@@ -1,0 +1,59 @@
+import type { Metadata } from "next";
+import "@/styles/globals.css";
+import { CartProvider } from "@/components/CartContext";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import WhatsAppButton from "@/components/WhatsAppButton";
+
+export const metadata: Metadata = {
+  title: "Nutravoe — Fresh Yogurt Bowls, Delivered to Your Door",
+  description:
+    "Premium yogurt-based oatmeal bowls made fresh every morning in Bangalore. No added sugar, probiotic base, delivered 7–10 AM. Order via WhatsApp.",
+  keywords: [
+    "healthy breakfast Bangalore",
+    "yogurt bowl delivery",
+    "fresh oatmeal delivery",
+    "nutravoe",
+    "healthy food delivery Bangalore",
+  ],
+  authors: [{ name: "Nutravoe" }],
+  openGraph: {
+    title: "Nutravoe — Fresh Yogurt Bowls, Delivered",
+    description:
+      "Premium yogurt-based oatmeal bowls made fresh every morning. Delivered 7–10 AM in Bangalore.",
+    url: "https://nutravoe.in",
+    siteName: "Nutravoe",
+    locale: "en_IN",
+    type: "website",
+  },
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <head>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/icon-32px.png" type="image/png" sizes="32x32" />
+        <link rel="apple-touch-icon" href="/icon-128px.png" />
+      </head>
+      <body className="min-h-screen flex flex-col">
+        <CartProvider>
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[200] focus:bg-sage focus:text-white focus:px-4 focus:py-2 focus:rounded-sm focus:text-sm focus:font-medium"
+          >
+            Skip to main content
+          </a>
+          <Navbar />
+          <main className="flex-1 pt-16">{children}</main>
+          <Footer />
+          <WhatsAppButton />
+        </CartProvider>
+      </body>
+    </html>
+  );
+}

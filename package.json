@@ -1,0 +1,30 @@
+{
+  "name": "nutravoe",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "sanity": "sanity dev"
+  },
+  "dependencies": {
+    "next": "14.2.3",
+    "react": "^18",
+    "react-dom": "^18",
+    "@sanity/client": "^6.15.7",
+    "@sanity/image-url": "^1.0.2",
+    "next-sanity": "^9.0.0",
+    "@supabase/supabase-js": "^2.43.0",
+    "razorpay": "^2.9.2"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "tailwindcss": "^3.4.1",
+    "postcss": "^8",
+    "autoprefixer": "^10.0.1"
+  }
+}

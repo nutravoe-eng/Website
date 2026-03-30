@@ -1,0 +1,91 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'Cormorant Garamond';
+  --font-body: 'DM Sans';
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-cream text-ink font-body;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+    font-weight: 300;
+    line-height: 1.1;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-ink text-white font-body text-sm font-medium tracking-widest px-8 py-3.5 rounded-sm transition-colors duration-300 hover:bg-sage-dark cursor-pointer border-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2;
+  }
+
+  .btn-sage {
+    @apply bg-sage text-white font-body text-sm font-medium tracking-widest px-8 py-3.5 rounded-sm transition-colors duration-300 hover:bg-sage-dark cursor-pointer border-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage focus-visible:ring-offset-2;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-ink font-body text-sm font-medium tracking-wider px-6 py-3.5 rounded-sm transition-all duration-300 hover:border-sage hover:text-sage-dark cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2;
+    border: 1px solid rgba(28, 28, 26, 0.2);
+  }
+
+  .section-eyebrow {
+    @apply font-body text-xs font-medium tracking-widest uppercase text-terracotta;
+    letter-spacing: 0.22em;
+  }
+
+  .section-heading {
+    @apply font-display text-ink;
+    font-weight: 300;
+  }
+
+  .tag-badge {
+    @apply font-body text-xs font-medium uppercase tracking-widest bg-white text-terracotta-dark px-2.5 py-1 rounded-sm;
+    letter-spacing: 0.14em;
+  }
+}
+
+@layer utilities {
+  .fade-in {
+    animation: fadeIn 0.6s ease forwards;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-33.3333%); }
+}
+
+/* Respect prefers-reduced-motion — pause the marquee */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,99 @@
+export interface BowlIngredient {
+  id: string;
+  name: string;
+  extraCost: number;
+  isBase?: boolean;
+}
+
+export type IngredientOption = 'default' | 'remove' | 'extra';
+
+export interface IngredientCustomization {
+  ingredientId: string;
+  option: IngredientOption;
+}
+
+export interface Bowl {
+  _id: string;
+  name: string;
+  slug: string;
+  tagline: string;
+  description: string;
+  price: number;
+  image: string; // URL string (resolved from Sanity or local path)
+  tags: BowlTag[];
+  available: boolean;
+  displayOrder: number;
+  nutrition?: {
+    calories: number;
+    protein: number;
+    fibre: number;
+  };
+  ingredients?: string[];
+  customizableIngredients?: BowlIngredient[];
+}
+
+export type BowlTag = "bestseller" | "high-protein" | "seasonal";
+
+export interface OrderItem {
+  bowl_name: string;
+  quantity: number;
+  price: number;
+}
+
+export interface Customer {
+  name: string;
+  phone: string;
+  address: string;
+}
+
+export interface Order {
+  id?: string;
+  created_at?: string;
+  customer_name: string;
+  customer_phone: string;
+  delivery_address: string;
+  items: OrderItem[];
+  total_amount: number; // in paise
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  status: "pending" | "paid" | "failed";
+}
+
+export interface GlobalSettings {
+  whatsappNumber: string;
+  swiggyUrl?: string;
+  zomatoUrl?: string;
+  instagramUrl?: string;
+}
+
+export interface CartItem {
+  bowl: Bowl;
+  quantity: number;
+  customizations: IngredientCustomization[];
+  customizationCost: number;
+}
+
+export type DeliveryStyle = 'spread' | 'bulk';
+export type PlanId = 'three-bowl' | 'five-bowl' | 'daily';
+
+export interface DayBowlConfig {
+  day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
+  bowlId: string;
+  bowlName: string;
+  customizations?: IngredientCustomization[];
+  customizationCost?: number;
+}
+
+export interface Subscription {
+  id: string;
+  planId: PlanId;
+  deliveryStyle: DeliveryStyle;
+  bulkDeliveryDay?: string; // 'next-day' | 'Mon' | 'Tue' | ... — only for bulk
+  dayConfigs: DayBowlConfig[];
+  bulkBowls?: { bowlId: string; bowlName: string; quantity: number; customizations?: IngredientCustomization[]; customizationCost?: number }[];
+  weeklyPrice: number;
+  deliveryAddress: string;
+  createdAt: string;
+  status: 'active' | 'paused' | 'cancelled';
+  nextDelivery: string;
+}
