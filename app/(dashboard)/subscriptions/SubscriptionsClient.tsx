@@ -1,13 +1,22 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import type { Bowl, Subscription } from "@/types";
+import type { Bowl, Subscription, DayBowlConfig } from "@/types";
 import { formatCurrency } from "@/lib/utils";
 import { PLANS } from "../../subscribe/PlanCard";
 import ManageModal from "./ManageModal";
 import CancelModal from "./CancelModal";
+import { createClient } from "@/lib/supabase/client";
 
 const PLAN_LABELS = Object.fromEntries(PLANS.map(p => [p.id, p.name]));
+
+function mapDay(d: string): DayBowlConfig['day'] {
+  const map: Record<string, DayBowlConfig['day']> = {
+    mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu',
+    fri: 'Fri', sat: 'Sat', sun: 'Sun',
+  };
+  return map[d] ?? 'Mon';
+}
 
 function deliverySummary(sub: Subscription): string {
   if (sub.deliveryStyle === "bulk" && sub.bulkBowls?.length) {
@@ -33,10 +42,6 @@ function nextDeliveryLabel(iso: string): string {
   return d.toLocaleDateString("en-IN", { weekday: "short", month: "short", day: "numeric" });
 }
 
-function persist(subs: Subscription[]) {
-  localStorage.setItem("nutravoe_subscriptions", JSON.stringify(subs));
-}
-
 interface Props {
   bowls: Bowl[];
 }
@@ -44,33 +49,143 @@ interface Props {
 export default function SubscriptionsClient({ bowls }: Props) {
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [managingId, setManagingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const stored = localStorage.getItem("nutravoe_subscriptions");
-    if (stored) setSubs(JSON.parse(stored));
+  const supabase = createClient();
+
+  const fetchSubscriptions = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setLoaded(true);
+      return;
+    }
+
+    const { data: subRows, error: subError } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (subError) {
+      setError('Failed to load subscriptions. Please refresh the page.');
+      setLoaded(true);
+      return;
+    }
+
+    if (!subRows || subRows.length === 0) {
+      setSubs([]);
+      setLoaded(true);
+      return;
+    }
+
+    const subIds = subRows.map(s => s.id);
+    const { data: dayConfigRows } = await supabase
+      .from('subscription_day_configs')
+      .select('*')
+      .in('subscription_id', subIds);
+
+    const mapped: Subscription[] = subRows.map(sub => {
+      const configs = (dayConfigRows ?? []).filter(r => r.subscription_id === sub.id);
+      const dayConfigs: DayBowlConfig[] = configs.map(row => ({
+        day: mapDay(row.day_of_week),
+        bowlId: row.bowl_slug,
+        bowlName: row.bowl_slug,
+        quantity: row.quantity,
+      }));
+
+      const plan = PLANS.find(p => p.id === sub.plan_id);
+
+      return {
+        id: sub.id,
+        planId: sub.plan_id,
+        deliveryStyle: sub.style,
+        status: sub.status,
+        weeklyPrice: plan?.weeklyPrice ?? 0,
+        nextDelivery: sub.start_date ?? new Date().toISOString(),
+        startDate: sub.start_date,
+        deliveryTimeSlot: sub.delivery_time_slot ?? undefined,
+        dayConfigs,
+        bulkDeliveryDay: sub.bulk_delivery_date ?? undefined,
+        walletBalancePaise: sub.wallet_balance_rs != null ? sub.wallet_balance_rs * 100 : 0,
+        deliveryAddress: '',
+        createdAt: sub.created_at,
+      } as Subscription;
+    });
+
+    setSubs(mapped);
     setLoaded(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function updateStatus(id: string, status: Subscription["status"]) {
-    setSubs(prev => {
-      const next = prev.map(s => s.id === id ? { ...s, status } : s);
-      persist(next);
-      return next;
-    });
+  useEffect(() => {
+    fetchSubscriptions();
+  }, [fetchSubscriptions]);
+
+  async function updateStatus(id: string, status: Subscription["status"]) {
+    const { error: updateError } = await supabase
+      .from('subscriptions')
+      .update({ status })
+      .eq('id', id);
+
+    if (updateError) {
+      setError('Failed to update subscription status. Please try again.');
+      return;
+    }
+
+    setSubs(prev => prev.map(s => s.id === id ? { ...s, status } : s));
   }
 
-  function handleManageSave(updated: Subscription) {
-    setSubs(prev => {
-      const next = prev.map(s => s.id === updated.id ? updated : s);
-      persist(next);
-      return next;
-    });
+  async function handleManageSave(updated: Subscription) {
+    const { error: updateError } = await supabase
+      .from('subscriptions')
+      .update({
+        delivery_time_slot: updated.deliveryTimeSlot ?? null,
+      })
+      .eq('id', updated.id);
+
+    if (updateError) {
+      setError('Failed to save changes. Please try again.');
+      return;
+    }
+
+    // If day configs changed, replace them
+    if (updated.dayConfigs?.length) {
+      await supabase
+        .from('subscription_day_configs')
+        .delete()
+        .eq('subscription_id', updated.id);
+
+      const newConfigs = updated.dayConfigs.map(dc => ({
+        subscription_id: updated.id,
+        day_of_week: dc.day.toLowerCase(),
+        bowl_slug: dc.bowlId,
+        quantity: dc.quantity,
+      }));
+
+      await supabase.from('subscription_day_configs').insert(newConfigs);
+    }
+
+    setSubs(prev => prev.map(s => s.id === updated.id ? updated : s));
     setManagingId(null);
   }
 
-  if (!loaded) return null;
+  if (!loaded) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="w-7 h-7 rounded-full border-2 border-sage border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-terracotta/5 border border-terracotta/20 rounded-xl">
+        <p className="font-body text-[13px] text-terracotta font-medium">{error}</p>
+      </div>
+    );
+  }
 
   const activeSubs = subs.filter(s => s.status !== "cancelled");
   const managingSub = managingId ? subs.find(s => s.id === managingId) : null;

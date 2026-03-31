@@ -9,22 +9,26 @@
     "sanity": "sanity dev"
   },
   "dependencies": {
-    "next": "14.2.3",
-    "react": "^18",
-    "react-dom": "^18",
     "@sanity/client": "^6.15.7",
     "@sanity/image-url": "^1.0.2",
-    "next-sanity": "^9.0.0",
+    "@sanity/vision": "^5.18.0",
+    "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.43.0",
-    "razorpay": "^2.9.2"
+    "next": "14.2.3",
+    "next-sanity": "^9.0.0",
+    "razorpay": "^2.9.6",
+    "react": "^18",
+    "react-dom": "^18",
+    "sanity": "^5.18.0",
+    "styled-components": "^6.3.12"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "tailwindcss": "^3.4.1",
+    "autoprefixer": "^10.0.1",
     "postcss": "^8",
-    "autoprefixer": "^10.0.1"
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
   }
 }

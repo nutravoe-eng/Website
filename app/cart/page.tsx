@@ -4,6 +4,11 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartContext";
 import { formatCurrency, buildOrderMessage } from "@/lib/utils";
+import { getWallet, debitWallet, hasActiveFlexibleSubscription } from "@/lib/wallet";
+import { getActivePlanConfig } from "@/lib/subscription";
+import { geocodePincode } from "@/lib/geocodeCache";
+import { getNearestHub, getDeliveryFee, DELIVERY_FEE_RS } from "@/lib/delivery";
+import { createClient } from "@/lib/supabase/client";
 
 // Generate delivery slots dynamically combining Same-Day buffer and Next-Day 11PM cutoff rules
 const getDeliverySlots = () => {
@@ -68,31 +73,119 @@ export default function CartPage() {
 
   // Hybrid Payment States
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"upi" | "razorpay" | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<"upi" | "razorpay" | "wallet" | null>(null);
   const [showUpiQR, setShowUpiQR] = useState(false);
 
+  // Wallet state
+  const [walletBalanceRs, setWalletBalanceRs] = useState(0);
+  const [hasFlexSub, setHasFlexSub] = useState(false);
+
+  // Subscriber discount
+  const [subscriberPricePerBowl, setSubscriberPricePerBowl] = useState<number | null>(null);
+
+  // Delivery fee
+  const [deliveryFee, setDeliveryFee] = useState<number>(0);
+  const [deliveryFeeLoading, setDeliveryFeeLoading] = useState(true);
+  const [nearestHubName, setNearestHubName] = useState<string>('');
+  const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
+
   useEffect(() => {
-    const stored = localStorage.getItem("nutravoe_currentUser");
-    if (stored) setUser(JSON.parse(stored));
+    (async () => {
+      const supabase = createClient();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        const name = (authUser.user_metadata?.full_name as string | undefined) ?? authUser.email?.split("@")[0] ?? "";
+        setUser({ name, phone: "", email: authUser.email ?? "" });
+      }
+
+      const [isFlexSub, wallet, planConfig] = await Promise.all([
+        hasActiveFlexibleSubscription(),
+        getWallet(),
+        getActivePlanConfig(),
+      ]);
+      setHasFlexSub(isFlexSub);
+      setWalletBalanceRs(wallet.balancePaise / 100);
+      if (planConfig) setSubscriberPricePerBowl(planConfig.perBowl);
+
+      // Resolve delivery fee from Supabase addresses (fallback to localStorage cache)
+      let pincode: string | null = null;
+      if (authUser) {
+        const { data: addrs } = await supabase
+          .from("addresses")
+          .select("pincode, is_default")
+          .eq("user_id", authUser.id)
+          .order("is_default", { ascending: false })
+          .limit(1);
+        pincode = addrs?.[0]?.pincode ?? null;
+      }
+      if (!pincode) {
+        const cached = localStorage.getItem("nutravoe_addresses");
+        if (cached) {
+          const arr: { pincode: string; isDefault: boolean }[] = JSON.parse(cached);
+          pincode = (arr.find(a => a.isDefault) ?? arr[0])?.pincode ?? null;
+        }
+      }
+      if (pincode) {
+        const coords = await geocodePincode(pincode);
+        if (coords) {
+          const { hub, distanceKm } = getNearestHub(coords.lat, coords.lng);
+          setDeliveryFee(getDeliveryFee(coords.lat, coords.lng));
+          setNearestHubName(hub.name);
+          setDeliveryDistanceKm(Math.round(distanceKm * 10) / 10);
+        }
+      }
+      setDeliveryFeeLoading(false);
+    })();
   }, []);
+
+  // Subscriber discount — applied per bowl (customization extras still at full cost)
+  const subscriberDiscount = subscriberPricePerBowl !== null
+    ? items.reduce((sum, item) => sum + Math.max(0, item.bowl.price - subscriberPricePerBowl) * item.quantity, 0)
+    : 0;
+  const effectiveTotal = total - subscriberDiscount;
+  const grandTotal = effectiveTotal + deliveryFee;
 
   const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
   const isRazorpayConfigured = Boolean(razorpayKeyId);
 
-  // Helper to sync local order history since we are using mock data
-  const recordMockOrder = (paymentMethodId: string) => {
-    const newOrder = {
-      id: "ORD" + Math.floor(Math.random() * 1000000),
-      status: "Confirmed",
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      items: items.map(i => `${i.quantity}x ${i.bowl.name}`).join(", "),
-      slot: selectedSlot,
-      total: total,
-      paymentId: paymentMethodId
-    };
-    const stored = localStorage.getItem("nutravoe_orders");
-    const existing = stored ? JSON.parse(stored) : [];
-    localStorage.setItem("nutravoe_orders", JSON.stringify([newOrder, ...existing]));
+  // Record order in Supabase
+  const recordOrder = async (paymentMethodId: string) => {
+    const supabase = createClient();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return;
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const deliveryDate = tomorrow.toISOString().split("T")[0];
+
+    const { data: order, error } = await supabase
+      .from("orders")
+      .insert({
+        user_id: authUser.id,
+        status: "confirmed",
+        delivery_date: deliveryDate,
+        delivery_time_slot: selectedSlot || null,
+        subtotal: effectiveTotal,
+        total: grandTotal,
+        delivery_fee: deliveryFee,
+        payment_method: paymentMethodId as string,
+        payment_status: "paid",
+      })
+      .select("id")
+      .single();
+
+    if (error || !order) return;
+
+    await supabase.from("order_items").insert(
+      items.map(i => ({
+        order_id: order.id,
+        bowl_slug: i.bowl.slug ?? i.bowl.name.toLowerCase().replace(/\s+/g, "-"),
+        bowl_name: i.bowl.name,
+        quantity: i.quantity,
+        unit_price: subscriberPricePerBowl ?? i.bowl.price,
+        total_price: (subscriberPricePerBowl ?? i.bowl.price) * i.quantity + i.customizationCost,
+      }))
+    );
   };
 
   async function handlePlaceOrder() {
@@ -130,9 +223,9 @@ export default function CartPage() {
             items: items.map((i) => ({
               bowl_name: i.bowl.name,
               quantity: i.quantity,
-              price: i.bowl.price + i.customizationCost,
+              price: (subscriberPricePerBowl ?? i.bowl.price) + i.customizationCost,
             })),
-            total_amount_paise: total * 100,
+            total_amount_paise: grandTotal * 100,
           }),
         });
 
@@ -141,18 +234,38 @@ export default function CartPage() {
 
         const options = {
           key: razorpayKeyId,
-          amount: total * 100,
+          amount: grandTotal * 100,
           currency: "INR",
           name: "Nutravoe",
           description: "Fresh Yogurt Bowl",
           order_id: razorpay_order_id,
-          handler: async (response: {
-            razorpay_payment_id: string;
-            razorpay_order_id: string;
-          }) => {
-            recordMockOrder(response.razorpay_payment_id);
-            clearCart();
-            window.location.href = `/confirmation?payment_id=${response.razorpay_payment_id}&order_id=${response.razorpay_order_id}`;
+          handler: async function (response: any) {
+            try {
+              // 1. Send the keys to our secure backend to verify the cryptographic signature
+              const verifyRes = await fetch("/api/razorpay/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                }),
+              });
+
+              const verifyData = await verifyRes.json();
+              if (verifyData.success) {
+                // 2. Verified safely! Clear local states and proceed.
+                await recordOrder(response.razorpay_payment_id);
+                clearCart();
+                window.location.href = `/confirmation?payment_id=${response.razorpay_payment_id}&order_id=${response.razorpay_order_id}`;
+              } else {
+                setError("Payment verification failed! Please contact support.");
+                setSubmitting(false);
+              }
+            } catch (err) {
+              setError("An error occurred during verification.");
+              setSubmitting(false);
+            }
           },
           prefill: { name: user!.name, contact: user!.phone, email: user!.email },
           theme: { color: "#7D9B76" },
@@ -175,11 +288,11 @@ export default function CartPage() {
           items.map((i) => ({
             bowl_name: i.bowl.name,
             quantity: i.quantity,
-            price: i.bowl.price + i.customizationCost,
+            price: (subscriberPricePerBowl ?? i.bowl.price) + i.customizationCost,
           })),
-          total
+          grandTotal
         );
-        recordMockOrder("wa_fallback");
+        await recordOrder("whatsapp_cod");
         clearCart();
         window.open(`https://wa.me/917899858374?text=${encodeURIComponent(message)}`, "_blank");
         window.location.href = "/confirmation";
@@ -191,8 +304,23 @@ export default function CartPage() {
     }
   }
 
+  async function handleWalletCheckout() {
+    if (!user) return;
+    const totalPaise = grandTotal * 100;
+    const description = items.map(i => `${i.quantity}× ${i.bowl.name}`).join(', ');
+    const updated = await debitWallet(totalPaise, `Order — ${description}`);
+    if (!updated) {
+      setError("Insufficient wallet balance. Please top up from your dashboard.");
+      return;
+    }
+    setWalletBalanceRs(updated.balancePaise / 100);
+    await recordOrder("wallet");
+    clearCart();
+    window.location.href = `/confirmation?payment_id=wallet_${Date.now()}`;
+  }
+
   // Dummy UPI Deep Link
-  const upiUrl = `upi://pay?pa=dummy-seller@upi&pn=Nutravoe&am=${total}&cu=INR`;
+  const upiUrl = `upi://pay?pa=dummy-seller@upi&pn=Nutravoe&am=${grandTotal}&cu=INR`;
 
   return (
     <>
@@ -225,7 +353,9 @@ export default function CartPage() {
                   {items.map((item) => {
                     const removed = item.customizations.filter(c => c.option === "remove");
                     const extras = item.customizations.filter(c => c.option === "extra");
-                    const effectiveUnitPrice = item.bowl.price + item.customizationCost;
+                    const basePrice = subscriberPricePerBowl ?? item.bowl.price;
+                    const effectiveUnitPrice = basePrice + item.customizationCost;
+                    const isDiscounted = subscriberPricePerBowl !== null && item.bowl.price > subscriberPricePerBowl;
 
                     return (
                       <div
@@ -236,9 +366,17 @@ export default function CartPage() {
                           <p className="font-display text-lg font-medium text-ink">
                             {item.bowl.name}
                           </p>
-                          <p className="font-body text-[13px] text-stone mt-0.5">
-                            {formatCurrency(effectiveUnitPrice)} each
-                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="font-body text-[13px] text-stone">
+                              {formatCurrency(effectiveUnitPrice)} each
+                            </p>
+                            {isDiscounted && (
+                              <>
+                                <span className="font-body text-[11px] text-stone/50 line-through">{formatCurrency(item.bowl.price)}</span>
+                                <span className="font-body text-[10px] font-bold text-sage-dark bg-sage/10 px-1.5 py-0.5 rounded-full">Subscriber</span>
+                              </>
+                            )}
+                          </div>
                           {/* Customization summary */}
                           {(removed.length > 0 || extras.length > 0) && (
                             <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5">
@@ -296,13 +434,42 @@ export default function CartPage() {
                   })}
                 </div>
 
-                <div className="flex items-center justify-between border-t border-black/5 pt-6 mb-6">
-                  <span className="font-body text-sm font-bold uppercase tracking-wider text-ink/70">
-                    Grand Total
-                  </span>
-                  <span className="font-display text-3xl font-medium text-sage-dark">
-                    {formatCurrency(total)}
-                  </span>
+                <div className="border-t border-black/5 pt-6 mb-6 space-y-2">
+                  {subscriberDiscount > 0 && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="font-body text-[13px] text-stone">Subtotal</span>
+                        <span className="font-body text-[13px] text-stone">{formatCurrency(total)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-body text-[13px] text-sage-dark font-medium">Subscriber discount</span>
+                        <span className="font-body text-[13px] text-sage-dark font-bold">− {formatCurrency(subscriberDiscount)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-body text-[13px] text-stone">Delivery</span>
+                      {deliveryDistanceKm !== null && (
+                        <span className="font-body text-[10px] text-stone/60">({deliveryDistanceKm} km from {nearestHubName})</span>
+                      )}
+                    </div>
+                    {deliveryFeeLoading ? (
+                      <span className="font-body text-[12px] text-stone animate-pulse">Checking…</span>
+                    ) : deliveryFee === 0 ? (
+                      <span className="font-body text-[13px] font-bold text-sage-dark">Free</span>
+                    ) : (
+                      <span className="font-body text-[13px] font-bold text-terracotta">+ {formatCurrency(DELIVERY_FEE_RS)}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="font-body text-sm font-bold uppercase tracking-wider text-ink/70">
+                      Grand Total
+                    </span>
+                    <span className="font-display text-3xl font-medium text-sage-dark">
+                      {formatCurrency(grandTotal)}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="mb-6">
@@ -452,7 +619,7 @@ export default function CartPage() {
               {!paymentMethod ? (
                 <div className="flex flex-col gap-4">
                   <p className="font-body text-[14px] text-stone mb-2 leading-relaxed">
-                    How would you like to pay the <span className="font-bold text-ink">{formatCurrency(total)}</span>?
+                    How would you like to pay the <span className="font-bold text-ink">{formatCurrency(effectiveTotal)}</span>?
                   </p>
 
                   {/* Option 1: UPI Hybrid */}
@@ -482,6 +649,31 @@ export default function CartPage() {
                       <p className="font-body text-[12px] text-stone mt-0.5">Credit/Debit Cards, Netbanking, Wallets</p>
                     </div>
                   </button>
+
+                  {/* Option 3: Wallet — only for flexible subscribers */}
+                  {hasFlexSub && (
+                    <button
+                      onClick={() => setPaymentMethod("wallet")}
+                      className={`flex items-center gap-4 p-4 border rounded-xl transition-all text-left group ${
+                        walletBalanceRs >= total
+                          ? 'border-black/10 hover:border-terracotta/50 hover:bg-terracotta/5'
+                          : 'border-terracotta/30 bg-terracotta/3 opacity-80'
+                      }`}
+                    >
+                      <div className="w-12 h-12 rounded-full bg-terracotta/10 text-terracotta flex items-center justify-center shrink-0">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/><path d="M2 10h20"/></svg>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-display text-lg font-medium text-ink group-hover:text-terracotta transition-colors">Pay from Wallet</h4>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <p className="font-body text-[12px] text-stone">Balance: <strong className={walletBalanceRs >= total ? 'text-sage-dark' : 'text-terracotta'}>{formatCurrency(walletBalanceRs)}</strong></p>
+                          {walletBalanceRs < total && (
+                            <span className="font-body text-[11px] text-terracotta font-bold">· Short by {formatCurrency(total - walletBalanceRs)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  )}
                 </div>
               ) : paymentMethod === "upi" ? (
                 <div className="flex flex-col animate-in slide-in-from-right-4 duration-300">
@@ -491,7 +683,7 @@ export default function CartPage() {
                   </button>
 
                   <h4 className="font-display text-xl font-medium text-ink mb-1">UPI Payment</h4>
-                  <p className="font-body text-[13px] text-stone mb-6">Amount to pay: <span className="font-bold text-ink">{formatCurrency(total)}</span></p>
+                  <p className="font-body text-[13px] text-stone mb-6">Amount to pay: <span className="font-bold text-ink">{formatCurrency(effectiveTotal)}</span></p>
 
                   <div className="flex flex-col gap-3">
                     {/* Direct App Linking intent */}
@@ -528,8 +720,8 @@ export default function CartPage() {
                       <p className="font-display text-lg font-medium text-sage-dark">Nutravoe Official</p>
 
                       <button
-                        onClick={() => {
-                          recordMockOrder("UPI_QR_SCANNED");
+                        onClick={async () => {
+                          await recordOrder("upi");
                           clearCart();
                           window.location.href = `/confirmation?payment_id=upi_dummy_${Date.now()}`;
                         }}
@@ -538,6 +730,63 @@ export default function CartPage() {
                         I have completed the payment
                       </button>
                     </div>
+                  )}
+                </div>
+              ) : paymentMethod === "wallet" ? (
+                <div className="flex flex-col animate-in slide-in-from-right-4 duration-300">
+                  <button onClick={() => setPaymentMethod(null)} className="text-sage hover:underline drop-shadow-sm font-body text-[12px] font-bold tracking-wide mb-6 flex items-center gap-1.5 w-fit">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Back to methods
+                  </button>
+
+                  <h4 className="font-display text-xl font-medium text-ink mb-4">Pay from Wallet</h4>
+
+                  {/* Balance summary */}
+                  <div className="space-y-2 mb-5">
+                    <div className="flex justify-between items-center p-3 bg-[#F9F8F6] rounded-lg">
+                      <span className="font-body text-[13px] text-stone">Current balance</span>
+                      <span className="font-body text-[13px] font-bold text-ink">{formatCurrency(walletBalanceRs)}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-[#F9F8F6] rounded-lg">
+                      <span className="font-body text-[13px] text-stone">Order total</span>
+                      <span className="font-body text-[13px] font-bold text-terracotta">− {formatCurrency(effectiveTotal)}</span>
+                    </div>
+                    <div className={`flex justify-between items-center p-3 rounded-lg border ${walletBalanceRs >= effectiveTotal ? 'bg-sage/5 border-sage/20' : 'bg-terracotta/5 border-terracotta/20'}`}>
+                      <span className="font-body text-[13px] font-bold text-stone">Balance after order</span>
+                      <span className={`font-body text-[14px] font-bold ${walletBalanceRs >= effectiveTotal ? 'text-sage-dark' : 'text-terracotta'}`}>
+                        {formatCurrency(Math.max(0, walletBalanceRs - effectiveTotal))}
+                      </span>
+                    </div>
+                  </div>
+
+                  {walletBalanceRs < effectiveTotal ? (
+                    <>
+                      <div className="flex items-start gap-2 p-3 bg-terracotta/5 border border-terracotta/20 rounded-lg mb-4">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C4714A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        <p className="font-body text-[12px] text-terracotta leading-relaxed">
+                          Your wallet is short by <strong>{formatCurrency(effectiveTotal - walletBalanceRs)}</strong>. Top up your wallet to continue.
+                        </p>
+                      </div>
+                      <a
+                        href="/wallet"
+                        className="w-full flex items-center justify-center gap-2 bg-terracotta hover:bg-[#D55F43] text-white font-body text-[13px] font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm"
+                      >
+                        Top Up Wallet →
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      {error && <p className="font-body text-[13px] text-terracotta mb-4 font-medium">{error}</p>}
+                      <button
+                        onClick={handleWalletCheckout}
+                        className="w-full bg-terracotta hover:bg-[#D55F43] text-white font-body text-[13px] font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm"
+                      >
+                        Confirm & Deduct {formatCurrency(effectiveTotal)} from Wallet
+                      </button>
+                      <p className="font-body text-[11px] text-stone text-center mt-2">
+                        Your wallet balance will update immediately
+                      </p>
+                    </>
                   )}
                 </div>
               ) : (
@@ -559,7 +808,7 @@ export default function CartPage() {
                     disabled={submitting}
                     className="w-full flex items-center justify-center gap-2 bg-[#3395FF] hover:bg-[#2082E6] disabled:bg-[#3395FF]/50 text-white font-body text-[13px] font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-md"
                   >
-                    {submitting ? "Connecting to secure gateway..." : `Pay ${formatCurrency(total)} Securely`}
+                    {submitting ? "Connecting to secure gateway..." : `Pay ${formatCurrency(effectiveTotal)} Securely`}
                   </button>
                   <p className="font-body text-[11px] text-stone text-center mt-4 px-4 leading-relaxed">
                     We'll hand over the transaction to Razorpay. Do not close the window after clicking.

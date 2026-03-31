@@ -3,6 +3,9 @@ import { useState } from "react";
 
 const faqs = [
   {q: "What time do deliveries happen?", a: "To ensure your morning begins perfectly, all deliveries are completed between 7:00 AM and 10:00 AM. Our partners will leave the package at your door or with security if instructed."},
+  {q: "Can I cancel my order?", a: "Yes — you can cancel any order up to 5 hours before your delivery slot starts. Since all deliveries begin at 7:00 AM, the cancellation cutoff is 2:00 AM on the day of delivery. You can cancel directly from the 'Cancellations & Refunds' tab in your dashboard."},
+  {q: "How do refunds work after cancellation?", a: "Once you cancel, we give you the choice of where your refund goes: (1) Nutravoe Wallet — added instantly and ready to use on your very next order, or (2) Original payment method (card, UPI, Netbanking) — processed within 5–7 business days. No cancellation fee is charged in either case."},
+  {q: "What if I miss the 5-hour cancellation window?", a: "If the cutoff has passed, please reach out immediately via WhatsApp or our support form. We'll check whether your order has already been dispatched. If it hasn't, we'll do our best to help — though we cannot guarantee a cancellation once preparation has begun."},
   {q: "Can I pause my subscription?", a: "Yes, you can pause your subscription at any time. Just visit the Subscriptions tab and click 'Pause'. Changes take effect 24 hours prior to the next scheduled delivery."},
   {q: "What is the shelf life of a bowl?", a: "Because we use absolutely no artificial preservatives or industrial stabilisers, our bowls are strictly fresh. They are best consumed within 24 hours and must be kept refrigerated at all times."},
   {q: "Are the bowls suitable for a vegan diet?", a: "Our traditional bowls use a probiotic dairy yogurt base. However, we occasionally run seasonal plant-based specials. Check the menu tags for 'Vegan Friendly'."},
@@ -93,6 +96,8 @@ export default function HelpPage() {
                   <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Topic</label>
                   <select className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-transparent text-ink">
                     <option>Where is my order?</option>
+                    <option>Cancel my order</option>
+                    <option>Refund status</option>
                     <option>Modify subscription</option>
                     <option>Product issue</option>
                     <option>Other</option>

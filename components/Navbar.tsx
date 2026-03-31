@@ -5,6 +5,11 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useCart } from "./CartContext";
+import { createClient } from "@/lib/supabase/client";
+import { getWallet, hasActiveFlexibleSubscription } from "@/lib/wallet";
+import { formatCurrency } from "@/lib/utils";
+import { geocodePincode } from "@/lib/geocodeCache";
+import { getNearestHub, DELIVERY_FEE_RS, FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
 
 const NAV_LINKS = [
   { href: "/menu", label: "Menu" },
@@ -16,53 +21,79 @@ export default function Navbar() {
   const pathname = usePathname();
   const isHomePage = pathname === "/";
   const { itemCount } = useCart();
+  const supabase = createClient();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  
+
   // Location Modal State
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [savedPincode, setSavedPincode] = useState("560001");
   const [inputPincode, setInputPincode] = useState("");
   const [locationState, setLocationState] = useState<"idle" | "invalid" | "waitlist" | "success">("idle");
-  
+  const [deliveryZone, setDeliveryZone] = useState<{ fee: number; distanceKm: number; hubName: string } | null>(null);
+  const [checkingZone, setCheckingZone] = useState(false);
+
   // Auth State
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [walletBalanceRs, setWalletBalanceRs] = useState<number | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener("scroll", onScroll);
-    
-    const checkUser = () => {
-      const stored = localStorage.getItem("nutravoe_currentUser");
-      if (stored) {
-        setUser(JSON.parse(stored));
+
+    const applyUser = async (authUser: { email?: string | null; user_metadata?: Record<string, unknown> } | null) => {
+      if (authUser) {
+        const name =
+          (authUser.user_metadata?.full_name as string | undefined) ??
+          authUser.email?.split("@")[0] ??
+          "there";
+        setUser({ name, email: authUser.email ?? "" });
+        // Wallet badge
+        const isFlexible = await hasActiveFlexibleSubscription();
+        if (isFlexible) {
+          const w = await getWallet();
+          setWalletBalanceRs(w.balancePaise / 100);
+        } else {
+          setWalletBalanceRs(null);
+        }
+        // Saved addresses (from localStorage cache written by addresses page)
         const addys = localStorage.getItem("nutravoe_addresses");
         if (addys) {
           const parsedAddys = JSON.parse(addys);
           setSavedAddresses(parsedAddys);
-          if (parsedAddys.length > 0) {
-            setSavedPincode(parsedAddys[0].pincode);
-          }
+          if (parsedAddys.length > 0) setSavedPincode(parsedAddys[0].pincode);
         }
       } else {
         setUser(null);
         setSavedAddresses([]);
+        setWalletBalanceRs(null);
       }
     };
-    
-    // Check on mount
-    checkUser();
-    // Listen for cross-component auth and address events
-    window.addEventListener("auth_change", checkUser);
-    window.addEventListener("address_change", checkUser);
-    
+
+    // Initial session check
+    supabase.auth.getUser().then(({ data: { user: u } }) => applyUser(u));
+
+    // Live auth state listener
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((_event, session) => {
+      applyUser(session?.user ?? null);
+    });
+
+    window.addEventListener("address_change", () => {
+      const addys = localStorage.getItem("nutravoe_addresses");
+      if (addys) {
+        const parsedAddys = JSON.parse(addys);
+        setSavedAddresses(parsedAddys);
+        if (parsedAddys.length > 0) setSavedPincode(parsedAddys[0].pincode);
+      }
+    });
+
     return () => {
       window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("auth_change", checkUser);
-      window.removeEventListener("address_change", checkUser);
+      authSub.unsubscribe();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -105,6 +136,7 @@ export default function Navbar() {
               onClick={() => {
                 setInputPincode("");
                 setLocationState("idle");
+                setDeliveryZone(null);
                 setShowLocationModal(true);
               }}
               className={`hidden md:flex items-center gap-2 animate-in fade-in transition-colors duration-300 cursor-pointer ${
@@ -174,7 +206,7 @@ export default function Navbar() {
                       <div className="absolute right-0 top-full mt-4 w-56 bg-white rounded-lg shadow-xl border border-black/5 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                         <div className="px-4 py-3 border-b border-black/5 mb-2">
                           <p className="font-display text-base font-medium text-ink truncate">{user.name}</p>
-                          <p className="font-body text-[11px] text-stone truncate">{user.email || user.phone}</p>
+                          <p className="font-body text-[11px] text-stone truncate">{user.email}</p>
                         </div>
                         
                         <div className="flex flex-col">
@@ -190,6 +222,17 @@ export default function Navbar() {
                             Subscriptions
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-hover:opacity-40 transition-opacity"><path d="m9 18 6-6-6-6"/></svg>
                           </Link>
+                          {walletBalanceRs !== null && (
+                            <Link href="/wallet" onClick={() => setProfileDropdownOpen(false)} className="px-5 py-2 hover:bg-terracotta/5 font-body text-[13px] text-ink transition-colors flex items-center justify-between group">
+                              <span className="flex items-center gap-2">
+                                Wallet
+                                <span className="font-body text-[10px] font-bold bg-terracotta/10 text-terracotta px-1.5 py-0.5 rounded-full">
+                                  {formatCurrency(walletBalanceRs)}
+                                </span>
+                              </span>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-hover:opacity-40 transition-opacity"><path d="m9 18 6-6-6-6"/></svg>
+                            </Link>
+                          )}
                           <Link href="/addresses" onClick={() => setProfileDropdownOpen(false)} className="px-5 py-2 hover:bg-[#F9F8F6] font-body text-[13px] text-ink transition-colors flex items-center justify-between group">
                             Addresses
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-hover:opacity-40 transition-opacity"><path d="m9 18 6-6-6-6"/></svg>
@@ -201,14 +244,17 @@ export default function Navbar() {
                           
                           <div className="h-px bg-black/5 my-2 mx-4"></div>
                           
+                          <Link href="/cancellations" onClick={() => setProfileDropdownOpen(false)} className="px-5 py-2 hover:bg-[#F9F8F6] font-body text-[13px] text-ink transition-colors flex items-center justify-between group">
+                            Cancellations & Refunds
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-hover:opacity-40 transition-opacity"><path d="m9 18 6-6-6-6"/></svg>
+                          </Link>
                           <Link href="/help" onClick={() => setProfileDropdownOpen(false)} className="px-5 py-2 hover:bg-[#F9F8F6] font-body text-[13px] text-stone transition-colors flex items-center justify-between group">
                             Help & Support
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-hover:opacity-40 transition-opacity"><path d="m9 18 6-6-6-6"/></svg>
                           </Link>
-                          <button 
-                            onClick={() => {
-                              localStorage.removeItem("nutravoe_currentUser");
-                              window.dispatchEvent(new Event("auth_change"));
+                          <button
+                            onClick={async () => {
+                              await supabase.auth.signOut();
                               setProfileDropdownOpen(false);
                             }}
                             className="px-5 py-2 hover:bg-terracotta/5 font-body text-[13px] text-terracotta font-medium transition-colors text-left flex items-center justify-between group w-full"
@@ -383,27 +429,63 @@ export default function Navbar() {
                         }
                       }}
                     />
-                    <button 
+                    <button
                       id="apply-pin-btn"
-                      onClick={() => {
+                      disabled={checkingZone}
+                      onClick={async () => {
                         if (inputPincode.length !== 6) {
                           setLocationState("invalid");
                           return;
                         }
-                        // Validation: Bangalore / Karnataka Urban PINs start with 56
-                        if (inputPincode.startsWith("56")) {
-                          setSavedPincode(inputPincode);
-                          setShowLocationModal(false);
-                        } else {
+                        if (!inputPincode.startsWith("56")) {
                           setLocationState("invalid");
+                          return;
                         }
+                        // Valid Bangalore pincode — geocode and check delivery zone
+                        setCheckingZone(true);
+                        setDeliveryZone(null);
+                        const coords = await geocodePincode(inputPincode);
+                        if (coords) {
+                          const { hub, distanceKm } = getNearestHub(coords.lat, coords.lng);
+                          setDeliveryZone({
+                            fee: distanceKm <= FREE_ZONE_RADIUS_KM ? 0 : DELIVERY_FEE_RS,
+                            distanceKm: Math.round(distanceKm * 10) / 10,
+                            hubName: hub.name,
+                          });
+                        }
+                        setSavedPincode(inputPincode);
+                        setCheckingZone(false);
                       }}
-                      className="px-6 bg-sage hover:bg-sage-dark text-white rounded-md font-body text-sm font-medium transition-colors shadow-sm cursor-pointer border border-black/5"
+                      className="px-6 bg-sage hover:bg-sage-dark disabled:opacity-60 text-white rounded-md font-body text-sm font-medium transition-colors shadow-sm cursor-pointer border border-black/5"
                     >
-                      Apply
+                      {checkingZone ? 'Checking…' : 'Apply'}
                     </button>
                   </div>
                   
+                  {/* Delivery zone result */}
+                  {deliveryZone && (
+                    <div className={`flex items-start gap-3 p-3 rounded-lg border ${deliveryZone.fee === 0 ? 'bg-sage/8 border-sage/20' : 'bg-terracotta/5 border-terracotta/20'}`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${deliveryZone.fee === 0 ? 'bg-sage/15' : 'bg-terracotta/15'}`}>
+                        {deliveryZone.fee === 0
+                          ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4E6B49" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C4714A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        }
+                      </div>
+                      <div className="flex-1">
+                        <p className={`font-body text-[13px] font-bold ${deliveryZone.fee === 0 ? 'text-sage-dark' : 'text-terracotta'}`}>
+                          {deliveryZone.fee === 0 ? 'Free delivery' : `+₹${DELIVERY_FEE_RS} delivery fee`}
+                        </p>
+                        <p className="font-body text-[11px] text-stone mt-0.5">
+                          {deliveryZone.distanceKm} km from {deliveryZone.hubName}
+                          {deliveryZone.fee === 0 ? ` · within ${FREE_ZONE_RADIUS_KM} km zone` : ` · beyond ${FREE_ZONE_RADIUS_KM} km zone`}
+                        </p>
+                      </div>
+                      <button onClick={() => setShowLocationModal(false)} className="shrink-0 font-body text-[11px] font-bold text-stone hover:text-ink underline">
+                        Done
+                      </button>
+                    </div>
+                  )}
+
                   {locationState === "invalid" && (
                     <div className="mt-2 p-4 bg-terracotta/5 border border-terracotta/20 rounded-md flex flex-col gap-3">
                       <p className="font-body text-[13px] text-terracotta font-medium">Sorry, we are currently not serviceable in this area.</p>

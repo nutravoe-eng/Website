@@ -114,6 +114,22 @@ export default function PlanCard({
               </div>
             </button>
 
+            {/* Flexible / Wallet option */}
+            <button
+              onClick={() => onDeliveryStyle('flexible')}
+              className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
+                deliveryStyle === 'flexible' ? 'border-terracotta bg-terracotta/5' : 'border-black/10 bg-white hover:border-terracotta/40'
+              }`}
+            >
+              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${deliveryStyle === 'flexible' ? 'border-terracotta' : 'border-stone/40'}`}>
+                {deliveryStyle === 'flexible' && <div className="w-2 h-2 rounded-full bg-terracotta" />}
+              </div>
+              <div>
+                <p className="font-body text-[13px] font-semibold text-ink">Flexible — Wallet</p>
+                <p className="font-body text-[11px] text-stone">Pay now, schedule freely all week</p>
+              </div>
+            </button>
+
             {/* Bulk delivery day picker — shown when bulk is selected */}
             {deliveryStyle === 'bulk' && (
               <div className="mt-1 ml-7 pt-3 border-t border-black/5" onClick={e => e.stopPropagation()}>

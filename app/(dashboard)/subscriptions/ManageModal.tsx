@@ -11,9 +11,16 @@ import CustomizationModal from '@/components/CustomizationModal';
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 type Day = typeof DAYS[number];
 
+const TIME_SLOTS = [
+  '7:00 AM – 8:00 AM',
+  '8:00 AM – 9:00 AM',
+  '9:00 AM – 10:00 AM',
+] as const;
+
 interface EditState {
-  deliveryStyle: 'spread' | 'bulk';
+  deliveryStyle: 'spread' | 'bulk' | 'flexible';
   bulkDeliveryDay: string;
+  deliveryTimeSlot: string;
   selectedDays: string[];
   dayBowlMap: Record<string, string>;
   bulkBowlCounts: Record<string, number>;
@@ -36,6 +43,7 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
   const [edit, setEdit] = useState<EditState>(() => ({
     deliveryStyle: sub.deliveryStyle,
     bulkDeliveryDay: sub.bulkDeliveryDay ?? 'next-day',
+    deliveryTimeSlot: sub.deliveryTimeSlot ?? '',
     selectedDays: sub.deliveryStyle === 'spread' ? sub.dayConfigs.map(d => d.day) : [],
     dayBowlMap: sub.deliveryStyle === 'spread'
       ? Object.fromEntries(sub.dayConfigs.map(d => [d.day, d.bowlId]))
@@ -65,6 +73,8 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
   const bulkTotal = Object.values(edit.bulkBowlCounts).reduce((s, c) => s + c, 0);
 
   const isValid = (() => {
+    if (edit.deliveryStyle === 'flexible') return true;
+    if (!edit.deliveryTimeSlot) return false;
     if (edit.deliveryStyle === 'bulk') {
       return bulkTotal === plan.bowlsPerWeek;
     }
@@ -72,7 +82,7 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
     return edit.selectedDays.every(d => Boolean(edit.dayBowlMap[d]));
   })();
 
-  function switchStyle(style: 'spread' | 'bulk') {
+  function switchStyle(style: 'spread' | 'bulk' | 'flexible') {
     setEdit(e => ({ ...e, deliveryStyle: style }));
   }
 
@@ -107,11 +117,13 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
       ...sub,
       deliveryStyle: edit.deliveryStyle,
       bulkDeliveryDay: edit.deliveryStyle === 'bulk' ? edit.bulkDeliveryDay : undefined,
+      deliveryTimeSlot: edit.deliveryStyle !== 'flexible' ? edit.deliveryTimeSlot : undefined,
       dayConfigs: edit.deliveryStyle === 'spread'
         ? edit.selectedDays.map(day => ({
             day: day as Day,
             bowlId: edit.dayBowlMap[day],
             bowlName: bowls.find(b => b._id === edit.dayBowlMap[day])?.name ?? '',
+            quantity: 1,
             customizations: edit.dayCustomMap[day] ?? [],
             customizationCost: edit.dayCustomCostMap[day] ?? 0,
           }))
@@ -184,6 +196,21 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
                 <div>
                   <p className="font-body text-[13px] font-semibold text-ink">Bulk delivery</p>
                   <p className="font-body text-[11px] text-stone">All bowls on one day</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => switchStyle('flexible')}
+                className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${
+                  edit.deliveryStyle === 'flexible' ? 'border-terracotta bg-terracotta/5' : 'border-black/10 hover:border-terracotta/40'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${edit.deliveryStyle === 'flexible' ? 'border-terracotta' : 'border-stone/40'}`}>
+                  {edit.deliveryStyle === 'flexible' && <div className="w-2 h-2 rounded-full bg-terracotta" />}
+                </div>
+                <div>
+                  <p className="font-body text-[13px] font-semibold text-ink">Flexible — Wallet</p>
+                  <p className="font-body text-[11px] text-stone">Pay now, schedule freely all week</p>
                 </div>
               </button>
             </div>
@@ -260,6 +287,38 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
                 </div>
               </div>
             </>
+          )}
+
+          {/* ── Flexible info ──────────────────────────────────── */}
+          {edit.deliveryStyle === 'flexible' && (
+            <div className="space-y-3">
+              <div className="bg-terracotta/5 border border-terracotta/20 rounded-xl p-4">
+                <p className="font-body text-[12px] font-bold text-terracotta mb-2">How Flexible works</p>
+                <div className="space-y-1.5">
+                  {[
+                    'Your weekly plan price is loaded to your Nutravoe Wallet',
+                    'Schedule any bowl, any day — as long as your balance allows',
+                    'Customisation extras are deducted automatically from the wallet',
+                    'Wallet refills each week while your subscription is active',
+                  ].map((line, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="w-4 h-4 rounded-full bg-terracotta/15 text-terracotta font-body text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+                      <p className="font-body text-[12px] text-stone leading-relaxed">{line}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <a
+                href="/wallet"
+                className="flex items-center justify-between p-3.5 bg-[#F9F8F6] border border-black/8 rounded-xl hover:border-terracotta/30 transition-colors group"
+              >
+                <div>
+                  <p className="font-body text-[13px] font-semibold text-ink">Go to Wallet</p>
+                  <p className="font-body text-[11px] text-stone">Check balance & schedule orders</p>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-stone group-hover:text-terracotta transition-colors"><path d="m9 18 6-6-6-6"/></svg>
+              </a>
+            </div>
           )}
 
           {/* ── Spread config ──────────────────────────────────── */}
@@ -349,6 +408,34 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
                 </div>
               )}
             </>
+          )}
+
+          {/* ── Delivery time slot ─────────────────────────────── */}
+          {edit.deliveryStyle !== 'flexible' && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7D9B76" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">Preferred delivery time</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {TIME_SLOTS.map(slot => (
+                  <button
+                    key={slot}
+                    onClick={() => setEdit(e => ({ ...e, deliveryTimeSlot: slot }))}
+                    className={`px-4 py-2.5 rounded-xl border font-body text-[12px] font-medium transition-all ${
+                      edit.deliveryTimeSlot === slot
+                        ? 'border-sage bg-sage/10 text-sage-dark font-bold'
+                        : 'border-black/15 text-stone hover:border-sage/50'
+                    }`}
+                  >
+                    {slot}
+                  </button>
+                ))}
+              </div>
+              {!edit.deliveryTimeSlot && (
+                <p className="font-body text-[11px] text-terracotta mt-2">Select a time slot to save changes.</p>
+              )}
+            </div>
           )}
         </div>
 
