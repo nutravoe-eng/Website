@@ -8,6 +8,7 @@ import { formatCurrency } from "@/lib/utils";
 interface DisplayOrder {
   id: string;
   status: string;
+  payment_status: string;
   date: string;
   slot: string | null;
   items: string;
@@ -30,7 +31,7 @@ export default function OrdersPage() {
 
       const { data: orderRows, error: ordersError } = await supabase
         .from('orders')
-        .select('id, status, created_at, delivery_time_slot, total')
+        .select('id, status, payment_status, created_at, delivery_time_slot, total')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -60,6 +61,7 @@ export default function OrdersPage() {
       const mapped: DisplayOrder[] = orderRows.map(o => ({
         id: o.id,
         status: o.status ?? 'pending',
+        payment_status: o.payment_status ?? 'pending',
         date: new Date(o.created_at).toLocaleDateString('en-IN', {
           month: 'short',
           day: 'numeric',
@@ -154,16 +156,36 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-[#F9F8F6] shrink-0 flex items-center justify-center text-stone">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4 flex-1 min-w-0">
+                  <div className="w-10 h-10 rounded-full bg-[#F9F8F6] shrink-0 flex items-center justify-center text-stone">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                  </div>
+                  <div>
+                    <h4 className="font-body text-[13px] font-medium text-ink mb-1 group-hover:text-sage-dark transition-colors">Items</h4>
+                    <p className="font-body text-[13px] text-stone/90 leading-relaxed">
+                      {order.items}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-body text-[13px] font-medium text-ink mb-1 group-hover:text-sage-dark transition-colors">Items</h4>
-                  <p className="font-body text-[13px] text-stone/90 leading-relaxed">
-                    {order.items}
-                  </p>
-                </div>
+
+                {/* Invoice download — only for delivered + paid orders */}
+                {order.status === 'delivered' && order.payment_status === 'paid' && (
+                  <a
+                    href={`/invoice/${order.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 flex items-center gap-1.5 border border-sage/30 text-sage-dark hover:bg-sage/5 transition-colors rounded-lg px-3 py-2 font-body text-[12px] font-bold"
+                    title="Download Invoice"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Invoice
+                  </a>
+                )}
               </div>
             </div>
           ))}

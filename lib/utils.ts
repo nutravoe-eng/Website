@@ -29,6 +29,103 @@ export function buildOrderMessage(
   ].join("\n");
 }
 
+export function buildCartOrderWhatsAppMessage(input: {
+  customerName: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  deliveryAddress?: string;
+  deliverySlot: string;
+  items: {
+    bowlName: string;
+    quantity: number;
+    basePrice: number;
+    customizationCost: number;
+    removedIngredients: string[];
+    extraIngredients: string[];
+  }[];
+  subtotal: number;
+  subscriberDiscount: number;
+  deliveryFee: number;
+  grandTotal: number;
+  orderRef?: string;
+}): string {
+  const itemLines = input.items.flatMap((item, index) => {
+    const lines = [
+      `${index + 1}. ${item.bowlName} x${item.quantity}`,
+      `   Base: ₹${item.basePrice} each`,
+    ];
+    if (item.removedIngredients.length > 0) {
+      lines.push(`   Remove: ${item.removedIngredients.join(", ")}`);
+    }
+    if (item.extraIngredients.length > 0) {
+      lines.push(`   Extra: ${item.extraIngredients.join(", ")}`);
+    }
+    if (item.customizationCost > 0) {
+      lines.push(`   Customization add-on: ₹${item.customizationCost}`);
+    }
+    const lineTotal = (item.basePrice * item.quantity) + item.customizationCost;
+    lines.push(`   Line total: ₹${lineTotal}`);
+    return lines;
+  });
+
+  const totals = [
+    `Subtotal: ₹${input.subtotal}`,
+    input.subscriberDiscount > 0 ? `Subscriber discount: -₹${input.subscriberDiscount}` : null,
+    `Delivery fee: ₹${input.deliveryFee}`,
+    `Grand total: ₹${input.grandTotal}`,
+  ].filter(Boolean);
+
+  return [
+    "Hi Nutravoe! New bowl order request",
+    "",
+    `Name: ${input.customerName}`,
+    `Phone: ${input.customerPhone || "NA"}`,
+    `Email: ${input.customerEmail || "NA"}`,
+    `Address: ${input.deliveryAddress || "NA"}`,
+    `Delivery slot: ${input.deliverySlot}`,
+    "",
+    "Order details:",
+    ...itemLines,
+    "",
+    "Charges:",
+    ...totals,
+    "",
+    input.orderRef ? `Order Ref: #NV-${input.orderRef}` : "",
+    "Please confirm this order on WhatsApp. Thank you!",
+  ].filter(line => line !== undefined).join("\n");
+}
+
+export function buildSubscriptionWhatsAppMessage(input: {
+  customerName: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  planName: string;
+  weeklyPrice: number;
+  deliveryAddress: string;
+  deliveryStyle: string;
+  deliveryTimeSlot?: string;
+  configurationLines: string[];
+  subscriptionRef?: string;
+}): string {
+  return [
+    "Hi Nutravoe! New subscription request",
+    "",
+    `Name: ${input.customerName}`,
+    `Phone: ${input.customerPhone || "NA"}`,
+    `Email: ${input.customerEmail || "NA"}`,
+    `Plan: ${input.planName} (₹${input.weeklyPrice}/week)`,
+    `Delivery style: ${input.deliveryStyle}`,
+    `Delivery slot: ${input.deliveryTimeSlot || "NA"}`,
+    `Address: ${input.deliveryAddress || "NA"}`,
+    "",
+    "Subscription configuration:",
+    ...input.configurationLines,
+    "",
+    input.subscriptionRef ? `Subscription Ref: #NV-SUB-${input.subscriptionRef}` : "",
+    "Please confirm and activate this subscription on WhatsApp. Thank you!",
+  ].filter(line => line !== undefined).join("\n");
+}
+
 export function generateReceiptId(): string {
   return `rcpt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }

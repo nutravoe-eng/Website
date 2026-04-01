@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { Bowl, Subscription, DayBowlConfig } from "@/types";
 import { formatCurrency } from "@/lib/utils";
-import { PLANS } from "../../subscribe/PlanCard";
+import { STUB_PLANS as PLANS } from "../../subscribe/PlanCard";
 import ManageModal from "./ManageModal";
 import CancelModal from "./CancelModal";
 import { createClient } from "@/lib/supabase/client";

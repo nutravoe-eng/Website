@@ -14,12 +14,30 @@ function hasNonDefaultCustomizations(customizations: IngredientCustomization[]):
   return customizations.some(c => c.option !== "default");
 }
 
+function customizationSummary(customizations: IngredientCustomization[], bowl: Bowl): string {
+  const removed = customizations
+    .filter(c => c.option === "remove")
+    .map(c => bowl.customizableIngredients?.find(i => i.id === c.ingredientId)?.name)
+    .filter(Boolean);
+  const extras = customizations
+    .filter(c => c.option === "extra")
+    .map(c => bowl.customizableIngredients?.find(i => i.id === c.ingredientId)?.name)
+    .filter(Boolean);
+  const parts: string[] = [];
+  if (removed.length) parts.push(`−${removed.join(", −")}`);
+  if (extras.length) parts.push(`+${extras.join(", +")}`);
+  return parts.join("  ·  ");
+}
+
 export default function BowlCard({ bowl }: BowlCardProps) {
   const { addItem, updateQuantity, updateCustomizations, items } = useCart();
+  // We pick the first one matching to edit its quantity, or 0 if none.
   const cartItem = items.find((i) => i.bowl._id === bowl._id);
-  const quantity = cartItem ? cartItem.quantity : 0;
+  const quantity = items.filter((i) => i.bowl._id === bowl._id).reduce((sum, i) => sum + i.quantity, 0);
 
   const [showCustomModal, setShowCustomModal] = useState(false);
+  const [customModalMode, setCustomModalMode] = useState<"edit" | "add-new">("edit");
+  const [showRepeatChoice, setShowRepeatChoice] = useState(false);
 
   const isCustomised = cartItem ? hasNonDefaultCustomizations(cartItem.customizations) : false;
 
@@ -94,7 +112,9 @@ export default function BowlCard({ bowl }: BowlCardProps) {
                 {/* Quantity stepper */}
                 <div className="flex items-center bg-sage-dark text-white rounded-sm overflow-hidden h-9 min-w-[96px] shadow-sm">
                   <button
-                    onClick={() => updateQuantity(bowl._id, quantity - 1)}
+                    onClick={() => {
+                      if (cartItem) updateQuantity(cartItem.instanceId, cartItem.quantity - 1);
+                    }}
                     className="w-9 h-full flex items-center justify-center hover:bg-black/10 transition-colors border-r border-white/10"
                     aria-label="Decrease quantity"
                   >
@@ -102,7 +122,13 @@ export default function BowlCard({ bowl }: BowlCardProps) {
                   </button>
                   <span className="font-body text-[13px] font-medium flex-1 text-center">{quantity}</span>
                   <button
-                    onClick={() => addItem(bowl)}
+                    onClick={() => {
+                      if (cartItem) {
+                        setShowRepeatChoice(true);
+                      } else {
+                        addItem(bowl);
+                      }
+                    }}
                     className="w-9 h-full flex items-center justify-center hover:bg-black/10 transition-colors border-l border-white/10"
                     aria-label="Increase quantity"
                   >
@@ -125,18 +151,99 @@ export default function BowlCard({ bowl }: BowlCardProps) {
       {showCustomModal && (
         <CustomizationModal
           bowl={bowl}
-          initialCustomizations={cartItem?.customizations}
+          initialCustomizations={customModalMode === "add-new" ? undefined : cartItem?.customizations}
           mode="cart"
           onConfirm={(customizations, cost) => {
-            if (cartItem) {
-              updateCustomizations(bowl._id, customizations, cost);
+            if (customModalMode === "add-new") {
+              addItem(bowl, customizations, cost);
+            } else if (cartItem) {
+              updateCustomizations(cartItem.instanceId, customizations, cost);
             } else {
               addItem(bowl, customizations, cost);
             }
             setShowCustomModal(false);
+            setCustomModalMode("edit");
           }}
-          onClose={() => setShowCustomModal(false)}
+          onClose={() => {
+            setShowCustomModal(false);
+            setCustomModalMode("edit");
+          }}
         />
+      )}
+
+      {/* Repeat-or-customise choice sheet */}
+      {showRepeatChoice && cartItem && (
+        <div
+          className="fixed inset-0 z-[120] flex items-end md:items-center justify-center p-0 md:p-4 bg-ink/60 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowRepeatChoice(false); }}
+        >
+          <div className="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-sm shadow-2xl animate-in slide-in-from-bottom-4 md:zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-black/5">
+              <div>
+                <h3 className="font-display text-xl font-medium text-ink">Add another {bowl.name}?</h3>
+                <p className="font-body text-[12px] text-stone mt-0.5">Choose how you'd like it</p>
+              </div>
+              <button
+                onClick={() => setShowRepeatChoice(false)}
+                aria-label="Close"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 text-stone hover:text-ink transition-colors"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Options */}
+            <div className="p-4 flex flex-col gap-3 pb-8 md:pb-4">
+              {/* Repeat same */}
+              <button
+                onClick={() => {
+                  updateQuantity(cartItem.instanceId, cartItem.quantity + 1);
+                  setShowRepeatChoice(false);
+                }}
+                className="flex items-center gap-4 p-4 border border-black/10 hover:border-sage/40 rounded-xl hover:bg-sage/5 transition-all text-left group"
+              >
+                <div className="w-10 h-10 rounded-full bg-sage/10 text-sage-dark flex items-center justify-center shrink-0">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-body text-[14px] font-bold text-ink group-hover:text-sage-dark transition-colors">Repeat same customisation</p>
+                  {customizationSummary(cartItem.customizations, bowl) && (
+                    <p className="font-body text-[11px] text-stone mt-0.5 truncate">
+                      {customizationSummary(cartItem.customizations, bowl)}
+                    </p>
+                  )}
+                </div>
+              </button>
+
+              {/* Customise differently */}
+              <button
+                onClick={() => {
+                  setShowRepeatChoice(false);
+                  setCustomModalMode("add-new");
+                  setShowCustomModal(true);
+                }}
+                className="flex items-center gap-4 p-4 border border-black/10 hover:border-terracotta/40 rounded-xl hover:bg-terracotta/5 transition-all text-left group"
+              >
+                <div className="w-10 h-10 rounded-full bg-terracotta/10 text-terracotta flex items-center justify-center shrink-0">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                    <path d="m15 5 4 4"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-body text-[14px] font-bold text-ink group-hover:text-terracotta transition-colors">Customise differently</p>
+                  <p className="font-body text-[11px] text-stone mt-0.5">Opens ingredient options for a new version</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

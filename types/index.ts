@@ -67,6 +67,7 @@ export interface GlobalSettings {
 }
 
 export interface CartItem {
+  instanceId: string;
   bowl: Bowl;
   quantity: number;
   customizations: IngredientCustomization[];
@@ -88,6 +89,21 @@ export interface Wallet {
   transactions: WalletTransaction[];
 }
 export type PlanId = 'three-bowl' | 'five-bowl' | 'daily';
+
+export interface SubscriptionPlan {
+  _id: string;
+  name: string;
+  slug: string; // used as plan_id in DB
+  bowlsPerCycle: number;
+  billingCycle: 'weekly' | 'monthly';
+  priceNearPerBowl: number; // ≤10 km zone
+  priceFarPerBowl: number;  // >10 km zone
+  customisationChargePerBowl: number;
+  deliveryStyles: DeliveryStyle[];
+  savingsBadge?: string;
+  isActive: boolean;
+  displayOrder: number;
+}
 
 export interface DayBowlConfig {
   day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';

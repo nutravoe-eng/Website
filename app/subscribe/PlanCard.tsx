@@ -9,12 +9,14 @@ export interface PlanConfig {
   weeklyPrice: number;
   perBowl: number;
   savingsBadge: string;
+  customisationChargePerBowl?: number;
+  deliveryStyles?: import("@/types").DeliveryStyle[];
 }
 
-export const PLANS: PlanConfig[] = [
-  { id: 'three-bowl', name: '3-Bowl / Week', bowlsPerWeek: 3, weeklyPrice: 852, perBowl: 284, savingsBadge: 'Save 5%' },
-  { id: 'five-bowl', name: '5-Bowl / Week', bowlsPerWeek: 5, weeklyPrice: 1346, perBowl: 269, savingsBadge: 'Save 10%' },
-  { id: 'daily', name: 'Daily Plan', bowlsPerWeek: 7, weeklyPrice: 1800, perBowl: 257, savingsBadge: 'Best Value' },
+export const STUB_PLANS: PlanConfig[] = [
+  { id: 'three-bowl', name: '3-Bowl / Week', bowlsPerWeek: 3, weeklyPrice: 852, perBowl: 284, savingsBadge: 'Save 5%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'bulk', 'flexible'] },
+  { id: 'five-bowl', name: '5-Bowl / Week', bowlsPerWeek: 5, weeklyPrice: 1346, perBowl: 269, savingsBadge: 'Save 10%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'bulk', 'flexible'] },
+  { id: 'daily', name: 'Daily Plan', bowlsPerWeek: 7, weeklyPrice: 1800, perBowl: 257, savingsBadge: 'Best Value', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'bulk', 'flexible'] },
 ];
 
 export const BULK_DAY_OPTIONS = [
@@ -42,8 +44,6 @@ export default function PlanCard({
   plan, selected, deliveryStyle, bulkDeliveryDay,
   onSelect, onDeliveryStyle, onBulkDeliveryDay,
 }: Props) {
-  const isDaily = plan.id === 'daily';
-
   return (
     <div
       className={`rounded-xl border-2 p-6 cursor-pointer transition-all duration-200 ${
@@ -78,57 +78,63 @@ export default function PlanCard({
         </div>
       )}
 
-      {selected && !isDaily && (
+      {selected && (
         <div className="mt-5 pt-5 border-t border-black/5" onClick={e => e.stopPropagation()}>
           <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-3">Delivery Style</p>
           <div className="flex flex-col gap-2">
             {/* Spread option */}
-            <button
-              onClick={() => onDeliveryStyle('spread')}
-              className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
-                deliveryStyle === 'spread' ? 'border-sage bg-sage/10' : 'border-black/10 bg-white hover:border-sage/50'
-              }`}
-            >
-              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${deliveryStyle === 'spread' ? 'border-sage' : 'border-stone/40'}`}>
-                {deliveryStyle === 'spread' && <div className="w-2 h-2 rounded-full bg-sage" />}
-              </div>
-              <div>
-                <p className="font-body text-[13px] font-semibold text-ink">Spread across the week</p>
-                <p className="font-body text-[11px] text-stone">Pick specific delivery days</p>
-              </div>
-            </button>
+            {(!plan.deliveryStyles || plan.deliveryStyles.includes('spread')) && (
+              <button
+                onClick={() => onDeliveryStyle('spread')}
+                className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
+                  deliveryStyle === 'spread' ? 'border-sage bg-sage/10' : 'border-black/10 bg-white hover:border-sage/50'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${deliveryStyle === 'spread' ? 'border-sage' : 'border-stone/40'}`}>
+                  {deliveryStyle === 'spread' && <div className="w-2 h-2 rounded-full bg-sage" />}
+                </div>
+                <div>
+                  <p className="font-body text-[13px] font-semibold text-ink">Spread across the week</p>
+                  <p className="font-body text-[11px] text-stone">Pick specific delivery days</p>
+                </div>
+              </button>
+            )}
 
             {/* Bulk option */}
-            <button
-              onClick={() => onDeliveryStyle('bulk')}
-              className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
-                deliveryStyle === 'bulk' ? 'border-sage bg-sage/10' : 'border-black/10 bg-white hover:border-sage/50'
-              }`}
-            >
-              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${deliveryStyle === 'bulk' ? 'border-sage' : 'border-stone/40'}`}>
-                {deliveryStyle === 'bulk' && <div className="w-2 h-2 rounded-full bg-sage" />}
-              </div>
-              <div>
-                <p className="font-body text-[13px] font-semibold text-ink">Bulk delivery</p>
-                <p className="font-body text-[11px] text-stone">All bowls on one day</p>
-              </div>
-            </button>
+            {(!plan.deliveryStyles || plan.deliveryStyles.includes('bulk')) && (
+              <button
+                onClick={() => onDeliveryStyle('bulk')}
+                className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
+                  deliveryStyle === 'bulk' ? 'border-sage bg-sage/10' : 'border-black/10 bg-white hover:border-sage/50'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${deliveryStyle === 'bulk' ? 'border-sage' : 'border-stone/40'}`}>
+                  {deliveryStyle === 'bulk' && <div className="w-2 h-2 rounded-full bg-sage" />}
+                </div>
+                <div>
+                  <p className="font-body text-[13px] font-semibold text-ink">Bulk delivery</p>
+                  <p className="font-body text-[11px] text-stone">All bowls on one day</p>
+                </div>
+              </button>
+            )}
 
             {/* Flexible / Wallet option */}
-            <button
-              onClick={() => onDeliveryStyle('flexible')}
-              className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
-                deliveryStyle === 'flexible' ? 'border-terracotta bg-terracotta/5' : 'border-black/10 bg-white hover:border-terracotta/40'
-              }`}
-            >
-              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${deliveryStyle === 'flexible' ? 'border-terracotta' : 'border-stone/40'}`}>
-                {deliveryStyle === 'flexible' && <div className="w-2 h-2 rounded-full bg-terracotta" />}
-              </div>
-              <div>
-                <p className="font-body text-[13px] font-semibold text-ink">Flexible — Wallet</p>
-                <p className="font-body text-[11px] text-stone">Pay now, schedule freely all week</p>
-              </div>
-            </button>
+            {(!plan.deliveryStyles || plan.deliveryStyles.includes('flexible')) && (
+              <button
+                onClick={() => onDeliveryStyle('flexible')}
+                className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
+                  deliveryStyle === 'flexible' ? 'border-terracotta bg-terracotta/5' : 'border-black/10 bg-white hover:border-terracotta/40'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${deliveryStyle === 'flexible' ? 'border-terracotta' : 'border-stone/40'}`}>
+                  {deliveryStyle === 'flexible' && <div className="w-2 h-2 rounded-full bg-terracotta" />}
+                </div>
+                <div>
+                  <p className="font-body text-[13px] font-semibold text-ink">Flexible — Wallet</p>
+                  <p className="font-body text-[11px] text-stone">Pay now, schedule freely all week</p>
+                </div>
+              </button>
+            )}
 
             {/* Bulk delivery day picker — shown when bulk is selected */}
             {deliveryStyle === 'bulk' && (

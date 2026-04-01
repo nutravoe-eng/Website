@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 
-type Step = "identifier" | "new-user" | "existing-user" | "success";
+const MapPicker = dynamic(() => import("@/components/MapPicker"), { ssr: false });
 
-export default function SignInPage() {
+type Step = "identifier" | "new-user" | "existing-user" | "success" | "churned";
+
+function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -21,8 +24,17 @@ export default function SignInPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [addressLine1, setAddressLine1] = useState("");
+  const [addressLine2, setAddressLine2] = useState("");
+  const [city, setCity] = useState("");
+  const [addressState, setAddressState] = useState("");
+  const [pincode, setPincode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showMap, setShowMap] = useState(false);
+  const [pinLat, setPinLat] = useState<number | null>(null);
+  const [pinLng, setPinLng] = useState<number | null>(null);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>();
 
   // Redirect on success
   useEffect(() => {
@@ -33,6 +45,21 @@ export default function SignInPage() {
     }
   }, [step, router, searchParams]);
 
+  // Geocode pincode to center the map when pincode is complete
+  useEffect(() => {
+    if (pincode.length !== 6) return;
+    fetch(`/api/geocode?pincode=${pincode}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.lat && d.lng) {
+          setMapCenter({ lat: d.lat, lng: d.lng });
+          setPinLat(d.lat);
+          setPinLng(d.lng);
+        }
+      })
+      .catch(() => {});
+  }, [pincode]);
+
   /* ── Step 1: check if email exists ── */
   const handleIdentifierSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -42,41 +69,97 @@ export default function SignInPage() {
     if (!val.includes("@")) { setError("Please enter a valid email address."); return; }
 
     setEmail(val);
-    // We can't tell if email exists without exposing user data, so go straight to sign-in.
-    // If sign-in fails we'll offer sign-up.
-    setStep("existing-user");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: val }),
+      });
+      const { exists, churned } = await res.json();
+      if (churned) {
+        setStep("churned");
+      } else {
+        setStep(exists ? "existing-user" : "new-user");
+      }
+    } catch {
+      // fallback: go to sign-in and let them switch if needed
+      setStep("existing-user");
+    } finally {
+      setLoading(false);
+    }
   };
 
   /* ── Sign up ── */
   const handleSignUp = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!name || !email || !password) { setError("Please fill in all fields."); return; }
+
+    if (!name.trim()) { setError("Please enter your name."); return; }
+    if (!phone.trim() || phone.replace(/\D/g, "").length < 10) { setError("Please enter a valid 10-digit mobile number."); return; }
+    if (!addressLine1.trim()) { setError("Please enter your street address."); return; }
+    if (!city.trim()) { setError("Please enter your city."); return; }
+    if (!addressState) { setError("Please select your state."); return; }
+    if (!/^\d{6}$/.test(pincode)) { setError("Please enter a valid 6-digit PIN code."); return; }
+    if (!email || !password) { setError("Please fill in all fields."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
 
     setLoading(true);
+
+    // Check if this phone was used on a previously deleted account
+    const phoneCheck = await fetch("/api/auth/check-phone", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: phone.replace(/\D/g, "") }),
+    });
+    if (phoneCheck.ok) {
+      const { churned } = await phoneCheck.json();
+      if (churned) {
+        setLoading(false);
+        setError("This mobile number is linked to a previously deleted account. You can still sign up — your old data will not be restored.");
+        return;
+      }
+    }
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: name, phone: phone || undefined },
+        data: { full_name: name, phone },
       },
     });
-    setLoading(false);
 
     if (signUpError) {
+      setLoading(false);
       setError(signUpError.message);
       return;
     }
 
     // Sign them in immediately (email confirmation disabled in Supabase dashboard)
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInError) {
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError || !signInData.user) {
+      setLoading(false);
       setError("Account created! Please sign in.");
       setStep("existing-user");
       return;
     }
 
+    // Save phone, first login timestamp, and insert default address
+    await Promise.all([
+      supabase.from("users").update({ phone, last_login_at: new Date().toISOString() }).eq("id", signInData.user.id),
+      supabase.from("addresses").insert({
+        user_id: signInData.user.id,
+        label: "Home",
+        line1: addressLine1.trim(),
+        line2: addressLine2.trim() || null,
+        city: city.trim(),
+        state: addressState,
+        pincode: pincode.trim(),
+        is_default: true,
+        ...(showMap && pinLat && pinLng ? { lat: pinLat, lng: pinLng } : {}),
+      }),
+    ]);
+
+    setLoading(false);
     setIsNewUser(true);
     setStep("success");
   };
@@ -87,7 +170,7 @@ export default function SignInPage() {
     setError("");
     setLoading(true);
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -101,6 +184,11 @@ export default function SignInPage() {
         setError(signInError.message);
       }
       return;
+    }
+
+    // Update last login timestamp
+    if (signInData.user) {
+      await supabase.from("users").update({ last_login_at: new Date().toISOString() }).eq("id", signInData.user.id);
     }
 
     setIsNewUser(false);
@@ -160,8 +248,8 @@ export default function SignInPage() {
 
                 {error && <p className="font-body text-[12px] text-terracotta">{error}</p>}
 
-                <button type="submit" className="w-full bg-sage hover:bg-sage-dark text-white font-body text-sm font-medium py-3 rounded-md transition-colors shadow-sm mt-2">
-                  Continue
+                <button type="submit" disabled={loading} className="w-full bg-sage hover:bg-sage-dark disabled:opacity-50 text-white font-body text-sm font-medium py-3 rounded-md transition-colors shadow-sm mt-2">
+                  {loading ? "Checking…" : "Continue"}
                 </button>
               </form>
 
@@ -259,14 +347,116 @@ export default function SignInPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-body text-[13px] font-medium text-ink mb-1.5">Mobile Number <span className="text-stone font-normal">(optional)</span></label>
+                  <label className="block font-body text-[13px] font-medium text-ink mb-1.5">Mobile Number</label>
                   <input
                     type="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    placeholder="10-digit mobile number"
                     className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
+                    required
                   />
                 </div>
+
+                {/* Address section */}
+                <div className="pt-1">
+                  <p className="font-body text-[12px] font-semibold text-stone uppercase tracking-widest mb-3">Delivery Address</p>
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <label className="block font-body text-[13px] font-medium text-ink mb-1.5">Street / Flat / Building</label>
+                      <input
+                        type="text"
+                        value={addressLine1}
+                        onChange={(e) => setAddressLine1(e.target.value)}
+                        placeholder="e.g. 12A, Green Apartments, MG Road"
+                        className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-body text-[13px] font-medium text-ink mb-1.5">Landmark <span className="text-stone font-normal">(optional)</span></label>
+                      <input
+                        type="text"
+                        value={addressLine2}
+                        onChange={(e) => setAddressLine2(e.target.value)}
+                        placeholder="e.g. Near City Mall"
+                        className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-body text-[13px] font-medium text-ink mb-1.5">City</label>
+                        <input
+                          type="text"
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          placeholder="e.g. Bengaluru"
+                          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-body text-[13px] font-medium text-ink mb-1.5">PIN Code</label>
+                        <input
+                          type="text"
+                          value={pincode}
+                          onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                          placeholder="6 digits"
+                          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block font-body text-[13px] font-medium text-ink mb-1.5">State</label>
+                      <select
+                        value={addressState}
+                        onChange={(e) => setAddressState(e.target.value)}
+                        className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all bg-white text-ink"
+                        required
+                      >
+                        <option value="">Select state…</option>
+                        {["Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa","Gujarat","Haryana","Himachal Pradesh","Jharkhand","Karnataka","Kerala","Madhya Pradesh","Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland","Odisha","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura","Uttar Pradesh","Uttarakhand","West Bengal","Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"].map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Optional map pin */}
+                    <div className="border border-dashed border-black/15 rounded-lg overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setShowMap((v) => !v)}
+                        className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-black/[0.02] transition-colors"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sage shrink-0">
+                          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+                          <circle cx="12" cy="10" r="3"/>
+                        </svg>
+                        <span className="font-body text-[13px] text-ink font-medium">
+                          Pin your exact location
+                        </span>
+                        <span className="font-body text-[11px] text-stone ml-1">(optional — helps with delivery)</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`ml-auto text-stone transition-transform ${showMap ? "rotate-180" : ""}`}>
+                          <path d="m6 9 6 6 6-6"/>
+                        </svg>
+                      </button>
+                      {showMap && (
+                        <div className="px-4 pb-4">
+                          <p className="font-body text-[12px] text-stone mb-3">
+                            Drag the pin or tap the map to mark your exact gate or building entrance.
+                          </p>
+                          <MapPicker
+                            centerLat={mapCenter?.lat}
+                            centerLng={mapCenter?.lng}
+                            onChange={(lat, lng) => { setPinLat(lat); setPinLng(lng); }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block font-body text-[13px] font-medium text-ink mb-1.5">Email</label>
                   <input
@@ -310,6 +500,45 @@ export default function SignInPage() {
             </div>
           )}
 
+          {/* CHURNED — previously deleted account */}
+          {step === "churned" && (
+            <div className="animate-in fade-in duration-300">
+              <div className="flex items-center justify-center w-12 h-12 bg-terracotta/10 rounded-full text-terracotta mb-4 mx-auto">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>
+                </svg>
+              </div>
+              <h1 className="font-display text-[26px] font-medium text-ink mb-2 text-center leading-tight">
+                This account was deleted
+              </h1>
+              <p className="font-body text-[14px] text-stone mb-4 text-center leading-relaxed px-2">
+                The email <span className="font-semibold text-ink">{identifier}</span> belongs to a previously deleted Nutravoe account.
+              </p>
+              <div className="bg-[#F9F8F6] border border-black/5 rounded-lg p-4 mb-6">
+                <p className="font-body text-[13px] text-ink/80 leading-relaxed">
+                  You can <span className="font-semibold">sign up fresh</span> using this email — your old data will not be restored. If you deleted your account by mistake, please contact us within 30 days to request a reactivation.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => { setStep("new-user"); setError(""); }}
+                  className="w-full bg-terracotta hover:bg-[#D55F43] text-white font-body text-sm font-medium py-3 rounded-md transition-colors shadow-sm"
+                >
+                  Sign Up Fresh with This Email
+                </button>
+                <button
+                  onClick={() => { setStep("identifier"); setIdentifier(""); setError(""); }}
+                  className="w-full bg-black/5 hover:bg-black/10 text-ink font-body text-sm font-medium py-3 rounded-md transition-colors"
+                >
+                  Use a Different Email
+                </button>
+              </div>
+              <p className="font-body text-[11px] text-stone mt-6 text-center">
+                Need help? Contact us on <a href="#" className="underline hover:text-ink">WhatsApp</a>
+              </p>
+            </div>
+          )}
+
           {/* SUCCESS */}
           {step === "success" && (
             <div className="flex flex-col items-center justify-center py-10 text-center animate-in zoom-in-95 fade-in duration-500">
@@ -343,5 +572,13 @@ export default function SignInPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense>
+      <SignInForm />
+    </Suspense>
   );
 }

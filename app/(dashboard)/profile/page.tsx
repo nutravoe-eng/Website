@@ -56,9 +56,17 @@ export default function ProfilePage() {
 
   const handleDeleteAccount = async () => {
     if (deleteConfirmText.trim().toLowerCase() !== "i dont want healthy eating habits") return;
-    // Sign out — full deletion requires a server-side admin call
+
+    const res = await fetch("/api/auth/delete-account", { method: "POST" });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({}));
+      alert(error ?? "Something went wrong. Please try again.");
+      return;
+    }
+
+    // Auth record is gone — clear local session and redirect
     await supabase.auth.signOut();
-    router.push("/");
+    router.push("/?account=deleted");
   };
 
   if (!loaded) return null;

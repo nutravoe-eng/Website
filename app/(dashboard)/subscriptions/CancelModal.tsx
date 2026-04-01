@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import type { Subscription } from '@/types';
-import { PLANS } from '../../subscribe/PlanCard';
+import { STUB_PLANS as PLANS } from '../../subscribe/PlanCard';
 
 type Step = 'appeal' | 'reason' | 'confirm' | 'farewell';
 

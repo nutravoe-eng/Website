@@ -3,13 +3,15 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import type { Bowl, PlanId, DeliveryStyle, DayBowlConfig, IngredientCustomization } from "@/types";
-import { formatCurrency } from "@/lib/utils";
-import PlanCard, { PLANS } from "./PlanCard";
-import { creditWallet } from "@/lib/wallet";
+import type { Bowl, PlanId, DeliveryStyle, DayBowlConfig, IngredientCustomization, SubscriptionPlan } from "@/types";
+import { buildSubscriptionWhatsAppMessage, formatCurrency, getWhatsAppUrl } from "@/lib/utils";
+import PlanCard, { STUB_PLANS } from "./PlanCard";
+import type { PlanConfig } from "./PlanCard";
 import BowlPicker from "./BowlPicker";
 import CustomizationModal from "@/components/CustomizationModal";
 import { createClient } from "@/lib/supabase/client";
+import { geocodePincode } from "@/lib/geocodeCache";
+import { getNearestHub, FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 type Day = typeof DAYS[number];
@@ -41,6 +43,8 @@ interface WizardState {
 
 interface Props {
   bowls: Bowl[];
+  whatsappNumber: string;
+  plans?: SubscriptionPlan[];
 }
 
 function calcCustomCost(customizations: IngredientCustomization[], bowl?: Bowl | null): number {
@@ -53,7 +57,7 @@ function calcCustomCost(customizations: IngredientCustomization[], bowl?: Bowl |
     }, 0);
 }
 
-export default function SubscribeWizard({ bowls }: Props) {
+export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPlans }: Props) {
   const [state, setState] = useState<WizardState>({
     step: 1,
     planId: null,
@@ -71,10 +75,29 @@ export default function SubscribeWizard({ bowls }: Props) {
 
   const [user, setUser] = useState<{ name: string; phone: string; email: string; id: string } | null>(null);
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryPincode, setDeliveryPincode] = useState('');
+  const [isNearZone, setIsNearZone] = useState(true); // default near; updated after geocode
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [hasActiveSub, setHasActiveSub] = useState(false);
+
+  // Convert Sanity plans to PlanConfig using distance-based pricing
+  const plans: PlanConfig[] = sanityPlans
+    ? sanityPlans.map(p => {
+        const pricePerBowl = isNearZone ? p.priceNearPerBowl : p.priceFarPerBowl;
+        return {
+          id: p.slug as PlanId,
+          name: p.name,
+          bowlsPerWeek: p.bowlsPerCycle,
+          weeklyPrice: pricePerBowl * p.bowlsPerCycle,
+          perBowl: pricePerBowl,
+          savingsBadge: p.savingsBadge ?? '',
+          customisationChargePerBowl: p.customisationChargePerBowl,
+          deliveryStyles: p.deliveryStyles,
+        };
+      })
+    : STUB_PLANS;
 
   // Customization modal triggers
   const [customizingDay, setCustomizingDay] = useState<string | null>(null);  // scenario C
@@ -122,17 +145,25 @@ export default function SubscribeWizard({ bowls }: Props) {
         const def = addresses.find(a => a.is_default) ?? addresses[0];
         if (def) {
           setDeliveryAddress(`${def.line1}, ${def.line2}, Karnataka ${def.pincode}`);
+          setDeliveryPincode(def.pincode);
+          // Determine delivery zone for distance-based pricing
+          const coords = await geocodePincode(def.pincode);
+          if (coords) {
+            const { distanceKm } = getNearestHub(coords.lat, coords.lng);
+            setIsNearZone(distanceKm <= FREE_ZONE_RADIUS_KM);
+          }
         }
       }
     });
   }, []);
 
-  const currentPlan = PLANS.find(p => p.id === state.planId);
+  const currentPlan = plans.find(p => p.id === state.planId);
 
   function getScenario(): 'A' | 'B' | 'C' | 'D' {
-    if (state.planId === 'daily') return 'C';
     if (state.deliveryStyle === 'bulk') return 'B';
     if (state.deliveryStyle === 'flexible') return 'D';
+    if (state.planId === 'daily' && state.deliveryStyle === 'spread') return 'C';
+    if (state.planId === 'daily' && !state.deliveryStyle) return 'C'; // fallback
     return 'A';
   }
 
@@ -140,7 +171,7 @@ export default function SubscribeWizard({ bowls }: Props) {
 
   const canProceedStep1 =
     state.planId !== null &&
-    (state.planId === 'daily' || state.deliveryStyle !== null);
+    state.deliveryStyle !== null;
 
   const spreadTotal = Object.values(state.dayBowlCounts).reduce(
     (sum, dayCounts) => sum + Object.values(dayCounts).reduce((s, c) => s + c, 0), 0
@@ -176,8 +207,8 @@ export default function SubscribeWizard({ bowls }: Props) {
 
   function goToStep2() {
     if (!currentPlan) return;
-    // Pre-fill days for Daily scenario
-    if (state.planId === 'daily') {
+    // Pre-fill all 7 days for daily + spread scenario (scenario C)
+    if (state.planId === 'daily' && (state.deliveryStyle === 'spread' || !state.deliveryStyle)) {
       setState(s => ({ ...s, step: 2, selectedDays: [...DAYS] }));
     } else {
       setState(s => ({ ...s, step: 2 }));
@@ -254,67 +285,100 @@ export default function SubscribeWizard({ bowls }: Props) {
     setState(s => ({ ...s, bulkBowlCounts: { ...s.bulkBowlCounts, [bowlId]: next } }));
   }
 
-  // ─── Payment ─────────────────────────────────────────────────────────────────
+  const describeCustomizations = (
+    customizations: IngredientCustomization[] | undefined,
+    bowl: Bowl | undefined
+  ) => {
+    const list = customizations ?? [];
+    const removed = list
+      .filter(c => c.option === 'remove')
+      .map(c => bowl?.customizableIngredients?.find(i => i.id === c.ingredientId)?.name)
+      .filter(Boolean) as string[];
+    const extras = list
+      .filter(c => c.option === 'extra')
+      .map(c => bowl?.customizableIngredients?.find(i => i.id === c.ingredientId)?.name)
+      .filter(Boolean) as string[];
+    const lines: string[] = [];
+    if (removed.length > 0) lines.push(`remove: ${removed.join(", ")}`);
+    if (extras.length > 0) lines.push(`extra: ${extras.join(", ")}`);
+    return lines.length > 0 ? ` (${lines.join(" | ")})` : "";
+  };
+
+  const buildSubscriptionConfigLines = (currentPlanName: string): string[] => {
+    const scenario = getScenario();
+    if (scenario === "D") {
+      return [
+        `- Flexible wallet plan: ${currentPlanName}`,
+        "- Wallet top-up happens weekly.",
+        "- Bowls are scheduled later from dashboard.",
+      ];
+    }
+    if (scenario === "B") {
+      const lines = Object.entries(state.bulkBowlCounts)
+        .filter(([, qty]) => qty > 0)
+        .map(([bowlId, qty]) => {
+          const bowl = bowls.find(b => b._id === bowlId);
+          const c = describeCustomizations(state.bulkCustomMap[bowlId], bowl);
+          return `- ${qty} x ${bowl?.name ?? bowlId}${c}`;
+        });
+      lines.push(`- Bulk delivery day: ${state.bulkDeliveryDay === "next-day" ? "next-day (weekly)" : state.bulkDeliveryDay}`);
+      return lines;
+    }
+    if (scenario === "A") {
+      return DAYS.filter(d => state.selectedDays.includes(d)).flatMap(day => {
+        const dayCounts = state.dayBowlCounts[day] ?? {};
+        const lines = Object.entries(dayCounts)
+          .filter(([, qty]) => qty > 0)
+          .map(([bowlId, qty]) => {
+            const bowl = bowls.find(b => b._id === bowlId);
+            const c = describeCustomizations(state.dayBowlCustomMap[day]?.[bowlId], bowl);
+            return `- ${day}: ${qty} x ${bowl?.name ?? bowlId}${c}`;
+          });
+        return lines.length > 0 ? lines : [`- ${day}: no bowls assigned`];
+      });
+    }
+    return state.selectedDays.map(day => {
+      const bowlId = state.dayBowlMap[day];
+      const bowl = bowls.find(b => b._id === bowlId);
+      const c = describeCustomizations(state.dayCustomMap[day], bowl);
+      return `- ${day}: ${bowl?.name ?? "Not selected"}${c}`;
+    });
+  };
+
+  // ─── Order request via WhatsApp ──────────────────────────────────────────────
 
   async function handlePayment() {
     if (!user || !currentPlan) return;
     setSubmitting(true);
     setError('');
 
-    const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
-
     try {
-      if (razorpayKeyId) {
-        const res = await fetch('/api/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customer: { name: user.name, phone: user.phone, email: user.email },
-            items: [{ bowl_name: currentPlan.name, quantity: 1, price: currentPlan.weeklyPrice }],
-            total_amount_paise: currentPlan.weeklyPrice * 100,
-          }),
-        });
-
-        if (!res.ok) throw new Error('Failed to create order.');
-        const { razorpay_order_id } = await res.json();
-
-        const options = {
-          key: razorpayKeyId,
-          amount: currentPlan.weeklyPrice * 100,
-          currency: 'INR',
-          name: 'Nutravoe',
-          description: `${currentPlan.name} — Week 1`,
-          order_id: razorpay_order_id,
-          handler: (response: { razorpay_payment_id: string }) => {
-            saveSubscription(response.razorpay_payment_id);
-          },
-          prefill: { name: user.name, contact: user.phone, email: user.email },
-          theme: { color: '#7D9B76' },
-        };
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const win = window as any;
-        if (!win.Razorpay) {
-          const script = document.createElement('script');
-          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-          document.body.appendChild(script);
-          await new Promise(r => (script.onload = r));
-        }
-        const rzp = new win.Razorpay(options);
-        rzp.open();
-      } else {
-        // No Razorpay key — simulate success
-        await saveSubscription('mock_' + Date.now());
-      }
+      const subRef = await saveSubscription();
+      const message = buildSubscriptionWhatsAppMessage({
+        customerName: user.name,
+        customerPhone: user.phone,
+        customerEmail: user.email,
+        planName: currentPlan.name,
+        weeklyPrice: currentPlan.weeklyPrice,
+        deliveryAddress,
+        deliveryStyle:
+          getScenario() === "D"
+            ? "Flexible wallet"
+            : (state.deliveryStyle ?? "spread"),
+        deliveryTimeSlot: getScenario() !== "D" ? state.deliveryTimeSlot : undefined,
+        configurationLines: buildSubscriptionConfigLines(currentPlan.name),
+        subscriptionRef: subRef ?? undefined,
+      });
+      window.open(getWhatsAppUrl(whatsappNumber, message), "_blank", "noopener,noreferrer");
     } catch {
-      setError('Something went wrong with payment. Please try again.');
+      setError('Something went wrong while creating your subscription. Please try again.');
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function saveSubscription(paymentId: string) {
-    if (!currentPlan || !user) return;
+  async function saveSubscription(): Promise<string | null> {
+    if (!currentPlan || !user) return null;
     const supabase = createClient();
     const scenario = getScenario();
 
@@ -352,9 +416,24 @@ export default function SubscribeWizard({ bowls }: Props) {
     const startDate = new Date().toISOString();
 
     // Map DeliveryStyle to Supabase enum values
-    const supabaseStyle: string = state.planId === 'daily'
-      ? 'spread'
-      : (state.deliveryStyle ?? 'spread');
+    const supabaseStyle: string = state.deliveryStyle ?? 'spread';
+
+    // Calculate customisation charges
+    const customisationChargePerBowl = currentPlan.customisationChargePerBowl ?? 0;
+    let customisedBowlCount = 0;
+    if (scenario === 'C') {
+      customisedBowlCount = state.selectedDays.filter(day => (state.dayCustomMap[day] ?? []).length > 0).length;
+    } else if (scenario === 'A') {
+      for (const [day, bowlCounts] of Object.entries(state.dayBowlCounts)) {
+        for (const bowlId of Object.keys(bowlCounts)) {
+          if ((state.dayBowlCustomMap[day]?.[bowlId] ?? []).length > 0) customisedBowlCount++;
+        }
+      }
+    } else if (scenario === 'B') {
+      customisedBowlCount = Object.keys(state.bulkCustomMap).filter(id => (state.bulkCustomMap[id] ?? []).length > 0).length;
+    }
+    const customisationTotal = customisedBowlCount * customisationChargePerBowl;
+    const totalAmountRs = currentPlan.weeklyPrice + customisationTotal;
 
     const { data: newSub, error: insertError } = await supabase
       .from('subscriptions')
@@ -369,15 +448,17 @@ export default function SubscribeWizard({ bowls }: Props) {
           ? Object.values(state.bulkBowlCounts).reduce((s, c) => s + c, 0)
           : null,
         bulk_delivery_date: scenario === 'B' ? state.bulkDeliveryDay : null,
-        wallet_balance_rs: scenario === 'D' ? currentPlan.weeklyPrice : null,
-        notes: paymentId ? `payment:${paymentId}` : null,
+        wallet_balance_rs: scenario === 'D' ? totalAmountRs : null,
+        total_amount_rs: totalAmountRs,
+        payment_status: 'pending',
+        notes: "requested_via_whatsapp",
       })
       .select('id')
       .single();
 
     if (insertError || !newSub) {
       setError('Failed to save subscription. Please contact support.');
-      return;
+      return null;
     }
 
     // Insert day configs
@@ -391,15 +472,9 @@ export default function SubscribeWizard({ bowls }: Props) {
       await supabase.from('subscription_day_configs').insert(configRows);
     }
 
-    // Credit wallet immediately for flexible plans
-    if (scenario === 'D') {
-      await creditWallet(
-        currentPlan.weeklyPrice * 100,
-        `${currentPlan.name} — Week 1 wallet load`
-      );
-    }
-
     setSuccess(true);
+    // Return short ref for WhatsApp message
+    return newSub.id.slice(-6).toUpperCase();
   }
 
   // ─── Derived values ───────────────────────────────────────────────────────────
@@ -510,7 +585,7 @@ export default function SubscribeWizard({ bowls }: Props) {
 
         <h2 className="font-display text-xl font-medium text-ink mb-6 text-center">Choose your plan</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          {PLANS.map(plan => (
+          {plans.map(plan => (
             <PlanCard
               key={plan.id}
               plan={plan}
@@ -520,7 +595,7 @@ export default function SubscribeWizard({ bowls }: Props) {
               onSelect={() => setState(s => ({
                 ...s,
                 planId: plan.id,
-                deliveryStyle: plan.id === 'daily' ? 'spread' : null,
+                deliveryStyle: null,
                 bulkDeliveryDay: 'next-day',
                 selectedDays: [],
                 dayBowlMap: {},
@@ -953,7 +1028,7 @@ export default function SubscribeWizard({ bowls }: Props) {
               onClick={goToStep3}
               className="bg-terracotta hover:bg-[#D55F43] disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide px-8 py-3.5 rounded-md transition-colors shadow-sm"
             >
-              Next: Review & Pay →
+            Next: Review & Confirm →
             </button>
           </div>
         </div>
@@ -1020,7 +1095,7 @@ export default function SubscribeWizard({ bowls }: Props) {
     );
   }
 
-  // ─── Step 3 — Review & Pay ────────────────────────────────────────────────────
+  // ─── Step 3 — Review & Confirm ────────────────────────────────────────────────
 
   if (state.step === 3 && currentPlan) {
     const scenario = getScenario();
@@ -1057,7 +1132,7 @@ export default function SubscribeWizard({ bowls }: Props) {
           <h1 className="font-display text-4xl font-medium text-ink mb-3">Subscribe & Save</h1>
         </div>
         <StepIndicator />
-        <h2 className="font-display text-xl font-medium text-ink mb-6 text-center">Review & Pay</h2>
+        <h2 className="font-display text-xl font-medium text-ink mb-6 text-center">Review & Confirm</h2>
 
         {/* Auth gate */}
         {!user && (
@@ -1175,11 +1250,11 @@ export default function SubscribeWizard({ bowls }: Props) {
               className="w-full bg-terracotta hover:bg-[#D55F43] disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm"
             >
               {submitting
-                ? 'Connecting to secure gateway...'
-                : `Subscribe & Pay ${formatCurrency(currentPlan.weeklyPrice)}`}
+                ? 'Preparing WhatsApp message...'
+                : `Send Subscription Request on WhatsApp`}
             </button>
             <p className="font-body text-[11px] text-stone text-center mt-3">
-              Recurring {formatCurrency(currentPlan.weeklyPrice)}/week. Cancel anytime.
+              Your full subscription summary will open in WhatsApp for confirmation.
             </p>
           </>
         )}

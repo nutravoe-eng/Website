@@ -1,4 +1,4 @@
-import { Bowl, GlobalSettings } from "@/types";
+import { Bowl, GlobalSettings, SubscriptionPlan } from "@/types";
 
 // ─── Stub data (used when Sanity is not configured) ─────────────────────────
 
@@ -157,6 +157,51 @@ export const STUB_BOWLS: Bowl[] = [
   },
 ];
 
+export const STUB_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
+  {
+    _id: 'plan-three-bowl',
+    name: '3-Bowl / Week',
+    slug: 'three-bowl',
+    bowlsPerCycle: 3,
+    billingCycle: 'weekly',
+    priceNearPerBowl: 284,
+    priceFarPerBowl: 299,
+    customisationChargePerBowl: 30,
+    deliveryStyles: ['spread', 'bulk', 'flexible'],
+    savingsBadge: 'Save 5%',
+    isActive: true,
+    displayOrder: 1,
+  },
+  {
+    _id: 'plan-five-bowl',
+    name: '5-Bowl / Week',
+    slug: 'five-bowl',
+    bowlsPerCycle: 5,
+    billingCycle: 'weekly',
+    priceNearPerBowl: 269,
+    priceFarPerBowl: 284,
+    customisationChargePerBowl: 30,
+    deliveryStyles: ['spread', 'bulk', 'flexible'],
+    savingsBadge: 'Save 10%',
+    isActive: true,
+    displayOrder: 2,
+  },
+  {
+    _id: 'plan-daily',
+    name: 'Daily Plan',
+    slug: 'daily',
+    bowlsPerCycle: 7,
+    billingCycle: 'weekly',
+    priceNearPerBowl: 257,
+    priceFarPerBowl: 271,
+    customisationChargePerBowl: 30,
+    deliveryStyles: ['spread', 'bulk', 'flexible'],
+    savingsBadge: 'Best Value',
+    isActive: true,
+    displayOrder: 3,
+  },
+];
+
 export const STUB_SETTINGS: GlobalSettings = {
   whatsappNumber: "917899858374",
   instagramUrl: "https://instagram.com/nutravoe",
@@ -196,14 +241,18 @@ export async function getAllBowls(): Promise<Bowl[]> {
     tagline,
     description,
     price,
-    "image": image.asset->url,
+    "image": image.asset->url + "?w=800&fm=webp&q=80",
     tags,
     available,
-    displayOrder
+    displayOrder,
+    ingredients,
+    nutrition,
+    customizableIngredients
   }`;
 
   try {
-    return await client.fetch(query);
+    const result = await client.fetch(query);
+    return result?.length ? result : STUB_BOWLS;
   } catch {
     return STUB_BOWLS;
   }
@@ -220,16 +269,46 @@ export async function getBowlBySlug(slug: string): Promise<Bowl | null> {
     tagline,
     description,
     price,
-    "image": image.asset->url,
+    "image": image.asset->url + "?w=800&fm=webp&q=80",
     tags,
     available,
-    displayOrder
+    displayOrder,
+    ingredients,
+    nutrition,
+    customizableIngredients
   }`;
 
   try {
     return await client.fetch(query, { slug });
   } catch {
     return STUB_BOWLS.find((b) => b.slug === slug) || null;
+  }
+}
+
+export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+  const client = await getSanityClient();
+  if (!client) return STUB_SUBSCRIPTION_PLANS;
+
+  const query = `*[_type == "subscriptionPlan" && isActive == true] | order(displayOrder asc) {
+    _id,
+    name,
+    "slug": slug.current,
+    bowlsPerCycle,
+    billingCycle,
+    priceNearPerBowl,
+    priceFarPerBowl,
+    customisationChargePerBowl,
+    deliveryStyles,
+    savingsBadge,
+    isActive,
+    displayOrder
+  }`;
+
+  try {
+    const result = await client.fetch(query);
+    return result?.length ? result : STUB_SUBSCRIPTION_PLANS;
+  } catch {
+    return STUB_SUBSCRIPTION_PLANS;
   }
 }
 

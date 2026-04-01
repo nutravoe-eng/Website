@@ -1,6 +1,9 @@
 "use client";
 import { useState, useEffect, FormEvent } from "react";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
+
+const MapPicker = dynamic(() => import("@/components/MapPicker"), { ssr: false });
 
 interface Address {
   id: string;
@@ -18,8 +21,27 @@ export default function AddressesPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({ label: "Home", line1: "", line2: "", pincode: "560" });
+  const [showMap, setShowMap] = useState(false);
+  const [pinLat, setPinLat] = useState<number | null>(null);
+  const [pinLng, setPinLng] = useState<number | null>(null);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>();
 
   useEffect(() => { loadAddresses(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Geocode pincode to center the map when pincode is complete
+  useEffect(() => {
+    if (formData.pincode.length !== 6) return;
+    fetch(`/api/geocode?pincode=${formData.pincode}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.lat && d.lng) {
+          setMapCenter({ lat: d.lat, lng: d.lng });
+          setPinLat(d.lat);
+          setPinLng(d.lng);
+        }
+      })
+      .catch(() => {});
+  }, [formData.pincode]);
 
   async function loadAddresses() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -66,6 +88,7 @@ export default function AddressesPage() {
         state: "Karnataka",
         pincode: formData.pincode,
         is_default: addresses.length === 0,
+        ...(showMap && pinLat && pinLng ? { lat: pinLat, lng: pinLng } : {}),
       })
       .select("id, label, line1, line2, pincode, is_default")
       .single();
@@ -78,6 +101,10 @@ export default function AddressesPage() {
     setSaving(false);
     setIsAdding(false);
     setFormData({ label: "Home", line1: "", line2: "", pincode: "560" });
+    setShowMap(false);
+    setPinLat(null);
+    setPinLng(null);
+    setMapCenter(undefined);
   };
 
   const removeAddress = async (id: string) => {
@@ -169,6 +196,37 @@ export default function AddressesPage() {
                 className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
               />
             </div>
+
+            {/* Optional map pin */}
+            <div className="md:col-span-2 border border-dashed border-black/15 rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowMap((v) => !v)}
+                className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-black/[0.02] transition-colors"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sage shrink-0">
+                  <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+                  <circle cx="12" cy="10" r="3"/>
+                </svg>
+                <span className="font-body text-[13px] text-ink font-medium">Pin your exact location</span>
+                <span className="font-body text-[11px] text-stone ml-1">(optional)</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`ml-auto text-stone transition-transform ${showMap ? "rotate-180" : ""}`}>
+                  <path d="m6 9 6 6 6-6"/>
+                </svg>
+              </button>
+              {showMap && (
+                <div className="px-4 pb-4">
+                  <p className="font-body text-[12px] text-stone mb-3">
+                    Drag the pin or tap the map to mark your exact gate or building entrance.
+                  </p>
+                  <MapPicker
+                    centerLat={mapCenter?.lat}
+                    centerLng={mapCenter?.lng}
+                    onChange={(lat, lng) => { setPinLat(lat); setPinLng(lng); }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex gap-3">
             <button
@@ -180,7 +238,7 @@ export default function AddressesPage() {
             </button>
             <button
               type="button"
-              onClick={() => setIsAdding(false)}
+              onClick={() => { setIsAdding(false); setShowMap(false); setPinLat(null); setPinLng(null); setMapCenter(undefined); }}
               className="bg-white hover:bg-black/5 border border-black/10 text-ink font-body text-[13px] font-bold px-6 py-2.5 rounded-md transition-colors"
             >
               Cancel

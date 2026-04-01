@@ -8,7 +8,10 @@ const PROTECTED_PREFIXES = [
   '/account',
   '/cancellations',
   '/help',
+  '/invoice',
 ];
+
+const ADMIN_PREFIX = '/admin';
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -60,6 +63,42 @@ export async function middleware(request: NextRequest) {
     url.pathname = next;
     url.search = '';
     return NextResponse.redirect(url);
+  }
+
+  // ── Admin routes ──────────────────────────────────────────────────────────
+  if (pathname.startsWith(ADMIN_PREFIX) && pathname !== '/admin/login') {
+    // Not logged in → send to admin login
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/admin/login';
+      return NextResponse.redirect(url);
+    }
+    // Logged in but not admin → send to homepage
+    const { data: profile } = await supabase
+      .from('users')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single();
+    if (!profile?.is_admin) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/';
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // Redirect signed-in admins away from /admin/login
+  if (user && pathname === '/admin/login') {
+    const { data: profile } = await supabase
+      .from('users')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single();
+    if (profile?.is_admin) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/admin';
+      url.search = '';
+      return NextResponse.redirect(url);
+    }
   }
 
   return supabaseResponse;

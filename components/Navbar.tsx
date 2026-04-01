@@ -27,6 +27,11 @@ export default function Navbar() {
 
   // Location Modal State
   const [showLocationModal, setShowLocationModal] = useState(false);
+  // Waitlist form state
+  const [waitlistName, setWaitlistName] = useState("");
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistPhone, setWaitlistPhone] = useState("");
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [savedPincode, setSavedPincode] = useState("560001");
   const [inputPincode, setInputPincode] = useState("");
   const [locationState, setLocationState] = useState<"idle" | "invalid" | "waitlist" | "success">("idle");
@@ -43,7 +48,7 @@ export default function Navbar() {
     const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener("scroll", onScroll);
 
-    const applyUser = async (authUser: { email?: string | null; user_metadata?: Record<string, unknown> } | null) => {
+    const applyUser = async (authUser: { id?: string; email?: string | null; user_metadata?: Record<string, unknown> } | null) => {
       if (authUser) {
         const name =
           (authUser.user_metadata?.full_name as string | undefined) ??
@@ -63,7 +68,22 @@ export default function Navbar() {
         if (addys) {
           const parsedAddys = JSON.parse(addys);
           setSavedAddresses(parsedAddys);
-          if (parsedAddys.length > 0) setSavedPincode(parsedAddys[0].pincode);
+          if (parsedAddys.length > 0) {
+            const defaultAddr = parsedAddys.find((a: { isDefault?: boolean }) => a.isDefault) ?? parsedAddys[0];
+            setSavedPincode(defaultAddr.pincode);
+          }
+        } else if (authUser.id) {
+          // Fallback: fetch default address from Supabase
+          const { data: addresses } = await supabase
+            .from('addresses')
+            .select('pincode, is_default')
+            .eq('user_id', authUser.id)
+            .order('is_default', { ascending: false })
+            .limit(5);
+          if (addresses && addresses.length > 0) {
+            const def = addresses.find((a: { is_default?: boolean; pincode: string }) => a.is_default) ?? addresses[0];
+            setSavedPincode(def.pincode);
+          }
         }
       } else {
         setUser(null);
@@ -85,7 +105,10 @@ export default function Navbar() {
       if (addys) {
         const parsedAddys = JSON.parse(addys);
         setSavedAddresses(parsedAddys);
-        if (parsedAddys.length > 0) setSavedPincode(parsedAddys[0].pincode);
+        if (parsedAddys.length > 0) {
+          const defaultAddr = parsedAddys.find((a: { isDefault?: boolean }) => a.isDefault) ?? parsedAddys[0];
+          setSavedPincode(defaultAddr.pincode);
+        }
       }
     });
 
@@ -502,13 +525,28 @@ export default function Navbar() {
                 <div className="flex flex-col gap-4 animate-in slide-in-from-right-4 duration-300">
                   <p className="font-body text-[14.5px] font-medium text-ink">Request delivery to <span className="font-bold">{inputPincode}</span></p>
                   <p className="font-body text-[13px] text-stone mb-2">Leave your details and we'll notify you the moment we launch in your neighborhood.</p>
-                  <input type="email" placeholder="Email Address" className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm focus:outline-none focus:border-sage" />
-                  <input type="tel" placeholder="Phone Number" className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm focus:outline-none focus:border-sage" />
-                  <button 
-                    onClick={() => setLocationState("success")}
-                    className="w-full bg-terracotta hover:bg-terracotta/90 text-white font-body text-[13px] tracking-wide font-bold py-3 rounded-md transition-colors mt-2 shadow-sm cursor-pointer border border-black/5"
+                  <input type="text" placeholder="Your Name" value={waitlistName} onChange={e => setWaitlistName(e.target.value)} className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm focus:outline-none focus:border-sage" />
+                  <input type="email" placeholder="Email Address" value={waitlistEmail} onChange={e => setWaitlistEmail(e.target.value)} className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm focus:outline-none focus:border-sage" />
+                  <input type="tel" placeholder="Phone Number" value={waitlistPhone} onChange={e => setWaitlistPhone(e.target.value)} className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm focus:outline-none focus:border-sage" />
+                  <button
+                    disabled={waitlistSubmitting}
+                    onClick={async () => {
+                      if (!waitlistEmail && !waitlistPhone) return;
+                      setWaitlistSubmitting(true);
+                      try {
+                        await fetch('/api/area-interest', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ name: waitlistName, email: waitlistEmail, phone: waitlistPhone, pincode: inputPincode }),
+                        });
+                        setLocationState("success");
+                      } finally {
+                        setWaitlistSubmitting(false);
+                      }
+                    }}
+                    className="w-full bg-terracotta hover:bg-terracotta/90 disabled:opacity-60 text-white font-body text-[13px] tracking-wide font-bold py-3 rounded-md transition-colors mt-2 shadow-sm cursor-pointer border border-black/5"
                   >
-                    Submit Request
+                    {waitlistSubmitting ? 'Submitting…' : 'Submit Request'}
                   </button>
                   <button onClick={() => setLocationState("idle")} className="font-body text-xs text-stone hover:text-ink transition-colors mt-1 underline">
                     Go back

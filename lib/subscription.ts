@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import type { Subscription, DayBowlConfig } from '@/types';
-import { PLANS, type PlanConfig } from '@/app/subscribe/PlanCard';
+import { STUB_PLANS as PLANS, type PlanConfig } from '@/app/subscribe/PlanCard';
 
 // Map Supabase day_of_week enum to the app's DayBowlConfig day type
 function mapDay(d: string): DayBowlConfig['day'] {

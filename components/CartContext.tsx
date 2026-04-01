@@ -6,9 +6,9 @@ import { Bowl, CartItem, IngredientCustomization } from "@/types";
 interface CartContextValue {
   items: CartItem[];
   addItem: (bowl: Bowl, customizations?: IngredientCustomization[], customizationCost?: number) => void;
-  removeItem: (bowlId: string) => void;
-  updateQuantity: (bowlId: string, quantity: number) => void;
-  updateCustomizations: (bowlId: string, customizations: IngredientCustomization[], customizationCost: number) => void;
+  removeItem: (instanceId: string) => void;
+  updateQuantity: (instanceId: string, quantity: number) => void;
+  updateCustomizations: (instanceId: string, customizations: IngredientCustomization[], customizationCost: number) => void;
   clearCart: () => void;
   total: number;
   itemCount: number;
@@ -22,16 +22,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addItem = useCallback(
     (bowl: Bowl, customizations?: IngredientCustomization[], customizationCost?: number) => {
       setItems((prev) => {
-        const existing = prev.find((i) => i.bowl._id === bowl._id);
+        const sortedCustomizations = [...(customizations || [])].sort((a,b) => a.ingredientId.localeCompare(b.ingredientId));
+        const instanceId = `${bowl._id}-${sortedCustomizations.map(c => c.ingredientId + c.option).join('-')}`;
+        
+        const existing = prev.find((i) => i.instanceId === instanceId);
         if (existing) {
           // Increment quantity only — keep existing customizations
           return prev.map((i) =>
-            i.bowl._id === bowl._id ? { ...i, quantity: i.quantity + 1 } : i
+            i.instanceId === instanceId ? { ...i, quantity: i.quantity + 1 } : i
           );
         }
         return [
           ...prev,
           {
+            instanceId,
             bowl,
             quantity: 1,
             customizations: customizations ?? [],
@@ -43,25 +47,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const removeItem = useCallback((bowlId: string) => {
-    setItems((prev) => prev.filter((i) => i.bowl._id !== bowlId));
+  const removeItem = useCallback((instanceId: string) => {
+    setItems((prev) => prev.filter((i) => i.instanceId !== instanceId));
   }, []);
 
-  const updateQuantity = useCallback((bowlId: string, quantity: number) => {
+  const updateQuantity = useCallback((instanceId: string, quantity: number) => {
     if (quantity <= 0) {
-      setItems((prev) => prev.filter((i) => i.bowl._id !== bowlId));
+      setItems((prev) => prev.filter((i) => i.instanceId !== instanceId));
     } else {
       setItems((prev) =>
-        prev.map((i) => (i.bowl._id === bowlId ? { ...i, quantity } : i))
+        prev.map((i) => (i.instanceId === instanceId ? { ...i, quantity } : i))
       );
     }
   }, []);
 
   const updateCustomizations = useCallback(
-    (bowlId: string, customizations: IngredientCustomization[], customizationCost: number) => {
+    (instanceId: string, customizations: IngredientCustomization[], customizationCost: number) => {
       setItems((prev) =>
         prev.map((i) =>
-          i.bowl._id === bowlId ? { ...i, customizations, customizationCost } : i
+          i.instanceId === instanceId ? { ...i, customizations, customizationCost } : i
         )
       );
     },

@@ -1,0 +1,57 @@
+﻿commit 759381f97c6dd196cb010a4b3ad1969a5749845a
+Author: Nutravoe <nutravoe@gmail.com>
+Date:   Tue Mar 31 12:10:35 2026 +0530
+
+    Add Supabase backend, auth, delivery fee, subscriptions, orders, wallet & Sanity CMS
+    
+    - Supabase email+password auth replacing localStorage mock auth
+    - Full DB schema: users, addresses, subscriptions, orders, wallet, cancellations (001_schema.sql)
+    - RLS policies, triggers, and auto-wallet creation on sign-up
+    - Middleware for session refresh and route protection
+    - Migrated all data layers from localStorage to Supabase (addresses, profile, subscriptions, orders, wallet, cancellations)
+    - Location-based delivery fee: free within 10 km of Domlur hub, +₹60 beyond (OpenStreetMap/Nominatim, no API key)
+    - Scalable multi-hub architecture with haversine distance calculation
+    - Client-side geocode cache (localStorage, 7-day TTL)
+    - Delivery time slot selection for spread and bulk subscription flows
+    - One-active-subscription-per-user constraint (partial unique index)
+    - Cancellations & Refunds page with 5-hour cutoff, wallet or original payment method refund
+    - Wallet page with transaction history, top-up flow
+    - Razorpay test integration and payment verification API route
+    - Sanity CMS integration (studio at /studio)
+    - Navbar wallet balance badge and delivery zone checker
+    
+    Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+ app/(dashboard)/addresses/page.tsx                 |   214 +-
+ app/(dashboard)/cancellations/page.tsx             |   400 +
+ app/(dashboard)/help/page.tsx                      |     5 +
+ app/(dashboard)/layout.tsx                         |    89 +-
+ app/(dashboard)/orders/page.tsx                    |   120 +-
+ app/(dashboard)/profile/page.tsx                   |   267 +-
+ app/(dashboard)/subscriptions/ManageModal.tsx      |    91 +-
+ .../subscriptions/SubscriptionsClient.tsx          |   159 +-
+ app/(dashboard)/wallet/page.tsx                    |   214 +
+ app/api/geocode/route.ts                           |    51 +
+ app/api/razorpay/verify/route.ts                   |    43 +
+ app/cart/page.tsx                                  |   343 +-
+ app/signin/page.tsx                                |   412 +-
+ app/studio/[[...index]]/layout.tsx                 |    12 +
+ app/studio/[[...index]]/page.tsx                   |     6 +
+ app/subscribe/PlanCard.tsx                         |    16 +
+ app/subscribe/SubscribeWizard.tsx                  |   602 +-
+ components/Navbar.tsx                              |   150 +-
+ lib/delivery.ts                                    |    64 +
+ lib/geocodeCache.ts                                |    58 +
+ lib/subscription.ts                                |    70 +
+ lib/supabase/admin.ts                              |    11 +
+ lib/supabase/client.ts                             |     8 +
+ lib/supabase/server.ts                             |    32 +
+ lib/wallet.ts                                      |   145 +
+ middleware.ts                                      |    72 +
+ package-lock.json                                  | 11556 +++++++++----------
+ package.json                                       |    20 +-
+ sanity.cli.ts                                      |     6 +
+ sanity.config.ts                                   |    25 +
+ supabase/migrations/001_schema.sql                 |   388 +
+ types/index.ts                                     |    17 +-
+ 32 files changed, 8983 insertions(+), 6683 deletions(-)

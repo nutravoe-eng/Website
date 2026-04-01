@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import type { Bowl, Subscription, IngredientCustomization } from '@/types';
 import { formatCurrency } from '@/lib/utils';
-import { PLANS, BULK_DAY_OPTIONS } from '../../subscribe/PlanCard';
+import { STUB_PLANS as PLANS, BULK_DAY_OPTIONS } from '../../subscribe/PlanCard';
 import BowlPicker from '../../subscribe/BowlPicker';
 import CustomizationModal from '@/components/CustomizationModal';
 
@@ -95,7 +95,7 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
         dayBowlMap: { ...e.dayBowlMap, [day]: '' },
       }));
     } else {
-      if (edit.selectedDays.length >= plan.bowlsPerWeek) return;
+      if (plan && edit.selectedDays.length >= plan.bowlsPerWeek) return;
       setEdit(e => ({ ...e, selectedDays: [...e.selectedDays, day] }));
     }
   }
@@ -106,7 +106,7 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
 
   function adjustCount(bowlId: string, delta: number) {
     const current = edit.bulkBowlCounts[bowlId] ?? 0;
-    if (delta > 0 && bulkTotal >= plan.bowlsPerWeek) return;
+    if (delta > 0 && plan && bulkTotal >= plan.bowlsPerWeek) return;
     const next = Math.max(0, current + delta);
     setEdit(e => ({ ...e, bulkBowlCounts: { ...e.bulkBowlCounts, [bowlId]: next } }));
   }
