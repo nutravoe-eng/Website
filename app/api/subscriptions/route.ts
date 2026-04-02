@@ -11,6 +11,38 @@ type DayConfigInput = {
   customizations?: Array<{ ingredientId: string; option: string }>;
 };
 
+const DAY_NAME_TO_ENUM: Record<string, string> = {
+  Sun: "sun",
+  Mon: "mon",
+  Tue: "tue",
+  Wed: "wed",
+  Thu: "thu",
+  Fri: "fri",
+  Sat: "sat",
+  sun: "sun",
+  mon: "mon",
+  tue: "tue",
+  wed: "wed",
+  thu: "thu",
+  fri: "fri",
+  sat: "sat",
+};
+
+function getTomorrowDayEnum(): string {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  return dayNames[tomorrow.getDay()]!;
+}
+
+function normalizeDayConfigDay(day: string, deliveryStyle: string): string | null {
+  if (deliveryStyle === "bulk" && day === "next-day") {
+    return getTomorrowDayEnum();
+  }
+
+  return DAY_NAME_TO_ENUM[day] ?? null;
+}
+
 function countCustomisedBowls(dayConfigs: DayConfigInput[]): number {
   return dayConfigs.reduce((sum, config) => {
     const hasCustomizations = Array.isArray(config.customizations) && config.customizations.some((item) => item?.option === "extra" || item?.option === "remove");
@@ -46,16 +78,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Delivery time slot is required" }, { status: 400, headers: limited.headers });
   }
 
+  if (dayConfigs.some((config) => !config?.bowlId || !Number.isFinite(config?.quantity) || Number(config.quantity) <= 0)) {
+    return NextResponse.json({ error: "Invalid subscription bowl configuration" }, { status: 400, headers: limited.headers });
+  }
+
   const { data: existingActive } = await adminSupabase
     .from("subscriptions")
     .select("id")
     .eq("user_id", user.id)
-    .eq("status", "active")
+    .in("status", ["active", "pending"])
     .limit(1)
     .maybeSingle();
 
   if (existingActive) {
-    return NextResponse.json({ error: "You already have an active subscription" }, { status: 409, headers: limited.headers });
+    return NextResponse.json({ error: "You already have an active or pending subscription" }, { status: 409, headers: limited.headers });
   }
 
   const { data: address, error: addressError } = await adminSupabase
@@ -70,6 +106,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A default delivery address is required" }, { status: 400, headers: limited.headers });
   }
 
+  const { data: dbPlan, error: planFetchError } = await adminSupabase
+    .from("subscription_plans")
+    .select("id")
+    .eq("slug", planId)
+    .single();
+
+  if (planFetchError || !dbPlan) {
+    return NextResponse.json({ error: "Invalid subscription plan" }, { status: 400, headers: limited.headers });
+  }
+
   let quote;
   try {
     quote = await buildSubscriptionQuote(planId, address, countCustomisedBowls(dayConfigs));
@@ -82,10 +128,10 @@ export async function POST(req: NextRequest) {
     .from("subscriptions")
     .insert({
       user_id: user.id,
-      plan_id: planId,
+      plan_id: dbPlan.id,
       style: deliveryStyle,
       billing_cycle: quote.billingCycle,
-      status: "active",
+      status: deliveryStyle === "flexible" ? "pending" : "active",
       start_date: nowIso,
       delivery_time_slot: deliveryStyle !== "flexible" ? deliveryTimeSlot : null,
       bulk_bowls: deliveryStyle === "bulk"
@@ -106,18 +152,27 @@ export async function POST(req: NextRequest) {
   }
 
   if (dayConfigs.length > 0) {
-    const { error: configError } = await adminSupabase
-      .from("subscription_day_configs")
-      .insert(dayConfigs.map((config) => ({
+    const configRows = dayConfigs.map((config) => {
+      const normalizedDay = normalizeDayConfigDay(config.day, deliveryStyle);
+      if (!normalizedDay) {
+        throw new Error(`Invalid delivery day: ${config.day}`);
+      }
+
+      return {
         subscription_id: subscription.id,
-        day_of_week: config.day.toLowerCase(),
+        day_of_week: normalizedDay,
         bowl_slug: config.bowlId,
         quantity: Math.max(1, Math.trunc(config.quantity)),
-      })));
+      };
+    });
+
+    const { error: configError } = await adminSupabase
+      .from("subscription_day_configs")
+      .insert(configRows);
 
     if (configError) {
       await adminSupabase.from("subscriptions").delete().eq("id", subscription.id);
-      return NextResponse.json({ error: "Failed to save subscription configuration" }, { status: 500, headers: limited.headers });
+      return NextResponse.json({ error: configError.message }, { status: 500, headers: limited.headers });
     }
   }
 

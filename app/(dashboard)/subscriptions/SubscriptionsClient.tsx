@@ -88,7 +88,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
 
     const { data: subRows, error: subError } = await supabase
       .from('subscriptions')
-      .select('*')
+      .select('*, subscription_plans ( slug )')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -119,11 +119,12 @@ export default function SubscriptionsClient({ bowls }: Props) {
         quantity: row.quantity,
       }));
 
-      const plan = PLANS.find(p => p.id === sub.plan_id);
+      const planSlug = sub.subscription_plans?.slug ?? sub.plan_id;
+      const plan = PLANS.find(p => p.id === planSlug);
 
       return {
         id: sub.id,
-        planId: sub.plan_id,
+        planId: planSlug,
         deliveryStyle: sub.style,
         billingCycle: sub.billing_cycle ?? 'weekly',
         status: sub.status,
@@ -209,7 +210,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
       <div className="flex items-center justify-between mb-8">
-        <h2 className="font-display text-2xl font-medium text-ink">Active Subscriptions</h2>
+        <h2 className="font-display text-2xl font-medium text-ink">My Subscriptions</h2>
         <Link
           href="/subscribe"
           className="px-4 py-2 bg-black/5 hover:bg-black/10 text-ink rounded-md font-body text-[13px] font-bold transition-colors"

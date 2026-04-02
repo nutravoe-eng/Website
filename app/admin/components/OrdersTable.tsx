@@ -82,6 +82,17 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
     }
   }
 
+  async function handleCancelOrder(order: AdminOrder) {
+    if (!confirm(`Cancel order for ${order.users.full_name}? This cannot be undone.`)) return;
+    try {
+      await patchOrder(order.id, { status: 'cancelled' });
+      onOrderUpdated({ id: order.id, status: 'cancelled' });
+      showToast('Order cancelled');
+    } catch {
+      showToast('Failed to cancel. Try again.');
+    }
+  }
+
   async function handleSaveNote() {
     if (!noteModal) return;
     setSaving(true);
@@ -211,9 +222,13 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                       <span className="inline-flex items-center gap-1 bg-sage/10 text-sage-dark font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
                         ✓ Delivered
                       </span>
+                    ) : order.status === 'cancelled' ? (
+                      <span className="inline-flex items-center bg-red-50 text-red-600 font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
+                        Cancelled
+                      </span>
                     ) : (
-                      <span className="inline-flex items-center bg-stone/10 text-stone font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
-                        Pending
+                      <span className="inline-flex items-center bg-stone/10 text-stone font-body text-[11px] font-bold px-2 py-0.5 rounded-full capitalize">
+                        {order.status}
                       </span>
                     )}
                   </td>
@@ -227,7 +242,7 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                           Mark Paid
                         </ActionBtn>
                       )}
-                      {order.status !== 'delivered' && (
+                      {order.status !== 'delivered' && order.status !== 'cancelled' && (
                         <ActionBtn onClick={() => handleMarkDelivered(order)} color="sage">
                           Mark Delivered
                         </ActionBtn>
@@ -238,6 +253,11 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                       >
                         {order.admin_notes ? 'Edit Note' : 'Add Note'}
                       </ActionBtn>
+                      {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                        <ActionBtn onClick={() => handleCancelOrder(order)} color="red">
+                          Cancel Order
+                        </ActionBtn>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -335,12 +355,13 @@ function Th({ children }: { children: React.ReactNode }) {
 function ActionBtn({ children, onClick, color }: {
   children: React.ReactNode;
   onClick: () => void;
-  color: 'terracotta' | 'sage' | 'stone';
+  color: 'terracotta' | 'sage' | 'stone' | 'red';
 }) {
   const styles = {
     terracotta: 'border-terracotta/30 text-terracotta hover:bg-terracotta/5',
     sage:       'border-sage/30 text-sage-dark hover:bg-sage/5',
     stone:      'border-black/10 text-stone hover:bg-black/5',
+    red:        'border-red-200 text-red-600 hover:bg-red-50',
   };
   return (
     <button

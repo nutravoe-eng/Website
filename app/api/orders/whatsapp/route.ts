@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
   const { data: activeSubscription } = await adminSupabase
     .from("subscriptions")
-    .select("plan_id")
+    .select("subscription_plans ( slug )")
     .eq("user_id", user.id)
     .eq("status", "active")
     .order("created_at", { ascending: false })
@@ -82,7 +82,9 @@ export async function POST(req: NextRequest) {
 
   let quote;
   try {
-    quote = await buildAuthoritativeOrder(items, address, activeSubscription?.plan_id ?? null);
+    const relatedPlans = activeSubscription?.subscription_plans as Array<{ slug?: string }> | undefined;
+    const activePlanSlug = relatedPlans?.[0]?.slug ?? null;
+    quote = await buildAuthoritativeOrder(items, address, activePlanSlug);
   } catch {
     return NextResponse.json({ error: "Unable to price this order" }, { status: 400, headers: limited.headers });
   }

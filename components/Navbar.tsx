@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, FormEvent } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useCart } from "./CartContext";
@@ -20,6 +20,7 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const isHomePage = pathname === "/";
   const { itemCount } = useCart();
   const supabase = createClient();
@@ -273,6 +274,7 @@ export default function Navbar() {
                             onClick={async () => {
                               await supabase.auth.signOut();
                               setProfileDropdownOpen(false);
+                              router.push("/");
                             }}
                             className="px-5 py-2 hover:bg-terracotta/5 font-body text-[13px] text-terracotta font-medium transition-colors text-left flex items-center justify-between group w-full"
                           >

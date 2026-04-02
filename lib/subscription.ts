@@ -23,7 +23,7 @@ export async function getActiveSubscription(): Promise<Subscription | null> {
 
   const { data: sub, error } = await supabase
     .from('subscriptions')
-    .select('*')
+    .select('*, subscription_plans ( slug )')
     .eq('user_id', user.id)
     .eq('status', 'active')
     .order('created_at', { ascending: false })
@@ -44,9 +44,11 @@ export async function getActiveSubscription(): Promise<Subscription | null> {
     quantity: row.quantity,
   }));
 
+  const planSlug = sub.subscription_plans?.slug ?? sub.plan_id;
+
   const subscription: Subscription = {
     id: sub.id,
-    planId: sub.plan_id,
+    planId: planSlug,
     deliveryStyle: sub.style,
     billingCycle: sub.billing_cycle ?? 'weekly',
     status: sub.status,

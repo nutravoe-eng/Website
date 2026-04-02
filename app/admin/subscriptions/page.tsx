@@ -36,13 +36,14 @@ export default function AdminSubscriptionsPage() {
   const [payModal, setPayModal]           = useState<AdminSubscription | null>(null);
   const [deliverModal, setDeliverModal]   = useState<AdminSubscription | null>(null);
   const [noteModal, setNoteModal]         = useState<AdminSubscription | null>(null);
+  const [rejectModal, setRejectModal]     = useState<AdminSubscription | null>(null);
   const [upiRef, setUpiRef]               = useState('');
   const [noteText, setNoteText]           = useState('');
   const [deliverDate, setDeliverDate]     = useState('');
   const [deliverSlot, setDeliverSlot]     = useState('');
   const [saving, setSaving]               = useState(false);
   const [toast, setToast]                 = useState('');
-  const [statusFilter, setStatusFilter]   = useState('active');
+  const [statusFilter, setStatusFilter]   = useState('pending');
 
   function showToast(msg: string) {
     setToast(msg);
@@ -156,6 +157,26 @@ export default function AdminSubscriptionsPage() {
     }
   }
 
+  async function handleReject() {
+    if (!rejectModal) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/subscriptions/${rejectModal.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      setSubs(prev => prev.filter(s => s.id !== rejectModal.id));
+      showToast('Subscription rejected and cancelled');
+      setRejectModal(null);
+    } catch {
+      showToast('Failed to reject. Try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div>
       {/* Toast */}
@@ -177,7 +198,7 @@ export default function AdminSubscriptionsPage() {
 
       {/* Filter tabs */}
       <div className="flex gap-2 mb-6">
-        {['active', 'paused', 'cancelled', 'expired'].map(s => (
+        {['pending', 'active', 'paused', 'cancelled', 'expired'].map(s => (
           <button
             key={s}
             onClick={() => setStatusFilter(s)}
@@ -281,7 +302,12 @@ export default function AdminSubscriptionsPage() {
 
               {/* Actions */}
               <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-black/5">
-                {sub.payment_status !== 'paid' && (
+                {sub.payment_status !== 'paid' && sub.status === 'pending' && (
+                  <Btn color="terracotta" onClick={() => { setPayModal(sub); setUpiRef(''); }}>
+                    Approve & Mark Paid
+                  </Btn>
+                )}
+                {sub.payment_status !== 'paid' && sub.status === 'active' && (
                   <Btn color="terracotta" onClick={() => { setPayModal(sub); setUpiRef(''); }}>
                     Mark Paid
                   </Btn>
@@ -298,6 +324,11 @@ export default function AdminSubscriptionsPage() {
                 <Btn color="stone" onClick={() => { setNoteModal(sub); setNoteText(sub.admin_notes ?? ''); }}>
                   {sub.admin_notes ? 'Edit Note' : 'Add Note'}
                 </Btn>
+                {(sub.status === 'pending' || sub.status === 'active') && (
+                  <Btn color="red" onClick={() => setRejectModal(sub)}>
+                    Reject
+                  </Btn>
+                )}
               </div>
             </div>
           ))}
@@ -382,6 +413,29 @@ export default function AdminSubscriptionsPage() {
         </Modal>
       )}
 
+      {/* Reject Modal */}
+      {rejectModal && (
+        <Modal onClose={() => setRejectModal(null)} title="Reject Subscription">
+          <div className="space-y-4">
+            <div className="bg-terracotta/5 border border-terracotta/20 rounded-lg p-4">
+              <p className="font-body text-[13px] text-ink font-semibold">{rejectModal.users.full_name}</p>
+              <p className="font-body text-[12px] text-stone">{rejectModal.subscription_plans?.name ?? rejectModal.style} · {rejectModal.status}</p>
+            </div>
+            <p className="font-body text-[13px] text-stone leading-relaxed">
+              This will cancel the subscription. The customer will see it as cancelled on their account. This cannot be undone from here.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setRejectModal(null)} className="flex-1 border border-black/10 rounded-lg py-3 font-body text-sm font-bold text-stone hover:bg-black/5 transition-colors">
+                Go Back
+              </button>
+              <button onClick={handleReject} disabled={saving} className="flex-1 bg-terracotta hover:bg-[#D55F43] disabled:bg-terracotta/30 text-white rounded-lg py-3 font-body text-sm font-bold transition-colors">
+                {saving ? 'Rejecting…' : 'Reject & Cancel'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Note Modal */}
       {noteModal && (
         <Modal onClose={() => setNoteModal(null)} title="Admin Note">
@@ -422,12 +476,13 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function Btn({ children, onClick, color }: {
   children: React.ReactNode; onClick: () => void;
-  color: 'terracotta' | 'sage' | 'stone';
+  color: 'terracotta' | 'sage' | 'stone' | 'red';
 }) {
   const styles = {
     terracotta: 'border-terracotta/30 text-terracotta hover:bg-terracotta/5',
     sage:       'border-sage/30 text-sage-dark hover:bg-sage/5',
     stone:      'border-black/10 text-stone hover:bg-black/5',
+    red:        'border-red-200 text-red-600 hover:bg-red-50',
   };
   return (
     <button onClick={onClick} className={`border rounded-lg px-4 py-2 font-body text-[12px] font-bold transition-colors ${styles[color]}`}>

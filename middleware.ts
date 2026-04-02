@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
 
 const PROTECTED_PREFIXES = [
@@ -70,38 +71,42 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Admin routes ──────────────────────────────────────────────────────────
-  if (pathname.startsWith(ADMIN_PREFIX) && pathname !== '/admin/login') {
+  const isAdminRoute = pathname.startsWith(ADMIN_PREFIX) && pathname !== '/admin/login';
+  const isAdminLogin = pathname === '/admin/login';
+
+  if (isAdminRoute || (user && isAdminLogin)) {
     // Not logged in → send to admin login
-    if (!user) {
+    if (!user && isAdminRoute) {
       const url = request.nextUrl.clone();
       url.pathname = '/admin/login';
       return NextResponse.redirect(url);
     }
-    // Logged in but not admin → send to homepage
-    const { data: profile } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single();
-    if (!profile?.is_admin) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/';
-      return NextResponse.redirect(url);
-    }
-  }
 
-  // Redirect signed-in admins away from /admin/login
-  if (user && pathname === '/admin/login') {
-    const { data: profile } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single();
-    if (profile?.is_admin) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/admin';
-      url.search = '';
-      return NextResponse.redirect(url);
+    if (user) {
+      // Use service-role client so RLS does not block the is_admin check
+      const serviceSupabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } },
+      );
+      const { data: profile } = await serviceSupabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (isAdminRoute && !profile?.is_admin) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/';
+        return NextResponse.redirect(url);
+      }
+
+      if (isAdminLogin && profile?.is_admin) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/admin';
+        url.search = '';
+        return NextResponse.redirect(url);
+      }
     }
   }
 

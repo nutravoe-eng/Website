@@ -80,6 +80,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState(false);
   const [hasActiveSub, setHasActiveSub] = useState(false);
 
   // Convert Sanity plans to PlanConfig using distance-based pricing
@@ -123,12 +124,12 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         email: authUser.email ?? '',
       });
 
-      // Check for active subscription
+      // Check for active or pending subscription
       const { data: activeSub } = await supabase
         .from('subscriptions')
         .select('id')
         .eq('user_id', authUser.id)
-        .eq('status', 'active')
+        .in('status', ['active', 'pending'])
         .limit(1)
         .maybeSingle();
 
@@ -356,8 +357,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     try {
       const subRef = await saveSubscription();
       if (!subRef) {
-        setError('Your subscription request could not be saved, so WhatsApp was not opened.');
-        return;
+        return; // saveSubscription already set the specific error
       }
       const message = buildSubscriptionWhatsAppMessage({
         customerName: user.name,
@@ -375,6 +375,11 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         subscriptionRef: subRef,
       });
       window.open(getWhatsAppUrl(whatsappNumber, message), "_blank", "noopener,noreferrer");
+      if (getScenario() === 'D') {
+        setPendingApproval(true);
+      } else {
+        setSuccess(true);
+      }
     } catch {
       setError('Something went wrong while creating your subscription. Please try again.');
     } finally {
@@ -444,7 +449,8 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     });
 
     if (!res.ok) {
-      setError('Failed to save subscription. Please contact support.');
+      const payload = await res.json().catch(() => null);
+      setError(typeof payload?.error === 'string' ? payload.error : 'Failed to save subscription. Please contact support.');
       return null;
     }
 
@@ -454,8 +460,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
       return null;
     }
 
-    setSuccess(true);
-    // Return short ref for WhatsApp message
+    // Return short ref for WhatsApp message (caller sets success/pending state)
     return newSub.id.slice(-6).toUpperCase();
   }
 
@@ -473,7 +478,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
   // ─── Active subscription blocker ──────────────────────────────────────────────
 
-  if (hasActiveSub && !success) {
+  if (hasActiveSub && !success && !pendingApproval) {
     return (
       <div className="max-w-lg mx-auto">
         <div className="bg-white rounded-2xl border border-black/8 p-10 text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
@@ -482,9 +487,9 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
           </div>
-          <h2 className="font-display text-2xl font-medium text-ink mb-3">You already have an active subscription</h2>
+          <h2 className="font-display text-2xl font-medium text-ink mb-3">You already have a subscription</h2>
           <p className="font-body text-[14px] text-stone leading-relaxed mb-8">
-            Only one active subscription is allowed at a time. To switch plans, please cancel your current subscription first and then subscribe again.
+            Only one subscription is allowed at a time. To switch plans, please cancel your current subscription first and then subscribe again.
           </p>
           <Link
             href="/subscriptions"
@@ -492,6 +497,36 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           >
             Manage My Subscription
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Pending approval screen (flexible wallet) ───────────────────────────────
+
+  if (pendingApproval && currentPlan) {
+    return (
+      <div className="max-w-lg mx-auto">
+        <div className="bg-white rounded-2xl border border-black/10 p-10 text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] animate-in zoom-in-95 duration-400">
+          <div className="w-16 h-16 rounded-full bg-terracotta/10 flex items-center justify-center mx-auto mb-6">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C4714A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </div>
+          <h2 className="font-display text-3xl font-medium text-ink mb-3">Request sent!</h2>
+          <p className="font-body text-[14px] text-stone leading-relaxed mb-2">
+            Your <strong className="text-ink">{currentPlan.name}</strong> wallet request has been sent via WhatsApp.
+          </p>
+          <p className="font-body text-[13px] text-stone mb-8">
+            Your plan will become active once it has been approved. You'll hear from us shortly.
+          </p>
+          <Link
+            href="/subscriptions"
+            className="bg-terracotta hover:bg-[#D55F43] text-white font-body text-sm font-bold tracking-wide px-8 py-3 rounded-md transition-colors shadow-sm inline-block"
+          >
+            View My Subscription
           </Link>
         </div>
       </div>

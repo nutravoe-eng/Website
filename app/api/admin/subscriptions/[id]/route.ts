@@ -3,7 +3,7 @@ import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 
 const ALLOWED_PAYMENT_STATUSES = new Set(['pending', 'paid', 'failed', 'refunded']);
-const ALLOWED_SUBSCRIPTION_STATUSES = new Set(['active', 'paused', 'cancelled', 'expired']);
+const ALLOWED_SUBSCRIPTION_STATUSES = new Set(['pending', 'active', 'paused', 'cancelled', 'expired']);
 
 export async function PATCH(
   req: NextRequest,
