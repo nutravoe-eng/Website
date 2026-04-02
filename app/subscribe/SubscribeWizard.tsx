@@ -380,7 +380,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
   async function saveSubscription(): Promise<string | null> {
     if (!currentPlan || !user) return null;
-    const supabase = createClient();
     const scenario = getScenario();
 
     // Build day_configs for spread/daily scenarios
@@ -414,64 +413,41 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         }))
       : [];
 
-    const startDate = new Date().toISOString();
+    const res = await fetch('/api/subscriptions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        planId: state.planId,
+        deliveryStyle: state.deliveryStyle ?? 'spread',
+        deliveryTimeSlot: scenario !== 'D' ? state.deliveryTimeSlot : null,
+        bulkDeliveryDay: scenario === 'B' ? state.bulkDeliveryDay : null,
+        dayConfigs: scenario === 'B'
+          ? Object.entries(state.bulkBowlCounts)
+              .filter(([, quantity]) => quantity > 0)
+              .map(([bowlId, quantity]) => ({
+                day: state.bulkDeliveryDay,
+                bowlId,
+                quantity,
+                customizations: state.bulkCustomMap[bowlId] ?? [],
+              }))
+          : dayConfigs.map((config) => ({
+              day: config.day,
+              bowlId: config.bowlId,
+              quantity: config.quantity,
+              customizations: config.customizations ?? [],
+            })),
+      }),
+    });
 
-    // Map DeliveryStyle to Supabase enum values
-    const supabaseStyle: string = state.deliveryStyle ?? 'spread';
-
-    // Calculate customisation charges
-    const customisationChargePerBowl = currentPlan.customisationChargePerBowl ?? 0;
-    let customisedBowlCount = 0;
-    if (scenario === 'C') {
-      customisedBowlCount = state.selectedDays.filter(day => (state.dayCustomMap[day] ?? []).length > 0).length;
-    } else if (scenario === 'A') {
-      for (const [day, bowlCounts] of Object.entries(state.dayBowlCounts)) {
-        for (const bowlId of Object.keys(bowlCounts)) {
-          if ((state.dayBowlCustomMap[day]?.[bowlId] ?? []).length > 0) customisedBowlCount++;
-        }
-      }
-    } else if (scenario === 'B') {
-      customisedBowlCount = Object.keys(state.bulkCustomMap).filter(id => (state.bulkCustomMap[id] ?? []).length > 0).length;
-    }
-    const customisationTotal = customisedBowlCount * customisationChargePerBowl;
-    const totalAmountRs = currentPlan.weeklyPrice + customisationTotal;
-
-    const { data: newSub, error: insertError } = await supabase
-      .from('subscriptions')
-      .insert({
-        user_id: user.id,
-        plan_id: state.planId,
-        style: supabaseStyle,
-        billing_cycle: currentPlan.billingCycle ?? 'weekly',
-        status: 'active',
-        start_date: startDate,
-        delivery_time_slot: scenario !== 'D' ? state.deliveryTimeSlot : null,
-        bulk_bowls: scenario === 'B'
-          ? Object.values(state.bulkBowlCounts).reduce((s, c) => s + c, 0)
-          : null,
-        bulk_delivery_date: scenario === 'B' ? state.bulkDeliveryDay : null,
-        wallet_balance_rs: 0,
-        total_amount_rs: totalAmountRs,
-        payment_status: 'pending',
-        notes: "requested_via_whatsapp",
-      })
-      .select('id')
-      .single();
-
-    if (insertError || !newSub) {
+    if (!res.ok) {
       setError('Failed to save subscription. Please contact support.');
       return null;
     }
 
-    // Insert day configs
-    if (dayConfigs.length > 0) {
-      const configRows = dayConfigs.map(dc => ({
-        subscription_id: newSub.id,
-        day_of_week: dc.day.toLowerCase(),
-        bowl_slug: dc.bowlId,
-        quantity: dc.quantity,
-      }));
-      await supabase.from('subscription_day_configs').insert(configRows);
+    const newSub = await res.json() as { id?: string };
+    if (!newSub.id) {
+      setError('Failed to save subscription. Please contact support.');
+      return null;
     }
 
     setSuccess(true);

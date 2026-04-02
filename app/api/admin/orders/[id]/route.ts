@@ -24,6 +24,14 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid order status' }, { status: 422 });
   }
 
+  if (payment_reference !== undefined && (typeof payment_reference !== 'string' || payment_reference.length > 200)) {
+    return NextResponse.json({ error: 'payment_reference must be a string under 200 characters' }, { status: 422 });
+  }
+
+  if (admin_notes !== undefined && (typeof admin_notes !== 'string' || admin_notes.length > 2000)) {
+    return NextResponse.json({ error: 'admin_notes must be a string under 2000 characters' }, { status: 422 });
+  }
+
   const updates: Record<string, unknown> = {};
   if (payment_status    !== undefined) updates.payment_status    = payment_status;
   if (payment_reference !== undefined) updates.payment_reference = payment_reference;

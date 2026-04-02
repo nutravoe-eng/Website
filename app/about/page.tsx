@@ -22,17 +22,17 @@ export default function AboutPage() {
               <em className="text-sage">Made for India.</em>
             </h1>
             <p className="font-body text-[15px] font-light text-stone leading-loose mb-6 max-w-lg">
-              Mornings decide how the rest of the day feels. Yet breakfast is often rushed,
-              confusing, or skipped altogether. Nutravoe solves one simple problem: what if
-              the right breakfast just showed up at your doorstep every morning?
+              What you eat shapes how you feel. Yet finding a wholesome, protein-rich meal
+              is often rushed, confusing, or skipped entirely. Nutravoe solves one simple
+              problem: what if the right bowl just showed up at your doorstep?
             </p>
             <p className="font-body text-[15px] font-light text-stone leading-loose mb-6 max-w-lg">
               On a trip to Austria, Harshita noticed something simple and brilliant —
-              grab-and-go breakfast bowls. Fresh, healthy, and casually available everywhere.
+              grab-and-go protein yoghurt bowls. Fresh, healthy, and casually available everywhere.
               She looked around and realised there was no equivalent in India.
             </p>
             <p className="font-body text-[15px] font-light text-stone leading-loose max-w-lg">
-              So she built one. Nutravoe is her answer to the gap: a premium morning ritual,
+              So she built one. Nutravoe is her answer to the gap: a premium daily ritual,
               made by hand in small batches each day and delivered to your door before 10 AM.
               No apps, no aggregators — just you and a bowl worth looking forward to.
             </p>
@@ -80,7 +80,7 @@ export default function AboutPage() {
               {
                 icon: "🥛",
                 title: "Probiotic First",
-                body: "Every bowl starts with a probiotic yogurt base — supporting gut health, naturally, every morning.",
+                body: "Every bowl starts with a probiotic yogurt base — supporting gut health, naturally, every day.",
               },
               {
                 icon: "🍓",
@@ -105,7 +105,7 @@ export default function AboutPage() {
               {
                 icon: "🔁",
                 title: "Built for Habit",
-                body: "The goal is a subscription you look forward to. A morning ritual you can count on.",
+                body: "The goal is a subscription you look forward to. A wholesome ritual you can count on.",
               },
             ].map(({ icon, title, body }) => (
               <div key={title} className="border border-ink/8 p-8 rounded-sm hover:border-sage transition-colors duration-300">

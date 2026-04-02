@@ -118,7 +118,7 @@ export default function OrdersPage() {
       {orders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-[#F9F8F6] rounded-xl border border-black/5 border-dashed">
           <div className="relative w-20 h-20 mb-6 grayscale opacity-40 mix-blend-multiply">
-            <Image src="/nutravoe_image.jpg" alt="No Orders" fill className="object-cover rounded-full" />
+            <Image src="/hero-image.png" alt="No Orders" fill className="object-cover rounded-full" />
           </div>
           <h3 className="font-display text-xl font-medium text-ink mb-2">No orders yet</h3>
           <p className="font-body text-[13.5px] text-stone max-w-sm mb-6 leading-relaxed">

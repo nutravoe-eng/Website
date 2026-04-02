@@ -4,6 +4,7 @@ import { createServerClient } from '@supabase/ssr';
 import Image from 'next/image';
 import PrintTrigger from './PrintTrigger';
 import PrintButton from './PrintButton';
+import './invoice-print.css';
 
 interface Customizations {
   removed?: string[];
@@ -66,6 +67,7 @@ export default async function InvoicePage({
       order_items ( bowl_name, quantity, unit_price, total_price, customizations )
     `)
     .eq('id', orderId)
+    .eq('user_id', user.id)
     .single();
 
   if (!order) notFound();
@@ -95,30 +97,6 @@ export default async function InvoicePage({
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          header, nav, footer,
-          [class*="whatsapp"], [class*="WhatsApp"],
-          .print-hide { display: none !important; }
-          main { padding-top: 0 !important; }
-          body { background: white !important; margin: 0 !important; padding: 0 !important; }
-          @page {
-            size: A4;
-            margin: 0;
-          }
-          .invoice-page {
-            box-shadow: none !important;
-            margin: 0 !important;
-            max-width: 100% !important;
-            width: 100% !important;
-            min-height: 297mm !important;
-          }
-        }
-        @media screen {
-          body { background: #ECEAE6; }
-        }
-      `}} />
-
       <PrintTrigger />
 
       {/* Screen-only top bar */}

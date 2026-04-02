@@ -135,74 +135,23 @@ export default function CartPage() {
 
   // Record order in Supabase — returns short order ref on success
   const recordOrder = async (): Promise<string | null> => {
-    const supabase = createClient();
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return null;
+    const res = await fetch("/api/orders/whatsapp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        selectedSlot,
+        items: items.map((item) => ({
+          bowlSlug: item.bowl.slug,
+          quantity: item.quantity,
+          customizations: item.customizations,
+        })),
+      }),
+    });
 
-    // Parse delivery date from selected slot ("Today, ..." or "Tomorrow, ...")
-    const isToday = selectedSlot.startsWith("Today");
-    const deliveryDate = (() => {
-      const d = new Date();
-      if (!isToday) d.setDate(d.getDate() + 1);
-      return d.toISOString().split("T")[0];
-    })();
+    if (!res.ok) return null;
 
-    // Get default delivery address id
-    const { data: addrs } = await supabase
-      .from("addresses")
-      .select("id, is_default")
-      .eq("user_id", authUser.id)
-      .order("is_default", { ascending: false })
-      .limit(1);
-    const deliveryAddressId = addrs?.[0]?.id ?? null;
-
-    const { data: order, error } = await supabase
-      .from("orders")
-      .insert({
-        user_id:             authUser.id,
-        order_type:          "one_time",
-        status:              "pending",
-        delivery_date:       deliveryDate,
-        delivery_time_slot:  selectedSlot || null,
-        delivery_address_id: deliveryAddressId,
-        delivery_fee:        deliveryFee,
-        subtotal:            effectiveTotal,
-        total:               grandTotal,
-        payment_method:      "whatsapp_cod",
-        payment_status:      "pending",
-      })
-      .select("id")
-      .single();
-
-    if (error || !order) return null;
-
-    await supabase.from("order_items").insert(
-      items.map(i => {
-        const removed = i.customizations
-          .filter(c => c.option === "remove")
-          .map(c => i.bowl.customizableIngredients?.find(ing => ing.id === c.ingredientId)?.name)
-          .filter(Boolean);
-        const extra = i.customizations
-          .filter(c => c.option === "extra")
-          .map(c => i.bowl.customizableIngredients?.find(ing => ing.id === c.ingredientId)?.name)
-          .filter(Boolean);
-
-        return {
-          order_id:       order.id,
-          bowl_slug:      i.bowl.slug ?? i.bowl.name.toLowerCase().replace(/\s+/g, "-"),
-          bowl_name:      i.bowl.name,
-          quantity:       i.quantity,
-          unit_price:     subscriberPricePerBowl ?? i.bowl.price,
-          total_price:    (subscriberPricePerBowl ?? i.bowl.price) * i.quantity + i.customizationCost,
-          customizations: (removed.length > 0 || extra.length > 0)
-            ? { removed, added: extra }
-            : null,
-        };
-      })
-    );
-
-    // Return a short human-readable ref (last 6 chars of UUID)
-    return order.id.slice(-6).toUpperCase();
+    const order = await res.json() as { id?: string };
+    return order.id ? order.id.slice(-6).toUpperCase() : null;
   };
 
   async function handlePlaceOrder() {

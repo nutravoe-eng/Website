@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description:
     "Premium yogurt-based oatmeal bowls made fresh every morning in Bangalore. No added sugar, probiotic base, delivered 7–10 AM. Order via WhatsApp.",
   keywords: [
-    "healthy breakfast Bangalore",
+    "protein yoghurt bowl Bangalore",
     "yogurt bowl delivery",
     "fresh oatmeal delivery",
     "nutravoe",

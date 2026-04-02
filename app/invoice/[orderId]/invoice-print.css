@@ -1,0 +1,21 @@
+@media print {
+  header, nav, footer,
+  [class*="whatsapp"], [class*="WhatsApp"],
+  .print-hide { display: none !important; }
+  main { padding-top: 0 !important; }
+  body { background: white !important; margin: 0 !important; padding: 0 !important; }
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  .invoice-page {
+    box-shadow: none !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    min-height: 297mm !important;
+  }
+}
+@media screen {
+  body { background: #ECEAE6; }
+}

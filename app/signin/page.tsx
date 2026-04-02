@@ -39,7 +39,8 @@ function SignInForm() {
   // Redirect on success
   useEffect(() => {
     if (step === "success") {
-      const next = searchParams.get("next") ?? "/";
+      const rawNext = searchParams.get("next") ?? "/";
+      const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/';
       const timer = setTimeout(() => router.push(next), 2000);
       return () => clearTimeout(timer);
     }
@@ -139,21 +140,29 @@ function SignInForm() {
       return;
     }
 
-    // Save phone, first login timestamp, and insert default address
-    await Promise.all([
-      supabase.from("users").update({ phone, last_login_at: new Date().toISOString() }).eq("id", signInData.user.id),
-      supabase.from("addresses").insert({
-        user_id: signInData.user.id,
-        label: "Home",
-        line1: addressLine1.trim(),
-        line2: addressLine2.trim() || null,
-        city: city.trim(),
-        state: addressState,
-        pincode: pincode.trim(),
-        is_default: true,
-        ...(showMap && pinLat && pinLng ? { lat: pinLat, lng: pinLng } : {}),
+    const bootstrapRes = await fetch("/api/account/bootstrap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        full_name: name,
+        phone,
+        touch_last_login: true,
+        address: {
+          line1: addressLine1.trim(),
+          line2: addressLine2.trim() || null,
+          city: city.trim(),
+          state: addressState,
+          pincode: pincode.trim(),
+          ...(showMap && pinLat && pinLng ? { lat: pinLat, lng: pinLng } : {}),
+        },
       }),
-    ]);
+    });
+
+    if (!bootstrapRes.ok) {
+      setLoading(false);
+      setError("Account created, but we couldn't finish setting up your profile. Please try signing in again.");
+      return;
+    }
 
     setLoading(false);
     setIsNewUser(true);
@@ -185,9 +194,12 @@ function SignInForm() {
       return;
     }
 
-    // Update last login timestamp
     if (signInData.user) {
-      await supabase.from("users").update({ last_login_at: new Date().toISOString() }).eq("id", signInData.user.id);
+      await fetch("/api/account/bootstrap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ touch_last_login: true }),
+      });
     }
 
     setIsNewUser(false);

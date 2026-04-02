@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -16,17 +15,20 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError('');
 
-    const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
 
-    if (signInError) {
-      setError('Invalid email or password.');
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(res.status === 429 ? 'Too many attempts. Please wait and try again.' : (data.error ?? 'Invalid email or password.'));
       setLoading(false);
       return;
     }
 
     // Middleware will check is_admin and redirect away if not admin.
-    // If they are admin, next navigation will land on /admin.
     router.push('/admin');
     router.refresh();
   }

@@ -42,13 +42,13 @@ export default async function HomePage() {
             </p>
             <h1 className="font-display text-white mb-5"
               style={{ fontSize: "clamp(46px, 6vw, 76px)", lineHeight: "1.05" }}>
-              Healthy breakfast.<br />
-              No effort.<br />
+              Wholesome protein bowls.<br />
+              Any meal.<br />
               <em className="text-sage-light">At your door.</em>
             </h1>
             <p className="font-body text-[15px] font-light text-white/85 leading-relaxed mb-8 max-w-md">
-              Fresh yogurt bowls crafted every morning. High protein, gut-friendly,
-              no added sugar — a complete morning meal you'll actually look forward to.
+              Fresh yogurt bowls crafted daily. High protein, gut-friendly,
+              no added sugar — a complete meal you'll actually look forward to.
             </p>
             <div className="flex flex-wrap gap-4 items-center">
               <Link href="/menu" className="btn-sage shadow-[0_4px_20px_rgba(125,155,118,0.35)] hover:shadow-[0_4px_25px_rgba(125,155,118,0.55)] transition-all duration-300">
@@ -143,8 +143,8 @@ export default async function HomePage() {
           </h2>
           <p className="font-body text-[14px] font-light leading-loose text-stone max-w-md mb-10">
             On a trip to Austria, Harshita noticed something simple and brilliant —
-            grab-and-go breakfast bowls. Fresh, healthy, and just there. Nothing like it
-            existed in India. Nutravoe is her answer: a premium morning ritual, made by hand
+            grab-and-go protein bowls. Fresh, healthy, and just there. Nothing like it
+            existed in India. Nutravoe is her answer: a premium daily ritual, made by hand
             and at your door before 10 AM.
           </p>
           <p className="font-display text-[20px] italic text-stone">
@@ -176,7 +176,7 @@ export default async function HomePage() {
           </p>
           <h2 className="font-display text-ink mb-10"
             style={{ fontSize: "clamp(36px, 4vw, 60px)", lineHeight: "1.2" }}>
-            A complete breakfast.<br />
+            A complete meal.<br />
             <strong className="font-medium italic text-sage-dark">
               At your door before you need it.
             </strong>

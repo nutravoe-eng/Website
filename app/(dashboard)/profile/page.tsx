@@ -50,11 +50,15 @@ export default function ProfilePage() {
     if (!userId) return;
     setSaving(true);
     setSaveError("");
-    const [profileResult, authResult] = await Promise.all([
-      supabase.from("users").update({ full_name: formData.name, phone: formData.phone || null }).eq("id", userId),
+    const [profileRes, authResult] = await Promise.all([
+      fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: formData.name, phone: formData.phone || null }),
+      }),
       supabase.auth.updateUser({ data: { full_name: formData.name } }),
     ]);
-    if (profileResult.error || authResult.error) {
+    if (!profileRes.ok || authResult.error) {
       setSaveError("Failed to save profile changes. Please try again.");
       setSaving(false);
       return;

@@ -3,12 +3,18 @@ import { NextResponse } from 'next/server';
 import { adminSupabase } from '@/lib/supabase/admin';
 
 function getClientIp(request: Request | NextRequest) {
+  // x-real-ip is set by Vercel/trusted proxies and cannot be spoofed by the client
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) return realIp.trim();
+
+  // Fall back to the last IP in x-forwarded-for (added by the nearest trusted proxy)
   const forwardedFor = request.headers.get('x-forwarded-for');
   if (forwardedFor) {
-    return forwardedFor.split(',')[0]?.trim() ?? 'unknown';
+    const ips = forwardedFor.split(',');
+    return ips[ips.length - 1]?.trim() ?? 'unknown';
   }
 
-  return request.headers.get('x-real-ip') ?? 'unknown';
+  return 'unknown';
 }
 
 export async function enforceRateLimit(
@@ -25,7 +31,14 @@ export async function enforceRateLimit(
   });
 
   if (error) {
-    return { ok: true as const, headers: {} };
+    console.error('[rate-limit] DB error:', error.message);
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { error: 'Service temporarily unavailable. Please try again.' },
+        { status: 503 }
+      ),
+    };
   }
 
   const row = Array.isArray(data) ? data[0] : data;

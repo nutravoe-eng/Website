@@ -18,6 +18,30 @@ function mapDay(d: string): DayBowlConfig['day'] {
   return map[d] ?? 'Mon';
 }
 
+function getNextDeliveryDate(dayConfigs: DayBowlConfig[]): string {
+  const dayIndexMap: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  };
+  const configuredDays = dayConfigs
+    .map(dc => dayIndexMap[dc.day])
+    .filter((d): d is number => d !== undefined);
+
+  if (configuredDays.length === 0) return new Date().toISOString();
+
+  const today = new Date();
+  const todayIndex = today.getDay();
+
+  const diffs = configuredDays.map(d => {
+    const diff = d - todayIndex;
+    return diff <= 0 ? diff + 7 : diff;
+  });
+
+  const next = new Date(today);
+  next.setDate(today.getDate() + Math.min(...diffs));
+  next.setHours(0, 0, 0, 0);
+  return next.toISOString();
+}
+
 function deliverySummary(sub: Subscription): string {
   if (sub.deliveryStyle === "bulk" && sub.bulkBowls?.length) {
     const bowlList = sub.bulkBowls.map(b => `${b.quantity}× ${b.bowlName}`).join(", ");
@@ -104,7 +128,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
         billingCycle: sub.billing_cycle ?? 'weekly',
         status: sub.status,
         weeklyPrice: plan?.weeklyPrice ?? 0,
-        nextDelivery: sub.start_date ?? new Date().toISOString(),
+        nextDelivery: getNextDeliveryDate(dayConfigs),
         startDate: sub.start_date,
         deliveryTimeSlot: sub.delivery_time_slot ?? undefined,
         dayConfigs,
@@ -125,16 +149,13 @@ export default function SubscriptionsClient({ bowls }: Props) {
   }, [fetchSubscriptions]);
 
   async function updateStatus(id: string, status: Subscription["status"]) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const res = await fetch(`/api/subscriptions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
 
-    const { error: updateError } = await supabase
-      .from('subscriptions')
-      .update({ status })
-      .eq('id', id)
-      .eq('user_id', user.id);
-
-    if (updateError) {
+    if (!res.ok) {
       setError('Failed to update subscription status. Please try again.');
       return;
     }
@@ -143,40 +164,22 @@ export default function SubscriptionsClient({ bowls }: Props) {
   }
 
   async function handleManageSave(updated: Subscription) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setError('You need to sign in again.');
-      return;
-    }
-
-    const { error: updateError } = await supabase
-      .from('subscriptions')
-      .update({
-        delivery_time_slot: updated.deliveryTimeSlot ?? null,
-      })
-      .eq('id', updated.id)
-      .eq('user_id', user.id);
-
-    if (updateError) {
-      setError('Failed to save changes. Please try again.');
-      return;
-    }
-
-    // If day configs changed, replace them
-    if (updated.dayConfigs?.length) {
-      const { error: replaceError } = await supabase.rpc('replace_day_configs', {
-        p_subscription_id: updated.id,
-        p_configs: updated.dayConfigs.map((dc) => ({
-          day_of_week: dc.day.toLowerCase(),
-          bowl_slug: dc.bowlId,
+    const res = await fetch(`/api/subscriptions/${updated.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deliveryTimeSlot: updated.deliveryTimeSlot ?? null,
+        dayConfigs: updated.dayConfigs.map((dc) => ({
+          day: dc.day,
+          bowlId: dc.bowlId,
           quantity: dc.quantity,
         })),
-      });
+      }),
+    });
 
-      if (replaceError) {
-        setError('Failed to save day configuration changes. Please try again.');
-        return;
-      }
+    if (!res.ok) {
+      setError('Failed to save changes. Please try again.');
+      return;
     }
 
     setSubs(prev => prev.map(s => s.id === updated.id ? updated : s));

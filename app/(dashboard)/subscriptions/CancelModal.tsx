@@ -10,7 +10,7 @@ type Step = 'appeal' | 'reason' | 'confirm' | 'farewell';
 
 const REASONS = [
   { id: 'wallet',     label: "It's putting a strain on my wallet" },
-  { id: 'skipping',   label: "I keep skipping breakfast anyway" },
+  { id: 'skipping',   label: "I don't need it right now" },
   { id: 'variety',    label: "I wish there were more bowl options" },
   { id: 'travelling', label: "I'm travelling or relocating soon" },
   { id: 'diet',       label: "I'm changing my diet entirely" },
@@ -119,8 +119,8 @@ export default function CancelModal({ sub, onPause, onCancel, onClose }: Props) 
                 We hate to see you go.
               </h2>
               <p className="font-body text-[14px] text-stone leading-relaxed mb-6">
-                You've kept up{' '}
-                <strong className="text-ink">{totalBowls} healthy morning{totalBowls !== 1 ? 's' : ''}</strong>{' '}
+                You've had{' '}
+                <strong className="text-ink">{totalBowls} wholesome bowl{totalBowls !== 1 ? 's' : ''}</strong>{' '}
                 with Nutravoe over {weeksActive} week{weeksActive !== 1 ? 's' : ''}. That's something worth holding on to.
               </p>
 
@@ -274,7 +274,7 @@ export default function CancelModal({ sub, onPause, onCancel, onClose }: Props) 
                   {[
                     `${bowlsPerWeek} bowl${bowlsPerWeek !== 1 ? 's' : ''} of fresh, hand-prepared goodness each week`,
                     `Your daily dose of protein, fibre, and morning calm`,
-                    `${totalBowls} healthy morning${totalBowls !== 1 ? 's' : ''} you already built for yourself`,
+                    `${totalBowls} wholesome bowl${totalBowls !== 1 ? 's' : ''} you already enjoyed`,
                   ].map(line => (
                     <div key={line} className="flex items-start gap-2.5">
                       <span className="text-terracotta mt-0.5 leading-none font-bold shrink-0">·</span>
@@ -362,13 +362,13 @@ export default function CancelModal({ sub, onPause, onCancel, onClose }: Props) 
             </div>
 
             <h2 className="font-display text-[26px] font-medium text-ink mb-3 leading-tight">
-              We'll miss your mornings.
+              We'll miss having you.
             </h2>
             <p className="font-body text-[14px] text-stone leading-relaxed mb-2">
               Your subscription has been cancelled. No further charges will be made.
             </p>
             <p className="font-body text-[13px] text-stone/70 leading-relaxed mb-8 max-w-xs mx-auto">
-              Whenever life settles and you're ready to rebuild your morning ritual, we'll be here — same bowls, same care.
+              Whenever you're ready to come back to your healthy habit, we'll be here — same bowls, same care.
             </p>
 
             <div className="flex flex-col gap-3 max-w-xs mx-auto">
