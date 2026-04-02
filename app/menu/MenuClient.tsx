@@ -34,7 +34,7 @@ export default function MenuClient({ bowls }: { bowls: Bowl[] }) {
               <em className="text-sage">All considered.</em>
             </h1>
             <p className="font-body text-sm text-stone max-w-xs leading-relaxed">
-              Made fresh every morning. No added sugar. Probiotic yogurt base.
+              Made fresh daily. No added sugar. Probiotic yogurt base.
               Best consumed within 24 hours.
             </p>
           </div>
@@ -128,7 +128,7 @@ export default function MenuClient({ bowls }: { bowls: Bowl[] }) {
             </table>
           </div>
           <p className="font-body text-xs tracking-[0.2em] uppercase text-stone/60 text-center mt-8">
-            No added sugar · Probiotic yoghurt base · Made fresh every morning
+            No added sugar · Probiotic yoghurt base · Made fresh daily
           </p>
         </div>
       </section>
@@ -139,7 +139,7 @@ export default function MenuClient({ bowls }: { bowls: Bowl[] }) {
           Ready to order?
         </p>
         <p className="font-body text-sm text-sage-light mb-8 tracking-wide">
-          Message us on WhatsApp and we'll confirm delivery for 7–10 AM tomorrow.
+          Message us on WhatsApp and we'll confirm same-day delivery.
         </p>
         <a
           href={getWhatsAppHref()}

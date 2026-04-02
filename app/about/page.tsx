@@ -90,12 +90,12 @@ export default function AboutPage() {
               {
                 icon: "📦",
                 title: "Made Daily, Not Mass-Produced",
-                body: "Small batches. Fresh ingredients. No preservatives. Made that morning, delivered that morning.",
+                body: "Small batches. Fresh ingredients. No preservatives. Made fresh daily, delivered same day.",
               },
               {
                 icon: "⏰",
-                title: "Delivered 7–10 AM",
-                body: "Your bowl arrives before your day starts. That's the whole point.",
+                title: "Delivered 7 AM–9 PM",
+                body: "Order anytime — your bowl arrives the same day, whenever you need it.",
               },
               {
                 icon: "💬",

@@ -122,7 +122,7 @@ export default function OrdersPage() {
           </div>
           <h3 className="font-display text-xl font-medium text-ink mb-2">No orders yet</h3>
           <p className="font-body text-[13.5px] text-stone max-w-sm mb-6 leading-relaxed">
-            Looks like you haven't started your morning ritual yet. Explore our menu to find your perfect bowl.
+            Looks like you haven't placed an order yet. Explore our menu to find your perfect bowl.
           </p>
           <Link
             href="/menu"

@@ -149,7 +149,7 @@ export default function TestimonialsCarousel() {
           style={{ fontSize: "clamp(36px, 3.5vw, 52px)", lineHeight: "1.15" }}
         >
           Real people.{" "}
-          <em className="text-sage-light">Real mornings.</em>
+          <em className="text-sage-light">Real stories.</em>
         </h2>
       </div>
 

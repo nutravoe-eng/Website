@@ -575,7 +575,7 @@ function SignInForm() {
               </h1>
               <p className="font-body text-[14px] text-stone mb-2 px-2 leading-relaxed">
                 {isNewUser
-                  ? "Your account is ready. Let's get your morning sorted."
+                  ? "Your account is ready. Let's find your perfect bowl."
                   : "We're so glad to see you again. Taking you to the menu..."}
               </p>
               <div className="mt-8 flex gap-2 justify-center">

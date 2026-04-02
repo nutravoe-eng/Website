@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export const metadata = {
   title: "Order Confirmed — Nutravoe",
-  description: "Your Nutravoe bowl is being prepared. Delivery between 7–10 AM.",
+  description: "Your Nutravoe bowl is being prepared. Delivery today, 7 AM–9 PM.",
 };
 
 export default function ConfirmationPage() {
@@ -24,8 +24,8 @@ export default function ConfirmationPage() {
         </h1>
 
         <p className="font-body text-[15px] font-light text-stone leading-loose mb-10 max-w-sm mx-auto">
-          We&apos;ll prepare your order fresh tomorrow morning and deliver between
-          7–10 AM. We&apos;ll message you on WhatsApp to confirm.
+          We&apos;ll prepare your order fresh and deliver between
+          7 AM–9 PM. We&apos;ll message you on WhatsApp to confirm.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">

@@ -258,7 +258,7 @@ export default function B2BPage() {
             Partner with Nutravoe
           </h1>
           <p className="font-body text-[16px] font-light text-white/60 max-w-xl leading-relaxed mb-16">
-            Healthy mornings for your entire team — delivered fresh, billed weekly.
+            Wholesome protein bowls for your entire team — delivered fresh, billed weekly.
           </p>
 
           {/* Benefit blocks */}

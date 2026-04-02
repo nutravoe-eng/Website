@@ -426,7 +426,7 @@ export default function CartPage() {
             <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 text-center border-t border-black/5 pt-8">
               {[
                 { emoji: "🌅", text: "Made fresh daily" },
-                { emoji: "🚚", text: "7–10 AM delivery" },
+                { emoji: "🚚", text: "Same-day delivery" },
                 { emoji: "🥛", text: "Probiotic base" },
               ].map(({ emoji, text }) => (
                 <div key={text} className="flex flex-col items-center gap-2">

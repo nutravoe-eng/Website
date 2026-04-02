@@ -355,6 +355,10 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
     try {
       const subRef = await saveSubscription();
+      if (!subRef) {
+        setError('Your subscription request could not be saved, so WhatsApp was not opened.');
+        return;
+      }
       const message = buildSubscriptionWhatsAppMessage({
         customerName: user.name,
         customerPhone: user.phone,
@@ -368,7 +372,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             : (state.deliveryStyle ?? "spread"),
         deliveryTimeSlot: getScenario() !== "D" ? state.deliveryTimeSlot : undefined,
         configurationLines: buildSubscriptionConfigLines(currentPlan.name),
-        subscriptionRef: subRef ?? undefined,
+        subscriptionRef: subRef,
       });
       window.open(getWhatsAppUrl(whatsappNumber, message), "_blank", "noopener,noreferrer");
     } catch {
@@ -510,7 +514,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             Your <strong className="text-ink">{currentPlan.name}</strong> plan is now active.
           </p>
           <p className="font-body text-[13px] text-stone mb-8">
-            First delivery arrives tomorrow morning.
+            First delivery arrives tomorrow.
           </p>
           <Link
             href="/subscriptions"

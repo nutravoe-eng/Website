@@ -9,7 +9,7 @@ import WhatsAppButton from "@/components/WhatsAppButton";
 export const metadata: Metadata = {
   title: "Nutravoe — Fresh Yogurt Bowls, Delivered to Your Door",
   description:
-    "Premium yogurt-based oatmeal bowls made fresh every morning in Bangalore. No added sugar, probiotic base, delivered 7–10 AM. Order via WhatsApp.",
+    "Premium protein yogurt bowls made fresh daily in Bangalore. No added sugar, probiotic base, delivered 7 AM–9 PM. Order via WhatsApp.",
   keywords: [
     "protein yoghurt bowl Bangalore",
     "yogurt bowl delivery",
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Nutravoe — Fresh Yogurt Bowls, Delivered",
     description:
-      "Premium yogurt-based oatmeal bowls made fresh every morning. Delivered 7–10 AM in Bangalore.",
+      "Premium protein yogurt bowls made fresh daily. Delivered 7 AM–9 PM in Bangalore.",
     url: "https://nutravoe.in",
     siteName: "Nutravoe",
     locale: "en_IN",

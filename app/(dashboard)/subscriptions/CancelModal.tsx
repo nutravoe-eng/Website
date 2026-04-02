@@ -127,9 +127,9 @@ export default function CancelModal({ sub, onPause, onCancel, onClose }: Props) 
               {/* Benefits */}
               <div className="space-y-3.5 mb-2">
                 {([
-                  ['20g+ protein per bowl', 'More than two eggs. Enough to actually fuel your morning.'],
+                  ['20g+ protein per bowl', 'More than two eggs. Enough to fuel your whole day.'],
                   ['Probiotic yogurt base', 'Your gut works harder for you when you feed it right.'],
-                  ['Zero prep, every day', 'Nourishment without the 6 AM effort. Your mornings, simplified.'],
+                  ['Zero prep, every day', 'Nourishment without the effort. Your day, simplified.'],
                   ['Seasonal, fresh ingredients', 'Hand-prepared daily. Never mass-produced, never sitting in a factory.'],
                 ] as [string, string][]).map(([title, desc]) => (
                   <div key={title} className="flex items-start gap-3">
@@ -273,7 +273,7 @@ export default function CancelModal({ sub, onPause, onCancel, onClose }: Props) 
                 <div className="space-y-2">
                   {[
                     `${bowlsPerWeek} bowl${bowlsPerWeek !== 1 ? 's' : ''} of fresh, hand-prepared goodness each week`,
-                    `Your daily dose of protein, fibre, and morning calm`,
+                    `Your daily dose of protein, fibre, and feel-good energy`,
                     `${totalBowls} wholesome bowl${totalBowls !== 1 ? 's' : ''} you already enjoyed`,
                   ].map(line => (
                     <div key={line} className="flex items-start gap-2.5">

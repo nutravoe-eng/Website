@@ -16,8 +16,8 @@ export default function Footer() {
             className="h-8 w-auto object-contain mb-5 brightness-0 invert"
           />
           <p className="font-body text-[13px] leading-relaxed text-[#9A9590] max-w-xs">
-            Fresh yogurt bowls crafted every morning and delivered to your door
-            before 10 AM. Bangalore, Karnataka.
+            Fresh protein yogurt bowls crafted daily and delivered to your door.
+            7 AM–9 PM. Bangalore, Karnataka.
           </p>
         </div>
 

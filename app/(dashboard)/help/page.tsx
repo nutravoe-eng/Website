@@ -2,7 +2,7 @@
 import { useState } from "react";
 
 const faqs = [
-  {q: "What time do deliveries happen?", a: "To ensure your morning begins perfectly, all deliveries are completed between 7:00 AM and 10:00 AM. Our partners will leave the package at your door or with security if instructed."},
+  {q: "What time do deliveries happen?", a: "All deliveries are completed between 7:00 AM and 9:00 PM. Our partners will leave the package at your door or with security if instructed."},
   {q: "Can I cancel my order?", a: "Once an order has been placed, cancellations are not processed through the website. If you need urgent help with an order, please contact Nutravoe support directly."},
   {q: "How do refunds work after cancellation?", a: "Refunds are not initiated through the website after an order has been placed. Any exceptional support cases are handled manually by the Nutravoe team."},
   {q: "What if I need urgent help after placing an order?", a: "Please reach out immediately via WhatsApp or our support form. Our team will review the order status and guide you on the next steps."},
@@ -41,7 +41,7 @@ export default function HelpPage() {
             </div>
             <h3 className="font-display text-lg font-medium text-ink mb-1">WhatsApp Support</h3>
             <p className="font-body text-[13px] text-stone mb-4">
-              Get an instant resolution for your morning delivery via our concierge channel.
+              Get an instant resolution for your delivery via our concierge channel.
             </p>
             <button className="bg-sage hover:bg-sage-dark text-white font-body text-[13px] font-bold px-6 py-2.5 rounded-md transition-colors shadow-sm w-fit">
               Message Us Now

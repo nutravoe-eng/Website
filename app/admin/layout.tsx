@@ -1,7 +1,11 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import AdminLogout from './AdminLogout';
+import { verifyAdmin } from '@/lib/admin-auth';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const admin = await verifyAdmin();
+  if (!admin) redirect('/admin/login');
 
   return (
     <div className="min-h-screen bg-[#F9F8F6]">

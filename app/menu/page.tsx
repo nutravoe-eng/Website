@@ -4,7 +4,7 @@ import MenuClient from "./MenuClient";
 export const metadata = {
   title: "Menu — Nutravoe",
   description:
-    "All five fresh yogurt bowls. No added sugar, probiotic base. Made every morning in Bangalore.",
+    "All five fresh protein yogurt bowls. No added sugar, probiotic base. Made daily in Bangalore.",
 };
 
 export default async function MenuPage() {

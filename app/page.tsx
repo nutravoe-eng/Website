@@ -38,7 +38,7 @@ export default async function HomePage() {
         <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-16 w-full -mt-4">
           <div className="max-w-2xl">
             <p className="font-body text-[11px] font-medium tracking-[0.25em] mb-4 text-[#FF8A66]" style={{ textShadow: "0 2px 10px rgba(0,0,0,0.3)" }}>
-              FRESH · BANGALORE · DELIVERED 7–10 AM
+              FRESH · BANGALORE · DELIVERED 7 AM–9 PM
             </p>
             <h1 className="font-display text-white mb-5"
               style={{ fontSize: "clamp(46px, 6vw, 76px)", lineHeight: "1.05" }}>
@@ -85,7 +85,7 @@ export default async function HomePage() {
             },
             {
               icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-              title: "Delivered 7–10 AM", sub: "Before your day begins"
+              title: "Delivered 7 AM–9 PM", sub: "Order anytime, same day"
             },
           ].map(({ icon, title, sub }) => (
             <div key={title} className="px-4 lg:px-8 py-2.5 text-center flex flex-col justify-center items-center">
@@ -172,7 +172,7 @@ export default async function HomePage() {
       <section className="py-28 px-6 lg:px-16 text-center bg-cream">
         <div className="max-w-3xl mx-auto">
           <p className="font-body text-xs font-medium tracking-[0.22em] uppercase text-stone mb-8">
-            Delivered 7–10 AM · Order by WhatsApp · Bangalore
+            Delivered 7 AM–9 PM · Order by WhatsApp · Bangalore
           </p>
           <h2 className="font-display text-ink mb-10"
             style={{ fontSize: "clamp(36px, 4vw, 60px)", lineHeight: "1.2" }}>
@@ -187,7 +187,7 @@ export default async function HomePage() {
             rel="noopener noreferrer"
             className="inline-block btn-primary text-xs tracking-widest"
           >
-            Start Your Morning Ritual →
+            Order Your First Bowl →
           </a>
         </div>
       </section>
