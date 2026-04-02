@@ -78,10 +78,15 @@ export default function AdminSubscriptionsPage() {
         body: JSON.stringify({ payment_status: 'paid', payment_reference: upiRef.trim() || null }),
       });
       if (!res.ok) throw new Error('Failed');
-      setSubs(prev => prev.map(s => s.id === payModal.id
-        ? { ...s, payment_status: 'paid', payment_reference: upiRef.trim() || null }
-        : s
-      ));
+      if (statusFilter === 'pending') {
+        // Approval activates the subscription — remove it from the pending list
+        setSubs(prev => prev.filter(s => s.id !== payModal.id));
+      } else {
+        setSubs(prev => prev.map(s => s.id === payModal.id
+          ? { ...s, payment_status: 'paid', payment_reference: upiRef.trim() || null }
+          : s
+        ));
+      }
       showToast('Subscription payment confirmed and wallet loaded');
       setPayModal(null);
       setUpiRef('');
