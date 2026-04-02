@@ -3,55 +3,59 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { adminSupabase } from "@/lib/supabase/admin";
 
-export async function POST(req: NextRequest) {
-  // Verify the caller is authenticated via their session cookie
+export async function POST(_req: NextRequest) {
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return cookieStore.getAll(); },
+        getAll() {
+          return cookieStore.getAll();
+        },
         setAll() {},
       },
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
 
-  // Fetch their profile so we can record it before deletion
   const { data: profile } = await adminSupabase
     .from("users")
-    .select("full_name, phone")
+    .select("full_name, phone, is_deleted")
     .eq("id", user.id)
     .single();
 
-  // Record in churned_users BEFORE deleting auth record
-  const { error: churnError } = await adminSupabase
-    .from("churned_users")
-    .insert({
-      original_user_id: user.id,
-      email: user.email!,
-      phone: profile?.phone ?? null,
-      full_name: profile?.full_name ?? null,
-    });
-
-  if (churnError) {
-    console.error("Failed to record churned user:", churnError);
-    return NextResponse.json({ error: "Failed to process deletion." }, { status: 500 });
+  if (profile?.is_deleted) {
+    return NextResponse.json({ error: "Account is already deactivated." }, { status: 409 });
   }
 
-  // Delete the auth.users record — this cascades to public.users and all child rows.
-  // After this the user CANNOT log in again with these credentials.
-  const { error: deleteError } = await adminSupabase.auth.admin.deleteUser(user.id);
-  if (deleteError) {
-    // Roll back the churn record to avoid a ghost entry
-    await adminSupabase.from("churned_users").delete().eq("original_user_id", user.id);
-    console.error("Failed to delete auth user:", deleteError);
-    return NextResponse.json({ error: "Failed to delete account." }, { status: 500 });
+  const { error: banError } = await adminSupabase.auth.admin.updateUserById(user.id, {
+    ban_duration: "876000h",
+  });
+
+  if (banError) {
+    console.error("Failed to deactivate auth user:", banError);
+    return NextResponse.json({ error: "Failed to deactivate account." }, { status: 500 });
+  }
+
+  const { error: softDeleteError } = await adminSupabase.rpc("soft_delete_account", {
+    p_user_id: user.id,
+    p_email: user.email!,
+    p_phone: profile?.phone ?? null,
+    p_full_name: profile?.full_name ?? null,
+  });
+
+  if (softDeleteError) {
+    await adminSupabase.auth.admin.updateUserById(user.id, { ban_duration: "none" });
+    console.error("Failed to record soft deletion:", softDeleteError);
+    return NextResponse.json({ error: "Failed to deactivate account." }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

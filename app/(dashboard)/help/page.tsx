@@ -3,9 +3,9 @@ import { useState } from "react";
 
 const faqs = [
   {q: "What time do deliveries happen?", a: "To ensure your morning begins perfectly, all deliveries are completed between 7:00 AM and 10:00 AM. Our partners will leave the package at your door or with security if instructed."},
-  {q: "Can I cancel my order?", a: "Yes — you can cancel any order up to 5 hours before your delivery slot starts. Since all deliveries begin at 7:00 AM, the cancellation cutoff is 2:00 AM on the day of delivery. You can cancel directly from the 'Cancellations & Refunds' tab in your dashboard."},
-  {q: "How do refunds work after cancellation?", a: "Once you cancel, we give you the choice of where your refund goes: (1) Nutravoe Wallet — added instantly and ready to use on your very next order, or (2) Original payment method (card, UPI, Netbanking) — processed within 5–7 business days. No cancellation fee is charged in either case."},
-  {q: "What if I miss the 5-hour cancellation window?", a: "If the cutoff has passed, please reach out immediately via WhatsApp or our support form. We'll check whether your order has already been dispatched. If it hasn't, we'll do our best to help — though we cannot guarantee a cancellation once preparation has begun."},
+  {q: "Can I cancel my order?", a: "Once an order has been placed, cancellations are not processed through the website. If you need urgent help with an order, please contact Nutravoe support directly."},
+  {q: "How do refunds work after cancellation?", a: "Refunds are not initiated through the website after an order has been placed. Any exceptional support cases are handled manually by the Nutravoe team."},
+  {q: "What if I need urgent help after placing an order?", a: "Please reach out immediately via WhatsApp or our support form. Our team will review the order status and guide you on the next steps."},
   {q: "Can I pause my subscription?", a: "Yes, you can pause your subscription at any time. Just visit the Subscriptions tab and click 'Pause'. Changes take effect 24 hours prior to the next scheduled delivery."},
   {q: "What is the shelf life of a bowl?", a: "Because we use absolutely no artificial preservatives or industrial stabilisers, our bowls are strictly fresh. They are best consumed within 24 hours and must be kept refrigerated at all times."},
   {q: "Are the bowls suitable for a vegan diet?", a: "Our traditional bowls use a probiotic dairy yogurt base. However, we occasionally run seasonal plant-based specials. Check the menu tags for 'Vegan Friendly'."},
@@ -13,7 +13,7 @@ const faqs = [
   {q: "How do I update my delivery address?", a: "You can manage your addresses from the 'Addresses' tab in your dashboard. Make sure to set your preferred address as 'Default' to route your subscription correctly."},
   {q: "What if I miss my delivery?", a: "Since the product requires refrigeration, our delivery partners will attempt to call you. If unreachable, they will follow your default fallback instructions (e.g., leave with security point)."},
   {q: "Do you cater for events or offices?", a: "Yes! We offer bulk corporate drops. Please send us an email specifying the headcount, and we will get back to you with custom pricing."},
-  {q: "How does billing work for subscriptions?", a: "Subscriptions are billed automatically on a recurring cadence using your saved payment method on file. You will receive an email receipt for every transaction."},
+  {q: "How does billing work for subscriptions?", a: "Subscription payments are reviewed and approved by the Nutravoe team before the wallet is loaded for the selected plan cycle. Once approved, the credited amount is used against deliveries within that plan window."},
   {q: "How are the bowls packaged?", a: "We use premium, food-safe, environmentally conscious packaging that seals in freshness while minimising our carbon footprint. Please recycle the empty containers."},
 ];
 

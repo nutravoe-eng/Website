@@ -200,11 +200,11 @@ export default function ProfilePage() {
               <>
                 <h3 id="delete-account-title" className="font-display text-2xl font-medium text-ink mb-2">We're sad to see you go...</h3>
                 <p className="font-body text-[14px] text-stone mb-4 leading-relaxed">
-                  It breaks our heart to see you go! Nutravoe was built to make eating healthy effortless, and we'll miss being part of your routine. This will permanently erase your saved addresses, payment methods, and subscription history.
+                  It breaks our heart to see you go! Nutravoe was built to make eating healthy effortless, and we'll miss being part of your routine. Deactivating your account will remove your access to the website and stop future subscription activity.
                 </p>
                 <div className="bg-[#F9F8F6] p-4 rounded-lg border border-black/5 mb-6">
                   <p className="font-body text-[13px] text-ink/80 leading-relaxed font-medium">
-                    Please note: We will be retaining the account data for 30 days in line with our policies before permanent deletion. If you deleted your account by mistake, you can send us an email within this timeframe to restore it.
+                    Your past orders, payments, and account activity are retained for records. If you deactivated your account by mistake, please contact us within 30 days and we can help restore access.
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -220,7 +220,7 @@ export default function ProfilePage() {
               <>
                 <h3 id="delete-account-title" className="font-display text-2xl font-medium text-ink mb-2">Final Confirmation</h3>
                 <p className="font-body text-[14px] text-stone mb-6 leading-relaxed">
-                  You are about to permanently delete your Nutravoe profile.
+                  You are about to deactivate your Nutravoe profile.
                 </p>
                 <label className="block font-body text-[12px] font-bold text-ink mb-2 uppercase tracking-wide">
                   To confirm, type: <span className="text-terracotta select-all">I dont want healthy eating habits</span>
@@ -242,7 +242,7 @@ export default function ProfilePage() {
                         : "bg-black/5 text-stone cursor-not-allowed"
                     }`}
                   >
-                    Delete My Account
+                    Deactivate My Account
                   </button>
                   <button
                     onClick={() => { setShowDeleteModal(false); setDeleteStep(1); setDeleteConfirmText(""); }}

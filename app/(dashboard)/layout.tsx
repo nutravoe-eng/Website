@@ -61,7 +61,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       ? [{ name: "Wallet", path: "/wallet", badge: formatCurrency(walletBalanceRs) }]
       : []),
     { name: "Addresses", path: "/addresses" },
-    { name: "Cancellations & Refunds", path: "/cancellations" },
     { name: "Help & Support", path: "/help" },
   ] as { name: string; path: string; badge?: string }[];
 

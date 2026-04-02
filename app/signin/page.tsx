@@ -173,7 +173,10 @@ function SignInForm() {
     setLoading(false);
 
     if (signInError) {
-      if (signInError.message.toLowerCase().includes("invalid")) {
+      const lowerMessage = signInError.message.toLowerCase();
+      if (lowerMessage.includes("ban") || lowerMessage.includes("deactivated")) {
+        setError("This account has been deactivated. Please contact support if you need to restore access.");
+      } else if (lowerMessage.includes("invalid")) {
         // Could be wrong password OR email doesn't exist — offer sign-up
         setError("No account found with this email, or the password is incorrect.");
       } else {
