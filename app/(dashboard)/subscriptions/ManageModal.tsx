@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Image from 'next/image';
 import type { Bowl, Subscription, IngredientCustomization } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { STUB_PLANS as PLANS, BULK_DAY_OPTIONS } from '../../subscribe/PlanCard';
 import BowlPicker from '../../subscribe/BowlPicker';
 import CustomizationModal from '@/components/CustomizationModal';
+import { useDialogAccessibility } from '@/lib/use-dialog-accessibility';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 type Day = typeof DAYS[number];
@@ -38,7 +39,9 @@ interface Props {
 }
 
 export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
+  const dialogRef = useRef<HTMLDivElement>(null);
   const plan = PLANS.find(p => p.id === sub.planId);
+  useDialogAccessibility(dialogRef, onClose);
 
   const [edit, setEdit] = useState<EditState>(() => ({
     deliveryStyle: sub.deliveryStyle,
@@ -145,17 +148,24 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-ink/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="manage-subscription-title"
+        tabIndex={-1}
+        className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200 flex flex-col max-h-[92vh]"
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-black/5 shrink-0">
           <div>
-            <h3 className="font-display text-xl font-medium text-ink">Manage Subscription</h3>
+            <h3 id="manage-subscription-title" className="font-display text-xl font-medium text-ink">Manage Subscription</h3>
             <p className="font-body text-[13px] text-stone mt-0.5">
               {plan.name} · {formatCurrency(plan.weeklyPrice)}/week
             </p>
           </div>
-          <button onClick={onClose} className="text-stone hover:text-ink transition-colors p-1 rounded-md">
+          <button onClick={onClose} className="text-stone hover:text-ink transition-colors p-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage focus-visible:ring-offset-1">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
             </svg>
@@ -168,9 +178,11 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
           {/* ── Delivery Type ─────────────────────────────────── */}
           <div>
             <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-3">Delivery Type</p>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Delivery Type">
               <button
                 onClick={() => switchStyle('spread')}
+                role="radio"
+                aria-checked={edit.deliveryStyle === 'spread'}
                 className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${
                   edit.deliveryStyle === 'spread' ? 'border-sage bg-sage/10' : 'border-black/10 hover:border-sage/40'
                 }`}
@@ -186,6 +198,8 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
 
               <button
                 onClick={() => switchStyle('bulk')}
+                role="radio"
+                aria-checked={edit.deliveryStyle === 'bulk'}
                 className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${
                   edit.deliveryStyle === 'bulk' ? 'border-sage bg-sage/10' : 'border-black/10 hover:border-sage/40'
                 }`}
@@ -201,6 +215,8 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
 
               <button
                 onClick={() => switchStyle('flexible')}
+                role="radio"
+                aria-checked={edit.deliveryStyle === 'flexible'}
                 className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${
                   edit.deliveryStyle === 'flexible' ? 'border-terracotta bg-terracotta/5' : 'border-black/10 hover:border-terracotta/40'
                 }`}
@@ -299,7 +315,7 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
                     'Your weekly plan price is loaded to your Nutravoe Wallet',
                     'Schedule any bowl, any day — as long as your balance allows',
                     'Customisation extras are deducted automatically from the wallet',
-                    'Wallet refills each week while your subscription is active',
+                    'Wallet does not auto-refill. New balance loads only after the next approved payment cycle.',
                   ].map((line, i) => (
                     <div key={i} className="flex items-start gap-2">
                       <span className="w-4 h-4 rounded-full bg-terracotta/15 text-terracotta font-body text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>

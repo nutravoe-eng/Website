@@ -48,6 +48,7 @@ export async function getActiveSubscription(): Promise<Subscription | null> {
     id: sub.id,
     planId: sub.plan_id,
     deliveryStyle: sub.style,
+    billingCycle: sub.billing_cycle ?? 'weekly',
     status: sub.status,
     weeklyPrice: 0,
     nextDelivery: sub.start_date ?? new Date().toISOString(),

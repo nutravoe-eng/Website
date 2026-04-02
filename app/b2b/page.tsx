@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from "react";
+import { getWhatsAppNumber } from "@/lib/contact";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -213,7 +214,7 @@ export default function B2BPage() {
       return;
     }
     const msg = buildWhatsAppMessage(form);
-    window.open(`https://wa.me/917899858374?text=${msg}`, "_blank", "noopener,noreferrer");
+    window.open(`https://wa.me/${getWhatsAppNumber()}?text=${msg}`, "_blank", "noopener,noreferrer");
   }
 
   function handleEmail() {

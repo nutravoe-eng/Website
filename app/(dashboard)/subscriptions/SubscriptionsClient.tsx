@@ -101,6 +101,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
         id: sub.id,
         planId: sub.plan_id,
         deliveryStyle: sub.style,
+        billingCycle: sub.billing_cycle ?? 'weekly',
         status: sub.status,
         weeklyPrice: plan?.weeklyPrice ?? 0,
         nextDelivery: sub.start_date ?? new Date().toISOString(),
@@ -124,10 +125,14 @@ export default function SubscriptionsClient({ bowls }: Props) {
   }, [fetchSubscriptions]);
 
   async function updateStatus(id: string, status: Subscription["status"]) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     const { error: updateError } = await supabase
       .from('subscriptions')
       .update({ status })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user.id);
 
     if (updateError) {
       setError('Failed to update subscription status. Please try again.');
@@ -138,12 +143,19 @@ export default function SubscriptionsClient({ bowls }: Props) {
   }
 
   async function handleManageSave(updated: Subscription) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setError('You need to sign in again.');
+      return;
+    }
+
     const { error: updateError } = await supabase
       .from('subscriptions')
       .update({
         delivery_time_slot: updated.deliveryTimeSlot ?? null,
       })
-      .eq('id', updated.id);
+      .eq('id', updated.id)
+      .eq('user_id', user.id);
 
     if (updateError) {
       setError('Failed to save changes. Please try again.');
@@ -152,19 +164,19 @@ export default function SubscriptionsClient({ bowls }: Props) {
 
     // If day configs changed, replace them
     if (updated.dayConfigs?.length) {
-      await supabase
-        .from('subscription_day_configs')
-        .delete()
-        .eq('subscription_id', updated.id);
+      const { error: replaceError } = await supabase.rpc('replace_day_configs', {
+        p_subscription_id: updated.id,
+        p_configs: updated.dayConfigs.map((dc) => ({
+          day_of_week: dc.day.toLowerCase(),
+          bowl_slug: dc.bowlId,
+          quantity: dc.quantity,
+        })),
+      });
 
-      const newConfigs = updated.dayConfigs.map(dc => ({
-        subscription_id: updated.id,
-        day_of_week: dc.day.toLowerCase(),
-        bowl_slug: dc.bowlId,
-        quantity: dc.quantity,
-      }));
-
-      await supabase.from('subscription_day_configs').insert(newConfigs);
+      if (replaceError) {
+        setError('Failed to save day configuration changes. Please try again.');
+        return;
+      }
     }
 
     setSubs(prev => prev.map(s => s.id === updated.id ? updated : s));

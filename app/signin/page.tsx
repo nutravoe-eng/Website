@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 
 const MapPicker = dynamic(() => import("@/components/MapPicker"), { ssr: false });
 
-type Step = "identifier" | "new-user" | "existing-user" | "success" | "churned";
+type Step = "identifier" | "new-user" | "existing-user" | "success";
 
 function SignInForm() {
   const router = useRouter();
@@ -76,12 +76,8 @@ function SignInForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: val }),
       });
-      const { exists, churned } = await res.json();
-      if (churned) {
-        setStep("churned");
-      } else {
-        setStep(exists ? "existing-user" : "new-user");
-      }
+      const { exists } = await res.json();
+      setStep(exists ? "existing-user" : "new-user");
     } catch {
       // fallback: go to sign-in and let them switch if needed
       setStep("existing-user");
@@ -102,7 +98,7 @@ function SignInForm() {
     if (!addressState) { setError("Please select your state."); return; }
     if (!/^\d{6}$/.test(pincode)) { setError("Please enter a valid 6-digit PIN code."); return; }
     if (!email || !password) { setError("Please fill in all fields."); return; }
-    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
 
     setLoading(true);
 
@@ -113,10 +109,10 @@ function SignInForm() {
       body: JSON.stringify({ phone: phone.replace(/\D/g, "") }),
     });
     if (phoneCheck.ok) {
-      const { churned } = await phoneCheck.json();
-      if (churned) {
+      const { exists } = await phoneCheck.json();
+      if (exists) {
         setLoading(false);
-        setError("This mobile number is linked to a previously deleted account. You can still sign up — your old data will not be restored.");
+        setError("This mobile number is already linked to a Nutravoe account.");
         return;
       }
     }
@@ -209,7 +205,7 @@ function SignInForm() {
   };
 
   return (
-    <main className="min-h-[calc(100vh-64px)] pt-24 pb-16 px-6 bg-[#F9F8F6] flex flex-col items-center justify-center">
+    <div className="min-h-[calc(100vh-64px)] pt-24 pb-16 px-6 bg-[#F9F8F6] flex flex-col items-center justify-center">
       {/* Brand Logo */}
       <Link href="/" className="mb-8">
         <div className="relative w-12 h-12">
@@ -246,7 +242,7 @@ function SignInForm() {
                   />
                 </div>
 
-                {error && <p className="font-body text-[12px] text-terracotta">{error}</p>}
+                {error && <p id="identifier-error" role="alert" className="font-body text-[12px] text-terracotta">{error}</p>}
 
                 <button type="submit" disabled={loading} className="w-full bg-sage hover:bg-sage-dark disabled:opacity-50 text-white font-body text-sm font-medium py-3 rounded-md transition-colors shadow-sm mt-2">
                   {loading ? "Checking…" : "Continue"}
@@ -254,9 +250,9 @@ function SignInForm() {
               </form>
 
               <p className="font-body text-[11px] text-stone mt-6 text-center leading-relaxed">
-                By continuing, you agree to Nutravoe's{" "}
-                <a href="#" className="underline hover:text-ink">Conditions of Use</a> and{" "}
-                <a href="#" className="underline hover:text-ink">Privacy Notice</a>.
+                By continuing, you agree to Nutravoe&apos;s{" "}
+                <Link href="/terms" className="underline hover:text-ink">Conditions of Use</Link> and{" "}
+                <Link href="/privacy" className="underline hover:text-ink">Privacy Notice</Link>.
               </p>
             </div>
           )}
@@ -277,22 +273,24 @@ function SignInForm() {
               <form onSubmit={handleSignIn} className="flex flex-col gap-4">
                 <div>
                   <div className="flex justify-between items-baseline mb-1.5">
-                    <label className="block font-body text-[13px] font-medium text-ink">Password</label>
+                    <label htmlFor="signin-password" className="block font-body text-[13px] font-medium text-ink">Password</label>
                     <button type="button" onClick={handleForgotPassword} className="font-body text-[12px] text-sage hover:underline">
                       Forgot Password?
                     </button>
                   </div>
                   <input
+                    id="signin-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
                     autoFocus
                     required
+                    aria-describedby={error ? "signin-error" : undefined}
                   />
                 </div>
 
-                {error && <p className="font-body text-[12px] text-terracotta">{error}</p>}
+                {error && <p id="signin-error" role="alert" className="font-body text-[12px] text-terracotta">{error}</p>}
 
                 <button
                   type="submit"
@@ -337,8 +335,9 @@ function SignInForm() {
 
               <form onSubmit={handleSignUp} className="flex flex-col gap-4">
                 <div>
-                  <label className="block font-body text-[13px] font-medium text-ink mb-1.5">Your Name</label>
+                  <label htmlFor="signup-name" className="block font-body text-[13px] font-medium text-ink mb-1.5">Your Name</label>
                   <input
+                    id="signup-name"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -347,8 +346,9 @@ function SignInForm() {
                   />
                 </div>
                 <div>
-                  <label className="block font-body text-[13px] font-medium text-ink mb-1.5">Mobile Number</label>
+                  <label htmlFor="signup-phone" className="block font-body text-[13px] font-medium text-ink mb-1.5">Mobile Number</label>
                   <input
+                    id="signup-phone"
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
@@ -363,8 +363,9 @@ function SignInForm() {
                   <p className="font-body text-[12px] font-semibold text-stone uppercase tracking-widest mb-3">Delivery Address</p>
                   <div className="flex flex-col gap-3">
                     <div>
-                      <label className="block font-body text-[13px] font-medium text-ink mb-1.5">Street / Flat / Building</label>
+                      <label htmlFor="signup-address-line1" className="block font-body text-[13px] font-medium text-ink mb-1.5">Street / Flat / Building</label>
                       <input
+                        id="signup-address-line1"
                         type="text"
                         value={addressLine1}
                         onChange={(e) => setAddressLine1(e.target.value)}
@@ -374,8 +375,9 @@ function SignInForm() {
                       />
                     </div>
                     <div>
-                      <label className="block font-body text-[13px] font-medium text-ink mb-1.5">Landmark <span className="text-stone font-normal">(optional)</span></label>
+                      <label htmlFor="signup-address-line2" className="block font-body text-[13px] font-medium text-ink mb-1.5">Landmark <span className="text-stone font-normal">(optional)</span></label>
                       <input
+                        id="signup-address-line2"
                         type="text"
                         value={addressLine2}
                         onChange={(e) => setAddressLine2(e.target.value)}
@@ -385,8 +387,9 @@ function SignInForm() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-body text-[13px] font-medium text-ink mb-1.5">City</label>
+                        <label htmlFor="signup-city" className="block font-body text-[13px] font-medium text-ink mb-1.5">City</label>
                         <input
+                          id="signup-city"
                           type="text"
                           value={city}
                           onChange={(e) => setCity(e.target.value)}
@@ -396,8 +399,9 @@ function SignInForm() {
                         />
                       </div>
                       <div>
-                        <label className="block font-body text-[13px] font-medium text-ink mb-1.5">PIN Code</label>
+                        <label htmlFor="signup-pincode" className="block font-body text-[13px] font-medium text-ink mb-1.5">PIN Code</label>
                         <input
+                          id="signup-pincode"
                           type="text"
                           value={pincode}
                           onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -408,8 +412,9 @@ function SignInForm() {
                       </div>
                     </div>
                     <div>
-                      <label className="block font-body text-[13px] font-medium text-ink mb-1.5">State</label>
+                      <label htmlFor="signup-state" className="block font-body text-[13px] font-medium text-ink mb-1.5">State</label>
                       <select
+                        id="signup-state"
                         value={addressState}
                         onChange={(e) => setAddressState(e.target.value)}
                         className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all bg-white text-ink"
@@ -458,8 +463,9 @@ function SignInForm() {
                 </div>
 
                 <div>
-                  <label className="block font-body text-[13px] font-medium text-ink mb-1.5">Email</label>
+                  <label htmlFor="signup-email" className="block font-body text-[13px] font-medium text-ink mb-1.5">Email</label>
                   <input
+                    id="signup-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -468,19 +474,21 @@ function SignInForm() {
                   />
                 </div>
                 <div>
-                  <label className="block font-body text-[13px] font-medium text-ink mb-1.5">Password</label>
+                  <label htmlFor="signup-password" className="block font-body text-[13px] font-medium text-ink mb-1.5">Password</label>
                   <input
+                    id="signup-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 6 characters"
+                    placeholder="At least 8 characters"
                     className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
                     required
-                    minLength={6}
+                    minLength={8}
+                    aria-describedby={error ? "signup-error" : undefined}
                   />
                 </div>
 
-                {error && <p className="font-body text-[12px] text-terracotta">{error}</p>}
+                {error && <p id="signup-error" role="alert" className="font-body text-[12px] text-terracotta">{error}</p>}
 
                 <button
                   type="submit"
@@ -501,7 +509,7 @@ function SignInForm() {
           )}
 
           {/* CHURNED — previously deleted account */}
-          {step === "churned" && (
+          {false && (
             <div className="animate-in fade-in duration-300">
               <div className="flex items-center justify-center w-12 h-12 bg-terracotta/10 rounded-full text-terracotta mb-4 mx-auto">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -534,7 +542,7 @@ function SignInForm() {
                 </button>
               </div>
               <p className="font-body text-[11px] text-stone mt-6 text-center">
-                Need help? Contact us on <a href="#" className="underline hover:text-ink">WhatsApp</a>
+                Need help? Contact us on <a href="/help" className="underline hover:text-ink">WhatsApp</a>
               </p>
             </div>
           )}
@@ -567,11 +575,11 @@ function SignInForm() {
 
         <div className="bg-[#F9F8F6]/80 px-8 py-5 border-t border-ink/5 flex justify-center">
           <p className="font-body text-[11px] text-stone">
-            Need help? Contact us on <a href="#" className="underline hover:text-ink">WhatsApp</a>
+            Need help? Contact us on <a href="/help" className="underline hover:text-ink">WhatsApp</a>
           </p>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
 

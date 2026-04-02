@@ -1,46 +1,41 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rate-limit';
 
-/**
- * Server-side Nominatim free-text search proxy.
- *
- * GET /api/geocode/search?q=some+address+bengaluru
- * → [{ lat, lng, display_name }, ...]
- */
 export async function GET(req: NextRequest) {
-  const q = req.nextUrl.searchParams.get("q")?.trim();
+  const limited = await enforceRateLimit(req, 'geocode-search', 10, 60);
+  if (!limited.ok) return limited.response;
 
-  if (!q || q.length < 3) {
-    return NextResponse.json({ error: "q must be at least 3 characters" }, { status: 400 });
+  const q = req.nextUrl.searchParams.get('q')?.trim();
+  if (!q || q.length < 3 || q.length > 160) {
+    return NextResponse.json({ error: 'q must be between 3 and 160 characters' }, { status: 400, headers: limited.headers });
   }
 
-  // Bias results toward Bengaluru / India
-  const query = q.toLowerCase().includes("bengaluru") ? q : `${q}, Bengaluru, India`;
+  const query = q.toLowerCase().includes('bengaluru') ? q : `${q}, Bengaluru, India`;
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=in`;
 
   try {
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "Nutravoe/1.0 (nutravoe@gmail.com)",
-        "Accept-Language": "en",
+        'User-Agent': 'Nutravoe/1.0 (support@nutravoe.in)',
+        'Accept-Language': 'en',
       },
-      // Short cache — search results are time-sensitive
       next: { revalidate: 60 },
     });
 
     if (!res.ok) {
-      return NextResponse.json({ error: "Nominatim request failed" }, { status: 502 });
+      return NextResponse.json({ error: 'Nominatim request failed' }, { status: 502, headers: limited.headers });
     }
 
     const data: { lat: string; lon: string; display_name: string }[] = await res.json();
-
     return NextResponse.json(
       data.map((item) => ({
         lat: parseFloat(item.lat),
         lng: parseFloat(item.lon),
         display_name: item.display_name,
-      }))
+      })),
+      { headers: limited.headers }
     );
   } catch {
-    return NextResponse.json({ error: "Search failed" }, { status: 500 });
+    return NextResponse.json({ error: 'Search failed' }, { status: 500, headers: limited.headers });
   }
 }

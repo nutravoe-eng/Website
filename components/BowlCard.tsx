@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import { Bowl, IngredientCustomization } from "@/types";
 import { useCart } from "./CartContext";
 import CustomizationModal from "./CustomizationModal";
+import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
 
 interface BowlCardProps {
   bowl: Bowl;
@@ -38,6 +39,8 @@ export default function BowlCard({ bowl }: BowlCardProps) {
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customModalMode, setCustomModalMode] = useState<"edit" | "add-new">("edit");
   const [showRepeatChoice, setShowRepeatChoice] = useState(false);
+  const repeatDialogRef = useRef<HTMLDivElement>(null);
+  useDialogAccessibility(repeatDialogRef, () => setShowRepeatChoice(false));
 
   const isCustomised = cartItem ? hasNonDefaultCustomizations(cartItem.customizations) : false;
 
@@ -177,17 +180,24 @@ export default function BowlCard({ bowl }: BowlCardProps) {
           className="fixed inset-0 z-[120] flex items-end md:items-center justify-center p-0 md:p-4 bg-ink/60 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={(e) => { if (e.target === e.currentTarget) setShowRepeatChoice(false); }}
         >
-          <div className="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-sm shadow-2xl animate-in slide-in-from-bottom-4 md:zoom-in-95 duration-200">
+          <div
+            ref={repeatDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="repeat-choice-title"
+            tabIndex={-1}
+            className="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-sm shadow-2xl animate-in slide-in-from-bottom-4 md:zoom-in-95 duration-200"
+          >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-black/5">
               <div>
-                <h3 className="font-display text-xl font-medium text-ink">Add another {bowl.name}?</h3>
+                <h3 id="repeat-choice-title" className="font-display text-xl font-medium text-ink">Add another {bowl.name}?</h3>
                 <p className="font-body text-[12px] text-stone mt-0.5">Choose how you'd like it</p>
               </div>
               <button
                 onClick={() => setShowRepeatChoice(false)}
                 aria-label="Close"
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 text-stone hover:text-ink transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 text-stone hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage focus-visible:ring-offset-1"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 6 6 18"/><path d="m6 6 12 12"/>

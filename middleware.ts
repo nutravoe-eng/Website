@@ -58,7 +58,8 @@ export async function middleware(request: NextRequest) {
 
   // Redirect signed-in users away from /signin
   if (user && pathname === '/signin') {
-    const next = request.nextUrl.searchParams.get('next') ?? '/';
+    const rawNext = request.nextUrl.searchParams.get('next') ?? '/';
+    const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/';
     const url = request.nextUrl.clone();
     url.pathname = next;
     url.search = '';

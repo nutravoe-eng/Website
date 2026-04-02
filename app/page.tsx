@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAllBowls } from "@/lib/sanity";
 import BowlCard from "@/components/BowlCard";
 import TestimonialsCarousel from "@/components/TestimonialsCarousel";
+import { getWhatsAppHref } from "@/lib/contact";
 
 export default async function HomePage() {
   const bowls = await getAllBowls();
@@ -12,7 +13,7 @@ export default async function HomePage() {
       {/* ── Hero ────────────────────────────────────────── */}
       <section className="relative h-[calc(100vh-64px)] min-h-[640px] flex items-center" aria-labelledby="trust-heading">
         {/* Background video bleeds up into the 64px layout padding */}
-        <div className="absolute inset-x-0 bottom-0 top-[-64px] z-[-1] overflow-hidden">
+        <div className="absolute inset-x-0 bottom-0 top-[-64px] z-[-1] overflow-hidden" aria-hidden="true">
           <video
             autoPlay
             loop
@@ -45,7 +46,7 @@ export default async function HomePage() {
               No effort.<br />
               <em className="text-sage-light">At your door.</em>
             </h1>
-            <p className="font-body text-[15px] font-light text-white/70 leading-relaxed mb-8 max-w-md">
+            <p className="font-body text-[15px] font-light text-white/85 leading-relaxed mb-8 max-w-md">
               Fresh yogurt bowls crafted every morning. High protein, gut-friendly,
               no added sugar — a complete morning meal you'll actually look forward to.
             </p>
@@ -90,7 +91,7 @@ export default async function HomePage() {
             <div key={title} className="px-4 lg:px-8 py-2.5 text-center flex flex-col justify-center items-center">
               <div className="text-sage mb-1.5 opacity-90 drop-shadow-md" aria-hidden="true">{icon}</div>
               <p className="font-body text-[11.5px] font-medium text-white/85 tracking-wide leading-tight">{title}</p>
-              <p className="font-body text-[10px] text-white/40 mt-0.5 leading-tight">{sub}</p>
+              <p className="font-body text-[10px] text-white/60 mt-0.5 leading-tight">{sub}</p>
             </div>
           ))}
         </div>
@@ -181,7 +182,7 @@ export default async function HomePage() {
             </strong>
           </h2>
           <a
-            href="https://wa.me/917899858374"
+            href={getWhatsAppHref()}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block btn-primary text-xs tracking-widest"

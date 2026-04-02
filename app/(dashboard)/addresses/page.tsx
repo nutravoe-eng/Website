@@ -153,8 +153,9 @@ export default function AddressesPage() {
           <h3 className="font-display text-lg font-medium text-ink mb-4">Add a New Address</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
             <div>
-              <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Address Tag</label>
+              <label htmlFor="address-label" className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Address Tag</label>
               <select
+                id="address-label"
                 value={formData.label}
                 onChange={e => setFormData({ ...formData, label: e.target.value })}
                 className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
@@ -165,8 +166,9 @@ export default function AddressesPage() {
               </select>
             </div>
             <div>
-              <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Pincode</label>
+              <label htmlFor="address-pincode" className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Pincode</label>
               <input
+                id="address-pincode"
                 required
                 type="text"
                 maxLength={6}
@@ -177,8 +179,9 @@ export default function AddressesPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Flat, House no., Building</label>
+              <label htmlFor="address-line1" className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Flat, House no., Building</label>
               <input
+                id="address-line1"
                 required
                 type="text"
                 value={formData.line1}
@@ -187,8 +190,9 @@ export default function AddressesPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Area, Street, Sector</label>
+              <label htmlFor="address-line2" className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Area, Street, Sector</label>
               <input
+                id="address-line2"
                 required
                 type="text"
                 value={formData.line2}

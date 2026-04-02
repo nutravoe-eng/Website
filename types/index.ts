@@ -84,9 +84,20 @@ export interface WalletTransaction {
   createdAt: string;
 }
 
+export interface WalletLoad {
+  id: string;
+  amountPaise: number;
+  remainingAmountPaise: number;
+  createdAt: string;
+  expiresAt: string | null;
+  sourceType: 'subscription_payment' | 'refund' | 'admin_adjustment';
+}
+
 export interface Wallet {
   balancePaise: number;
   transactions: WalletTransaction[];
+  activeLoads?: WalletLoad[];
+  nextExpiryAt?: string | null;
 }
 export type PlanId = 'three-bowl' | 'five-bowl' | 'daily';
 
@@ -118,6 +129,7 @@ export interface Subscription {
   id: string;
   planId: PlanId;
   deliveryStyle: DeliveryStyle;
+  billingCycle?: 'weekly' | 'monthly';
   bulkDeliveryDay?: string; // 'next-day' | 'Mon' | 'Tue' | ... — only for bulk
   deliveryTimeSlot?: string; // e.g. '7:00 AM – 8:00 AM'
   dayConfigs: DayBowlConfig[];
@@ -127,4 +139,5 @@ export interface Subscription {
   createdAt: string;
   status: 'active' | 'paused' | 'cancelled';
   nextDelivery: string;
+  walletBalancePaise?: number;
 }

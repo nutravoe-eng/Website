@@ -1,7 +1,8 @@
 "use client";
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, FormEvent, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -16,6 +17,9 @@ export default function ProfilePage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const deleteDialogRef = useRef<HTMLDivElement>(null);
+  useDialogAccessibility(deleteDialogRef, () => setShowDeleteModal(false));
 
   useEffect(() => {
     (async () => {
@@ -45,10 +49,16 @@ export default function ProfilePage() {
     e.preventDefault();
     if (!userId) return;
     setSaving(true);
-    await Promise.all([
+    setSaveError("");
+    const [profileResult, authResult] = await Promise.all([
       supabase.from("users").update({ full_name: formData.name, phone: formData.phone || null }).eq("id", userId),
       supabase.auth.updateUser({ data: { full_name: formData.name } }),
     ]);
+    if (profileResult.error || authResult.error) {
+      setSaveError("Failed to save profile changes. Please try again.");
+      setSaving(false);
+      return;
+    }
     setOriginalData(formData);
     setSaving(false);
     setEditing(false);
@@ -69,7 +79,9 @@ export default function ProfilePage() {
     router.push("/?account=deleted");
   };
 
-  if (!loaded) return null;
+  if (!loaded) {
+    return <div className="h-48 animate-pulse rounded-xl bg-black/5" />;
+  }
 
   return (
     <>
@@ -86,8 +98,9 @@ export default function ProfilePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Full Name</label>
+              <label htmlFor="profile-name" className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Full Name</label>
               <input
+                id="profile-name"
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -96,8 +109,9 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Phone</label>
+              <label htmlFor="profile-phone" className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Phone</label>
               <input
+                id="profile-phone"
                 type="text"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, "") })}
@@ -106,8 +120,9 @@ export default function ProfilePage() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Email Address</label>
+              <label htmlFor="profile-email" className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Email Address</label>
               <input
+                id="profile-email"
                 type="email"
                 value={formData.email}
                 className="w-full border rounded-md px-3 py-2.5 font-body text-sm outline-none border-black/20 bg-black/5 text-ink/80 pointer-events-none"
@@ -147,6 +162,12 @@ export default function ProfilePage() {
               )}
             </div>
 
+            {saveError && (
+              <p id="profile-save-error" role="alert" className="font-body text-[12px] text-terracotta">
+                {saveError}
+              </p>
+            )}
+
             {!editing && (
               <button
                 type="button"
@@ -163,14 +184,21 @@ export default function ProfilePage() {
       {/* Delete Account Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/70 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+          <div
+            ref={deleteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-account-title"
+            tabIndex={-1}
+            className="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+          >
             <div className="w-12 h-12 rounded-full bg-terracotta/10 text-terracotta flex items-center justify-center mb-5">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
             </div>
 
             {deleteStep === 1 ? (
               <>
-                <h3 className="font-display text-2xl font-medium text-ink mb-2">We're sad to see you go...</h3>
+                <h3 id="delete-account-title" className="font-display text-2xl font-medium text-ink mb-2">We're sad to see you go...</h3>
                 <p className="font-body text-[14px] text-stone mb-4 leading-relaxed">
                   It breaks our heart to see you go! Nutravoe was built to make eating healthy effortless, and we'll miss being part of your routine. This will permanently erase your saved addresses, payment methods, and subscription history.
                 </p>
@@ -190,7 +218,7 @@ export default function ProfilePage() {
               </>
             ) : (
               <>
-                <h3 className="font-display text-2xl font-medium text-ink mb-2">Final Confirmation</h3>
+                <h3 id="delete-account-title" className="font-display text-2xl font-medium text-ink mb-2">Final Confirmation</h3>
                 <p className="font-body text-[14px] text-stone mb-6 leading-relaxed">
                   You are about to permanently delete your Nutravoe profile.
                 </p>

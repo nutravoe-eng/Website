@@ -81,7 +81,7 @@ export default function AdminSubscriptionsPage() {
         ? { ...s, payment_status: 'paid', payment_reference: upiRef.trim() || null }
         : s
       ));
-      showToast('Subscription payment confirmed — wallet credited');
+      showToast('Subscription payment confirmed and wallet loaded');
       setPayModal(null);
       setUpiRef('');
     } catch {
@@ -315,7 +315,7 @@ export default function AdminSubscriptionsPage() {
               <p className="font-display text-2xl text-ink">
                 {payModal.total_amount_rs ? `₹${Number(payModal.total_amount_rs).toLocaleString('en-IN')}` : '—'}
               </p>
-              <p className="font-body text-[11px] text-stone mt-1">This amount will be credited to their wallet.</p>
+              <p className="font-body text-[11px] text-stone mt-1">This amount will be loaded to their wallet for the active billing cycle.</p>
             </div>
             <div>
               <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
@@ -334,7 +334,7 @@ export default function AdminSubscriptionsPage() {
                 Cancel
               </button>
               <button onClick={handleMarkPaid} disabled={saving} className="flex-1 bg-sage hover:bg-sage/80 disabled:bg-sage/30 text-white rounded-lg py-3 font-body text-sm font-bold transition-colors">
-                {saving ? 'Saving…' : 'Confirm & Credit Wallet'}
+                {saving ? 'Saving…' : 'Confirm & Load Wallet'}
               </button>
             </div>
           </div>

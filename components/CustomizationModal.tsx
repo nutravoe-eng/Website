@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Bowl, BowlIngredient, IngredientCustomization, IngredientOption } from "@/types";
 import { formatCurrency } from "@/lib/utils";
+import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
 
 interface Props {
   bowl: Bowl;
@@ -40,7 +41,9 @@ function calcCost(
 }
 
 export default function CustomizationModal({ bowl, initialCustomizations, mode, onConfirm, onClose }: Props) {
+  const dialogRef = useRef<HTMLDivElement>(null);
   const ingredients = (bowl.customizableIngredients ?? []).filter(i => !i.isBase);
+  useDialogAccessibility(dialogRef, onClose);
 
   const [optionMap, setOptionMap] = useState<Record<string, IngredientOption>>(
     () => buildInitialMap(ingredients, initialCustomizations)
@@ -67,18 +70,25 @@ export default function CustomizationModal({ bowl, initialCustomizations, mode, 
       className="fixed inset-0 z-[120] flex items-end md:items-center justify-center p-0 md:p-4 bg-ink/60 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-md shadow-2xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-4 md:zoom-in-95 duration-200">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="customization-modal-title"
+        tabIndex={-1}
+        className="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-md shadow-2xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-4 md:zoom-in-95 duration-200"
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-black/5 shrink-0">
           <div>
-            <h3 className="font-display text-xl font-medium text-ink">{bowl.name}</h3>
+            <h3 id="customization-modal-title" className="font-display text-xl font-medium text-ink">{bowl.name}</h3>
             <p className="font-body text-[12px] text-stone mt-0.5">Customise your ingredients</p>
           </div>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 text-stone hover:text-ink transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 text-stone hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage focus-visible:ring-offset-1"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 6 6 18"/><path d="m6 6 12 12"/>

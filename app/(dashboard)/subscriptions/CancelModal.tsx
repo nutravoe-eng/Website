@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import type { Subscription } from '@/types';
 import { STUB_PLANS as PLANS } from '../../subscribe/PlanCard';
+import { useDialogAccessibility } from '@/lib/use-dialog-accessibility';
 
 type Step = 'appeal' | 'reason' | 'confirm' | 'farewell';
 
@@ -27,6 +28,7 @@ interface Props {
 }
 
 export default function CancelModal({ sub, onPause, onCancel, onClose }: Props) {
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<Step>('appeal');
   const [reasonId, setReasonId] = useState('');
   const [otherText, setOtherText] = useState('');
@@ -48,6 +50,7 @@ export default function CancelModal({ sub, onPause, onCancel, onClose }: Props) 
 
   const selectedReason = REASONS.find(r => r.id === reasonId);
   const offerPause = !!(selectedReason && 'offerPause' in selectedReason && selectedReason.offerPause);
+  useDialogAccessibility(dialogRef, onClose);
 
   const canProceedReason =
     reasonId !== '' &&
@@ -77,7 +80,7 @@ export default function CancelModal({ sub, onPause, onCancel, onClose }: Props) 
 
   // ── Shared close button ──────────────────────────────────────────────────────
   const CloseBtn = () => (
-    <button onClick={onClose} className="text-stone hover:text-ink transition-colors p-1 rounded-md">
+    <button onClick={onClose} className="text-stone hover:text-ink transition-colors p-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage focus-visible:ring-offset-1">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
       </svg>
@@ -86,7 +89,14 @@ export default function CancelModal({ sub, onPause, onCancel, onClose }: Props) 
 
   return (
     <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-ink/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md shadow-2xl flex flex-col overflow-hidden max-h-[95vh] animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-250">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cancel-subscription-title"
+        tabIndex={-1}
+        className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md shadow-2xl flex flex-col overflow-hidden max-h-[95vh] animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-250"
+      >
 
         {/* ── STEP 1: Emotional appeal ─────────────────────────────────────── */}
         {step === 'appeal' && (
@@ -105,7 +115,7 @@ export default function CancelModal({ sub, onPause, onCancel, onClose }: Props) 
                 </svg>
               </div>
 
-              <h2 className="font-display text-[26px] font-medium text-ink mb-3 leading-tight">
+              <h2 id="cancel-subscription-title" className="font-display text-[26px] font-medium text-ink mb-3 leading-tight">
                 We hate to see you go.
               </h2>
               <p className="font-body text-[14px] text-stone leading-relaxed mb-6">
@@ -169,11 +179,13 @@ export default function CancelModal({ sub, onPause, onCancel, onClose }: Props) 
               </p>
 
               {/* Reason list */}
-              <div className="space-y-2">
+              <div className="space-y-2" role="radiogroup" aria-label="Cancellation reason">
                 {REASONS.map(reason => (
                   <button
                     key={reason.id}
                     onClick={() => { setReasonId(reason.id); setOtherText(''); }}
+                    role="radio"
+                    aria-checked={reasonId === reason.id}
                     className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border text-left transition-all ${
                       reasonId === reason.id
                         ? 'border-terracotta/40 bg-terracotta/5'

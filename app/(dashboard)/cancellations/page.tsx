@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { creditWallet } from '@/lib/wallet';
 import { formatCurrency } from '@/lib/utils';
 
 interface Order {
@@ -115,44 +114,32 @@ export default function CancellationsPage() {
   async function handleConfirmCancel() {
     if (!cancellingOrder || !refundMethod) return;
     setConfirming(true);
+    try {
+      const res = await fetch(`/api/orders/${cancellingOrder.id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refundMethod }),
+      });
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setConfirming(false); return; }
-
-    // Update order status
-    await supabase
-      .from('orders')
-      .update({ status: 'cancelled' })
-      .eq('id', cancellingOrder.id);
-
-    // Insert cancellation record
-    await supabase.from('cancellations').insert({
-      order_id: cancellingOrder.id,
-      user_id: user.id,
-      refund_amount: cancellingOrder.total,
-      refund_destination: refundMethod === 'wallet' ? 'wallet' : 'original_payment_method',
-      refund_status: refundMethod === 'wallet' ? 'completed' : 'processing',
-    });
-
-    // Credit wallet if chosen
-    if (refundMethod === 'wallet') {
-      await creditWallet(cancellingOrder.total * 100, `Refund for Order #${cancellingOrder.id.slice(-6)}`);
-    }
-
-    // Update local state
-    setOrders(prev => prev.map(o =>
-      o.id !== cancellingOrder.id ? o : {
-        ...o,
-        status: 'cancelled',
-        cancellationStatus: refundMethod === 'wallet' ? 'refund_wallet' : 'refund_original',
-        refundMethod,
+      if (!res.ok) {
+        throw new Error('Failed to cancel order');
       }
-    ));
 
-    setSuccessOrder({ id: cancellingOrder.id, method: refundMethod });
-    setCancellingOrder(null);
-    setRefundMethod(null);
-    setConfirming(false);
+      setOrders(prev => prev.map(o =>
+        o.id !== cancellingOrder.id ? o : {
+          ...o,
+          status: 'cancelled',
+          cancellationStatus: refundMethod === 'wallet' ? 'refund_wallet' : 'refund_original',
+          refundMethod,
+        }
+      ));
+
+      setSuccessOrder({ id: cancellingOrder.id, method: refundMethod });
+      setCancellingOrder(null);
+      setRefundMethod(null);
+    } finally {
+      setConfirming(false);
+    }
   }
 
   const cancellable = orders.filter(o => isCancellable(o));

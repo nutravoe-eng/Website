@@ -33,7 +33,7 @@ export default function ConfirmationPage() {
             Order Again
           </Link>
           <a
-            href="https://wa.me/917899858374"
+            href={getWhatsAppHref()}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-ghost text-xs tracking-widest"
@@ -49,3 +49,4 @@ export default function ConfirmationPage() {
     </section>
   );
 }
+import { getWhatsAppHref } from "@/lib/contact";

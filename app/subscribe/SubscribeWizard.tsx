@@ -92,6 +92,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           bowlsPerWeek: p.bowlsPerCycle,
           weeklyPrice: pricePerBowl * p.bowlsPerCycle,
           perBowl: pricePerBowl,
+          billingCycle: p.billingCycle,
           savingsBadge: p.savingsBadge ?? '',
           customisationChargePerBowl: p.customisationChargePerBowl,
           deliveryStyles: p.deliveryStyles,
@@ -309,7 +310,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     if (scenario === "D") {
       return [
         `- Flexible wallet plan: ${currentPlanName}`,
-        "- Wallet top-up happens weekly.",
+        `- Funds are loaded only after payment approval and expire in ${currentPlan?.billingCycle === 'monthly' ? '1 month' : '7 days'}.`,
         "- Bowls are scheduled later from dashboard.",
       ];
     }
@@ -441,6 +442,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         user_id: user.id,
         plan_id: state.planId,
         style: supabaseStyle,
+        billing_cycle: currentPlan.billingCycle ?? 'weekly',
         status: 'active',
         start_date: startDate,
         delivery_time_slot: scenario !== 'D' ? state.deliveryTimeSlot : null,
@@ -448,7 +450,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           ? Object.values(state.bulkBowlCounts).reduce((s, c) => s + c, 0)
           : null,
         bulk_delivery_date: scenario === 'B' ? state.bulkDeliveryDay : null,
-        wallet_balance_rs: scenario === 'D' ? totalAmountRs : null,
+        wallet_balance_rs: 0,
         total_amount_rs: totalAmountRs,
         payment_status: 'pending',
         notes: "requested_via_whatsapp",
@@ -937,7 +939,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                   <div className="flex items-center gap-3 p-3 bg-sage/5 rounded-lg border border-sage/20">
                     <div className="w-6 h-6 rounded-full bg-sage/20 flex items-center justify-center shrink-0 text-sage font-bold text-[12px]">1</div>
                     <p className="font-body text-[13px] text-ink">
-                      Pay <strong>₹{currentPlan.weeklyPrice.toLocaleString('en-IN')}</strong> now — this is added to your Nutravoe wallet instantly.
+                      Pay <strong>₹{currentPlan.weeklyPrice.toLocaleString('en-IN')}</strong> now. The amount is loaded only after Nutravoe approves the payment.
                     </p>
                   </div>
                   <div className="flex items-center gap-3 p-3 bg-sage/5 rounded-lg border border-sage/20">
@@ -949,7 +951,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                   <div className="flex items-center gap-3 p-3 bg-sage/5 rounded-lg border border-sage/20">
                     <div className="w-6 h-6 rounded-full bg-sage/20 flex items-center justify-center shrink-0 text-sage font-bold text-[12px]">3</div>
                     <p className="font-body text-[13px] text-ink">
-                      Your wallet refills automatically every week as long as your subscription is active.
+                      Once loaded, this balance expires in {currentPlan.billingCycle === 'monthly' ? '1 month' : '7 days'} from the approval date.
                     </p>
                   </div>
                 </div>
@@ -973,8 +975,8 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
               {/* Wallet balance summary */}
               <div className="bg-white rounded-xl border border-black/8 p-4 flex items-center justify-between">
                 <div>
-                  <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">Wallet balance after payment</p>
-                  <p className="font-body text-[12px] text-stone mt-0.5">{currentPlan.bowlsPerWeek} bowls × ₹{currentPlan.perBowl} each</p>
+                  <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">Wallet balance after approval</p>
+                  <p className="font-body text-[12px] text-stone mt-0.5">{currentPlan.bowlsPerWeek} bowls × ₹{currentPlan.perBowl} each, loaded after approval</p>
                 </div>
                 <p className="font-display text-2xl font-medium text-sage-dark">
                   ₹{currentPlan.weeklyPrice.toLocaleString('en-IN')}
@@ -1102,7 +1104,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
     // Build human-readable summary
     const deliverySummaryText = (() => {
-      if (scenario === 'D') return `₹${currentPlan.weeklyPrice.toLocaleString('en-IN')} loaded to your wallet — schedule freely`;
+      if (scenario === 'D') return `₹${currentPlan.weeklyPrice.toLocaleString('en-IN')} will load after approval and expire in ${currentPlan.billingCycle === 'monthly' ? '1 month' : '7 days'}`;
 
       if (scenario === 'B') {
         const parts = Object.entries(state.bulkBowlCounts)

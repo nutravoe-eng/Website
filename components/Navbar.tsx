@@ -10,6 +10,7 @@ import { getWallet, hasActiveFlexibleSubscription } from "@/lib/wallet";
 import { formatCurrency } from "@/lib/utils";
 import { geocodePincode } from "@/lib/geocodeCache";
 import { getNearestHub, DELIVERY_FEE_RS, FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
+import { getWhatsAppHref } from "@/lib/contact";
 
 const NAV_LINKS = [
   { href: "/menu", label: "Menu" },
@@ -362,7 +363,7 @@ export default function Navbar() {
               ))}
             </ul>
             <a
-              href="https://wa.me/917899858374"
+              href={getWhatsAppHref()}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-sage text-xs tracking-widest text-center py-3.5"

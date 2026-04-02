@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "@/styles/globals.css";
+import "leaflet/dist/leaflet.css";
 import { CartProvider } from "@/components/CartContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";

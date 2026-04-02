@@ -120,9 +120,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </aside>
 
           {/* Main Content */}
-          <main className="flex-1 bg-white rounded-xl shadow-[0_2px_20px_rgb(0,0,0,0.03)] border border-black/5 p-8 min-h-[500px]">
+          <section className="flex-1 bg-white rounded-xl shadow-[0_2px_20px_rgb(0,0,0,0.03)] border border-black/5 p-8 min-h-[500px]">
             {children}
-          </main>
+          </section>
         </div>
       </div>
     </div>

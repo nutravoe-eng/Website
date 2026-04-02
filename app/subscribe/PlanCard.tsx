@@ -8,15 +8,16 @@ export interface PlanConfig {
   bowlsPerWeek: number;
   weeklyPrice: number;
   perBowl: number;
+  billingCycle?: 'weekly' | 'monthly';
   savingsBadge: string;
   customisationChargePerBowl?: number;
   deliveryStyles?: import("@/types").DeliveryStyle[];
 }
 
 export const STUB_PLANS: PlanConfig[] = [
-  { id: 'three-bowl', name: '3-Bowl / Week', bowlsPerWeek: 3, weeklyPrice: 852, perBowl: 284, savingsBadge: 'Save 5%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'bulk', 'flexible'] },
-  { id: 'five-bowl', name: '5-Bowl / Week', bowlsPerWeek: 5, weeklyPrice: 1346, perBowl: 269, savingsBadge: 'Save 10%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'bulk', 'flexible'] },
-  { id: 'daily', name: 'Daily Plan', bowlsPerWeek: 7, weeklyPrice: 1800, perBowl: 257, savingsBadge: 'Best Value', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'bulk', 'flexible'] },
+  { id: 'three-bowl', name: '3-Bowl / Week', bowlsPerWeek: 3, weeklyPrice: 852, perBowl: 284, billingCycle: 'weekly', savingsBadge: 'Save 5%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'bulk', 'flexible'] },
+  { id: 'five-bowl', name: '5-Bowl / Week', bowlsPerWeek: 5, weeklyPrice: 1346, perBowl: 269, billingCycle: 'weekly', savingsBadge: 'Save 10%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'bulk', 'flexible'] },
+  { id: 'daily', name: 'Daily Plan', bowlsPerWeek: 7, weeklyPrice: 1800, perBowl: 257, billingCycle: 'weekly', savingsBadge: 'Best Value', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'bulk', 'flexible'] },
 ];
 
 export const BULK_DAY_OPTIONS = [

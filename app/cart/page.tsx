@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartContext";
 import { buildCartOrderWhatsAppMessage, formatCurrency, getWhatsAppUrl } from "@/lib/utils";
@@ -8,6 +8,8 @@ import { getActivePlanConfig } from "@/lib/subscription";
 import { geocodePincode } from "@/lib/geocodeCache";
 import { getNearestHub, getDeliveryFee, DELIVERY_FEE_RS } from "@/lib/delivery";
 import { createClient } from "@/lib/supabase/client";
+import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
+import { getWhatsAppNumber } from "@/lib/contact";
 
 // Generate delivery slots dynamically combining Same-Day buffer and Next-Day 11PM cutoff rules
 const getDeliverySlots = () => {
@@ -68,6 +70,8 @@ export default function CartPage() {
   // Delivery Slots State
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [showSlotPicker, setShowSlotPicker] = useState(false);
+  const slotDialogRef = useRef<HTMLDivElement>(null);
+  useDialogAccessibility(slotDialogRef, () => setShowSlotPicker(false));
   const deliverySlots = getDeliverySlots();
 
   // Subscriber discount
@@ -269,7 +273,7 @@ export default function CartPage() {
         orderRef: orderRef ?? undefined,
       });
 
-      const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "917899858374";
+      const whatsappNumber = getWhatsAppNumber();
       clearCart();
       window.open(getWhatsAppUrl(whatsappNumber, message), "_blank", "noopener,noreferrer");
       window.location.href = "/confirmation?payment_id=whatsapp";
@@ -362,6 +366,7 @@ export default function CartPage() {
                         <div className="flex items-center gap-3 shrink-0">
                           <div className="flex items-center gap-2 bg-white rounded-md border border-black/10 px-2 py-1">
                             <button
+                              aria-label={`Decrease quantity of ${item.bowl.name}`}
                               onClick={() => updateQuantity(item.instanceId, item.quantity - 1)}
                               className="w-6 h-6 flex items-center justify-center text-stone hover:text-ink transition-colors cursor-pointer"
                             >
@@ -371,6 +376,7 @@ export default function CartPage() {
                               {item.quantity}
                             </span>
                             <button
+                              aria-label={`Increase quantity of ${item.bowl.name}`}
                               onClick={() => updateQuantity(item.instanceId, item.quantity + 1)}
                               className="w-6 h-6 flex items-center justify-center text-stone hover:text-ink transition-colors cursor-pointer"
                             >
@@ -381,6 +387,7 @@ export default function CartPage() {
                             {formatCurrency(effectiveUnitPrice * item.quantity)}
                           </span>
                           <button
+                            aria-label={`Remove ${item.bowl.name} from cart`}
                             onClick={() => removeItem(item.instanceId)}
                             className="w-8 h-8 rounded-full border border-black/5 flex items-center justify-center text-stone hover:bg-terracotta/5 hover:text-terracotta transition-colors ml-2 cursor-pointer bg-white"
                           >
@@ -435,6 +442,7 @@ export default function CartPage() {
                     Select Delivery Slot
                   </label>
                   <button
+                    aria-label={selectedSlot ? `Selected delivery slot ${selectedSlot}` : "Choose an available delivery slot"}
                     onClick={() => { setShowSlotPicker(true); setError(""); }}
                     className="w-full flex items-center justify-between border border-black/10 rounded-lg px-4 py-3.5 bg-[#F9F8F6] hover:bg-sage/5 hover:border-sage/30 transition-colors text-left group cursor-pointer shadow-sm"
                   >
@@ -485,16 +493,23 @@ export default function CartPage() {
       {/* Delivery Slot Picker Modal */}
       {showSlotPicker && (
         <div className="fixed inset-0 z-[110] flex items-end md:items-center justify-center p-0 md:p-4 bg-ink/70 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white rounded-t-3xl md:rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-[50%] md:zoom-in-95 duration-400">
+          <div
+            ref={slotDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delivery-slot-title"
+            tabIndex={-1}
+            className="bg-white rounded-t-3xl md:rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-[50%] md:zoom-in-95 duration-400"
+          >
             {/* Header */}
             <div className="bg-white px-6 py-5 flex items-center justify-between border-b border-black/5 shrink-0 sticky top-0 z-10">
               <div>
-                <h3 className="font-display text-2xl font-medium text-ink">Choose a timeslot</h3>
+                <h3 id="delivery-slot-title" className="font-display text-2xl font-medium text-ink">Choose a timeslot</h3>
                 <p className="font-body text-[12px] text-stone mt-0.5 tracking-wide">Select your ideal delivery window</p>
               </div>
               <button
                 onClick={() => setShowSlotPicker(false)}
-                className="text-stone hover:text-ink w-8 h-8 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 transition-colors cursor-pointer"
+                className="text-stone hover:text-ink w-8 h-8 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage focus-visible:ring-offset-1"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>

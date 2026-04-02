@@ -203,7 +203,7 @@ export const STUB_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
 ];
 
 export const STUB_SETTINGS: GlobalSettings = {
-  whatsappNumber: "917899858374",
+  whatsappNumber: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "917899858374",
   instagramUrl: "https://instagram.com/nutravoe",
 };
 

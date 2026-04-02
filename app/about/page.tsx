@@ -127,7 +127,7 @@ export default function AboutPage() {
           <span className="text-sage-dark">I&apos;d love to hear from you."</span>
         </blockquote>
         <a
-          href="https://wa.me/917899858374"
+          href={getWhatsAppHref()}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-block btn-primary text-xs tracking-widest"
@@ -138,3 +138,4 @@ export default function AboutPage() {
     </>
   );
 }
+import { getWhatsAppHref } from "@/lib/contact";

@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rate-limit';
 
-/**
- * Server-side Nominatim proxy.
- * Keeps the User-Agent header server-side and adds edge caching so the
- * same pincode is only ever looked up once per 24 hours at the CDN level.
- *
- * GET /api/geocode?pincode=560001
- * → { lat: number, lng: number, display_name: string }
- */
 export async function GET(req: NextRequest) {
-  const pincode = req.nextUrl.searchParams.get('pincode')?.trim();
+  const limited = await enforceRateLimit(req, 'geocode-pincode', 10, 60);
+  if (!limited.ok) return limited.response;
 
-  if (!pincode) {
-    return NextResponse.json({ error: 'pincode query param is required' }, { status: 400 });
+  const pincode = req.nextUrl.searchParams.get('pincode')?.trim();
+  if (!pincode || !/^\d{6}$/.test(pincode)) {
+    return NextResponse.json({ error: 'Valid pincode query param is required' }, { status: 400, headers: limited.headers });
   }
 
   const query = `${pincode}, Bengaluru, Karnataka, India`;
@@ -21,22 +16,19 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(url, {
       headers: {
-        // Nominatim ToS requires a descriptive User-Agent
-        'User-Agent': 'Nutravoe/1.0 (nutravoe@gmail.com)',
+        'User-Agent': 'Nutravoe/1.0 (support@nutravoe.in)',
         'Accept-Language': 'en',
       },
-      // Cache at the Next.js / CDN layer for 24 hours — pincodes don't move
       next: { revalidate: 86400 },
     });
 
     if (!res.ok) {
-      return NextResponse.json({ error: 'Nominatim request failed' }, { status: 502 });
+      return NextResponse.json({ error: 'Nominatim request failed' }, { status: 502, headers: limited.headers });
     }
 
     const data: { lat: string; lon: string; display_name: string }[] = await res.json();
-
     if (!data.length) {
-      return NextResponse.json({ error: 'Location not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Location not found' }, { status: 404, headers: limited.headers });
     }
 
     const { lat, lon, display_name } = data[0];
@@ -44,8 +36,8 @@ export async function GET(req: NextRequest) {
       lat: parseFloat(lat),
       lng: parseFloat(lon),
       display_name,
-    });
+    }, { headers: limited.headers });
   } catch {
-    return NextResponse.json({ error: 'Geocoding failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Geocoding failed' }, { status: 500, headers: limited.headers });
   }
 }

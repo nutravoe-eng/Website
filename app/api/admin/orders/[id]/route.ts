@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 
+const ALLOWED_PAYMENT_STATUSES = new Set(['pending', 'paid', 'failed', 'refunded']);
+const ALLOWED_ORDER_STATUSES = new Set(['pending', 'confirmed', 'out_for_delivery', 'delivered', 'cancelled']);
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,6 +15,14 @@ export async function PATCH(
   const { id } = await params;
   const body = await req.json();
   const { payment_status, payment_reference, status, admin_notes } = body;
+
+  if (payment_status !== undefined && !ALLOWED_PAYMENT_STATUSES.has(payment_status)) {
+    return NextResponse.json({ error: 'Invalid payment status' }, { status: 422 });
+  }
+
+  if (status !== undefined && !ALLOWED_ORDER_STATUSES.has(status)) {
+    return NextResponse.json({ error: 'Invalid order status' }, { status: 422 });
+  }
 
   const updates: Record<string, unknown> = {};
   if (payment_status    !== undefined) updates.payment_status    = payment_status;

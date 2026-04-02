@@ -142,7 +142,7 @@ export default function MenuClient({ bowls }: { bowls: Bowl[] }) {
           Message us on WhatsApp and we'll confirm delivery for 7–10 AM tomorrow.
         </p>
         <a
-          href="https://wa.me/917899858374"
+          href={getWhatsAppHref()}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-block bg-white text-sage-dark font-body text-xs font-medium tracking-widest uppercase px-8 py-3.5 rounded-sm hover:bg-sage-light transition-colors duration-300"
@@ -153,3 +153,4 @@ export default function MenuClient({ bowls }: { bowls: Bowl[] }) {
     </>
   );
 }
+import { getWhatsAppHref } from "@/lib/contact";
