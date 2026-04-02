@@ -261,10 +261,7 @@ export default function Navbar() {
                             Addresses
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-hover:opacity-40 transition-opacity"><path d="m9 18 6-6-6-6"/></svg>
                           </Link>
-                          <Link href="/payment-methods" onClick={() => setProfileDropdownOpen(false)} className="px-5 py-2 hover:bg-[#F9F8F6] font-body text-[13px] text-ink transition-colors flex items-center justify-between group">
-                            Payment Methods
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-hover:opacity-40 transition-opacity"><path d="m9 18 6-6-6-6"/></svg>
-                          </Link>
+
                           
                           <div className="h-px bg-black/5 my-2 mx-4"></div>
                           
