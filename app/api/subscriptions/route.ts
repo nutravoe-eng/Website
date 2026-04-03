@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
       plan_id: dbPlan.id,
       style: deliveryStyle,
       billing_cycle: quote.billingCycle,
-      status: deliveryStyle === "flexible" ? "pending" : "active",
+      status: "pending",
       start_date: nowIso,
       delivery_time_slot: deliveryStyle !== "flexible" ? deliveryTimeSlot : null,
       wallet_balance_rs: 0,
