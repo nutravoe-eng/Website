@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   if (!selectedSlot) {
     return NextResponse.json({ error: "Delivery slot is required" }, { status: 400, headers: limited.headers });
   }
-  if (selectedSlot.length > 64 || !/^[\w\s\-–:.]+$/.test(selectedSlot)) {
+  if (selectedSlot.length > 64 || !/^[\w\s\-–:.,]+$/.test(selectedSlot)) {
     return NextResponse.json({ error: "Invalid delivery slot" }, { status: 400, headers: limited.headers });
   }
   if (!incomingItems.length) {
