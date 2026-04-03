@@ -26,7 +26,6 @@ interface WizardState {
   step: 1 | 2 | 3;
   planId: PlanId | null;
   deliveryStyle: DeliveryStyle | null;
-  bulkDeliveryDay: string;
   selectedDays: Day[];
   // Scenario C (daily) — one bowl per day
   dayBowlMap: Record<string, string>;
@@ -34,9 +33,6 @@ interface WizardState {
   // Scenario A (spread) — multiple bowls + quantities per day
   dayBowlCounts: Record<string, Record<string, number>>;
   dayBowlCustomMap: Record<string, Record<string, IngredientCustomization[]>>;
-  // Scenario B (bulk)
-  bulkBowlCounts: Record<string, number>;
-  bulkCustomMap: Record<string, IngredientCustomization[]>;
   // Shared
   deliveryTimeSlot: string;
 }
@@ -62,14 +58,11 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     step: 1,
     planId: null,
     deliveryStyle: null,
-    bulkDeliveryDay: 'next-day',
     selectedDays: [],
     dayBowlMap: {},
     dayCustomMap: {},
     dayBowlCounts: {},
     dayBowlCustomMap: {},
-    bulkBowlCounts: {},
-    bulkCustomMap: {},
     deliveryTimeSlot: '',
   });
 
@@ -104,7 +97,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   // Customization modal triggers
   const [customizingDay, setCustomizingDay] = useState<string | null>(null);  // scenario C
   const [customizingSpreadKey, setCustomizingSpreadKey] = useState<{ day: string; bowlId: string } | null>(null);  // scenario A
-  const [customizingBulkBowlId, setCustomizingBulkBowlId] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -159,10 +151,12 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     });
   }, []);
 
+  // Suppress unused variable warning — deliveryPincode is set alongside deliveryAddress
+  void deliveryPincode;
+
   const currentPlan = plans.find(p => p.id === state.planId);
 
-  function getScenario(): 'A' | 'B' | 'C' | 'D' {
-    if (state.deliveryStyle === 'bulk') return 'B';
+  function getScenario(): 'A' | 'C' | 'D' {
     if (state.deliveryStyle === 'flexible') return 'D';
     if (state.planId === 'daily' && state.deliveryStyle === 'spread') return 'C';
     if (state.planId === 'daily' && !state.deliveryStyle) return 'C'; // fallback
@@ -197,11 +191,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
       return state.selectedDays.every(day => Boolean(state.dayBowlMap[day]));
     }
 
-    if (scenario === 'B') {
-      const total = Object.values(state.bulkBowlCounts).reduce((s, c) => s + c, 0);
-      return total === currentPlan.bowlsPerWeek;
-    }
-
     return false;
   })();
 
@@ -230,7 +219,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   // ─── Day toggle (Step 2A & 2C) ───────────────────────────────────────────────
 
   function toggleDay(day: Day) {
-    const scenario = getScenario();
     const isSelected = state.selectedDays.includes(day);
 
     if (isSelected) {
@@ -249,8 +237,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         };
       });
     } else {
-      // Scenario C (daily): hard cap at 7 days
-      if (scenario === 'C' && !currentPlan) return;
+      if (!currentPlan) return;
       setState(s => ({ ...s, selectedDays: [...s.selectedDays, day] }));
     }
   }
@@ -273,18 +260,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         [day]: { ...(s.dayBowlCounts[day] ?? {}), [bowlId]: next },
       },
     }));
-  }
-
-  // ─── Bulk bowl controls (Step 2B) ────────────────────────────────────────────
-
-  function adjustBulkCount(bowlId: string, delta: number) {
-    if (!currentPlan) return;
-    const current = state.bulkBowlCounts[bowlId] ?? 0;
-    const total = Object.values(state.bulkBowlCounts).reduce((s, c) => s + c, 0);
-
-    if (delta > 0 && total >= currentPlan.bowlsPerWeek) return;
-    const next = Math.max(0, current + delta);
-    setState(s => ({ ...s, bulkBowlCounts: { ...s.bulkBowlCounts, [bowlId]: next } }));
   }
 
   const describeCustomizations = (
@@ -314,17 +289,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         `- Funds are loaded only after payment approval and expire in ${currentPlan?.billingCycle === 'monthly' ? '1 month' : '7 days'}.`,
         "- Bowls are scheduled later from dashboard.",
       ];
-    }
-    if (scenario === "B") {
-      const lines = Object.entries(state.bulkBowlCounts)
-        .filter(([, qty]) => qty > 0)
-        .map(([bowlId, qty]) => {
-          const bowl = bowls.find(b => b._id === bowlId);
-          const c = describeCustomizations(state.bulkCustomMap[bowlId], bowl);
-          return `- ${qty} x ${bowl?.name ?? bowlId}${c}`;
-        });
-      lines.push(`- Bulk delivery day: ${state.bulkDeliveryDay === "next-day" ? "next-day (weekly)" : state.bulkDeliveryDay}`);
-      return lines;
     }
     if (scenario === "A") {
       return DAYS.filter(d => state.selectedDays.includes(d)).flatMap(day => {
@@ -429,22 +393,12 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         planId: state.planId,
         deliveryStyle: state.deliveryStyle ?? 'spread',
         deliveryTimeSlot: scenario !== 'D' ? state.deliveryTimeSlot : null,
-        bulkDeliveryDay: scenario === 'B' ? state.bulkDeliveryDay : null,
-        dayConfigs: scenario === 'B'
-          ? Object.entries(state.bulkBowlCounts)
-              .filter(([, quantity]) => quantity > 0)
-              .map(([bowlId, quantity]) => ({
-                day: state.bulkDeliveryDay,
-                bowlId,
-                quantity,
-                customizations: state.bulkCustomMap[bowlId] ?? [],
-              }))
-          : dayConfigs.map((config) => ({
-              day: config.day,
-              bowlId: config.bowlId,
-              quantity: config.quantity,
-              customizations: config.customizations ?? [],
-            })),
+        dayConfigs: dayConfigs.map((config) => ({
+          day: config.day,
+          bowlId: config.bowlId,
+          quantity: config.quantity,
+          customizations: config.customizations ?? [],
+        })),
       }),
     });
 
@@ -466,14 +420,9 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
   // ─── Derived values ───────────────────────────────────────────────────────────
 
-  const bulkTotal = Object.values(state.bulkBowlCounts).reduce((s, c) => s + c, 0);
-
   // Bowl being customised (for modal)
   const customizingDayBowl = customizingDay  // scenario C only
     ? bowls.find(b => b._id === state.dayBowlMap[customizingDay]) ?? null
-    : null;
-  const customizingBulkBowl = customizingBulkBowlId
-    ? bowls.find(b => b._id === customizingBulkBowlId) ?? null
     : null;
 
   // ─── Active subscription blocker ──────────────────────────────────────────────
@@ -608,22 +557,17 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
               plan={plan}
               selected={state.planId === plan.id}
               deliveryStyle={state.planId === plan.id ? state.deliveryStyle : null}
-              bulkDeliveryDay={state.planId === plan.id ? state.bulkDeliveryDay : 'next-day'}
               onSelect={() => setState(s => ({
                 ...s,
                 planId: plan.id,
                 deliveryStyle: null,
-                bulkDeliveryDay: 'next-day',
                 selectedDays: [],
                 dayBowlMap: {},
                 dayCustomMap: {},
                 dayBowlCounts: {},
                 dayBowlCustomMap: {},
-                bulkBowlCounts: {},
-                bulkCustomMap: {},
               }))}
               onDeliveryStyle={(style) => setState(s => ({ ...s, deliveryStyle: style }))}
-              onBulkDeliveryDay={(day) => setState(s => ({ ...s, bulkDeliveryDay: day }))}
             />
           ))}
         </div>
@@ -658,8 +602,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           <StepIndicator />
 
           <h2 className="font-display text-xl font-medium text-ink mb-6 text-center">
-            {scenario === 'B' ? 'Choose your bowls'
-              : scenario === 'D' ? 'How your wallet works'
+            {scenario === 'D' ? 'How your wallet works'
               : 'Assign bowls to delivery days'}
           </h2>
 
@@ -854,83 +797,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             </div>
           )}
 
-          {/* Scenario B — Bulk */}
-          {scenario === 'B' && (
-            <div className="bg-white rounded-xl border border-black/8 p-6">
-              <div className="flex items-center justify-between mb-1">
-                <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">
-                  Pick your bowls
-                </p>
-                <span className={`font-body text-[13px] font-bold ${bulkTotal === currentPlan.bowlsPerWeek ? 'text-sage' : 'text-ink'}`}>
-                  {bulkTotal} / {currentPlan.bowlsPerWeek}
-                </span>
-              </div>
-              <p className="font-body text-[12px] text-stone mb-5">
-                All {currentPlan.bowlsPerWeek} bowls delivered together{' '}
-                {state.bulkDeliveryDay === 'next-day'
-                  ? 'the next day'
-                  : `every ${state.bulkDeliveryDay}`}
-                , then every week.
-              </p>
-
-              <div className="space-y-3">
-                {bowls.map(bowl => {
-                  const count = state.bulkBowlCounts[bowl._id] ?? 0;
-                  const bulkCustoms = state.bulkCustomMap[bowl._id] ?? [];
-                  const hasCustoms = bulkCustoms.some(c => c.option !== 'default');
-
-                  return (
-                    <div key={bowl._id} className={`flex items-center gap-4 p-3 rounded-xl border transition-all ${count > 0 ? 'border-sage/40 bg-sage/5' : 'border-black/8 bg-[#F9F8F6]'}`}>
-                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-white relative shrink-0">
-                        <Image
-                          src={bowl.image}
-                          alt={bowl.name}
-                          fill
-                          className="object-contain"
-                          sizes="48px"
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-body text-[13px] font-medium text-ink truncate">{bowl.name}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <p className="font-body text-[11px] text-stone">{bowl.tagline}</p>
-                          {count > 0 && (
-                            <button
-                              onClick={() => setCustomizingBulkBowlId(bowl._id)}
-                              className="font-body text-[11px] text-sage font-semibold hover:underline flex items-center gap-1 cursor-pointer"
-                            >
-                              {hasCustoms ? 'Edit' : 'Customise'} →
-                            </button>
-                          )}
-                          {hasCustoms && <span className="w-1.5 h-1.5 rounded-full bg-terracotta" />}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => adjustBulkCount(bowl._id, -1)}
-                          disabled={count === 0}
-                          className="w-8 h-8 rounded-full border border-black/10 flex items-center justify-center text-stone hover:text-ink hover:border-black/20 disabled:opacity-30 transition-all"
-                        >
-                          −
-                        </button>
-                        <span className="font-body text-[14px] font-bold text-ink w-5 text-center">
-                          {count}
-                        </span>
-                        <button
-                          onClick={() => adjustBulkCount(bowl._id, 1)}
-                          disabled={bulkTotal >= currentPlan.bowlsPerWeek}
-                          className="w-8 h-8 rounded-full border border-black/10 flex items-center justify-center text-stone hover:text-ink hover:border-black/20 disabled:opacity-30 transition-all"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Scenario D — Flexible / Wallet */}
           {scenario === 'D' && (
             <div className="space-y-4">
@@ -1091,23 +957,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             />
           );
         })()}
-
-        {/* Customization modal — bulk bowl */}
-        {customizingBulkBowlId && customizingBulkBowl && (
-          <CustomizationModal
-            bowl={customizingBulkBowl}
-            initialCustomizations={state.bulkCustomMap[customizingBulkBowlId]}
-            mode="subscription"
-            onConfirm={(customizations) => {
-              setState(s => ({
-                ...s,
-                bulkCustomMap: { ...s.bulkCustomMap, [customizingBulkBowlId]: customizations },
-              }));
-              setCustomizingBulkBowlId(null);
-            }}
-            onClose={() => setCustomizingBulkBowlId(null)}
-          />
-        )}
       </>
     );
   }
@@ -1121,12 +970,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     const deliverySummaryText = (() => {
       if (scenario === 'D') return `₹${currentPlan.weeklyPrice.toLocaleString('en-IN')} will load after approval and expire in ${currentPlan.billingCycle === 'monthly' ? '1 month' : '7 days'}`;
 
-      if (scenario === 'B') {
-        const parts = Object.entries(state.bulkBowlCounts)
-          .filter(([, c]) => c > 0)
-          .map(([id, c]) => `${c}× ${bowls.find(b => b._id === id)?.name ?? id}`);
-        return parts.join(', ');
-      }
       if (scenario === 'A') {
         return DAYS.filter(d => state.selectedDays.includes(d))
           .map(d => {
@@ -1219,14 +1062,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                     <span className="font-body text-[13px] text-stone">Schedule</span>
                     <span className="font-body text-[13px] text-ink text-right">
                       {state.selectedDays.join(', ')}
-                    </span>
-                  </div>
-                )}
-                {scenario === 'B' && (
-                  <div className="flex items-start justify-between gap-4">
-                    <span className="font-body text-[13px] text-stone">Delivery day</span>
-                    <span className="font-body text-[13px] text-ink text-right">
-                      {state.bulkDeliveryDay === 'next-day' ? 'Next day (weekly)' : `Every ${state.bulkDeliveryDay}`}
                     </span>
                   </div>
                 )}

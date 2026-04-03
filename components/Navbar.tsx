@@ -172,7 +172,9 @@ export default function Navbar() {
                 <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
               </svg>
               <div className="flex flex-col items-start leading-tight text-left">
-                <span className="font-body text-[11px] font-medium tracking-wide opacity-80">Delivering to Bengaluru</span>
+                <span className="font-body text-[11px] font-medium tracking-wide opacity-80">
+                  {savedPincode?.startsWith("56") ? "Delivering to Bengaluru" : savedPincode ? "Not delivering here yet" : "Delivering to Bengaluru"}
+                </span>
                 <span className="font-body text-[13px] font-bold">{savedPincode}</span>
               </div>
             </button>
@@ -343,13 +345,14 @@ export default function Navbar() {
             onClick={() => setMenuOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute top-16 left-0 right-0 bg-white shadow-xl px-6 py-8 flex flex-col gap-6">
-            <ul className="list-none m-0 p-0 flex flex-col gap-5">
+          <div className="absolute top-16 left-0 right-0 bg-white shadow-xl flex flex-col overflow-y-auto max-h-[calc(100vh-4rem)]">
+            {/* Nav links */}
+            <ul className="list-none m-0 p-0 flex flex-col border-b border-black/5">
               {NAV_LINKS.map(({ href, label }) => (
                 <li key={href}>
                   <Link
                     href={href}
-                    className="font-display text-[28px] font-light text-ink hover:text-sage-dark transition-colors duration-200"
+                    className="block px-6 py-4 font-display text-[22px] font-light text-ink hover:text-sage-dark hover:bg-[#F9F8F6] transition-colors duration-200"
                     onClick={() => setMenuOpen(false)}
                   >
                     {label}
@@ -357,15 +360,83 @@ export default function Navbar() {
                 </li>
               ))}
             </ul>
-            <a
-              href={getWhatsAppHref()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-sage text-xs tracking-widest text-center py-3.5"
-              onClick={() => setMenuOpen(false)}
-            >
-              Order on WhatsApp
-            </a>
+
+            {/* Account section */}
+            {!user ? (
+              <div className="px-6 py-5">
+                <Link
+                  href="/signin"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 w-full bg-sage hover:bg-sage-dark text-white font-body text-sm font-bold tracking-wide px-5 py-3.5 rounded-md transition-colors shadow-sm justify-center"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  Sign In
+                </Link>
+              </div>
+            ) : (
+              <div className="flex flex-col">
+                {/* User identity */}
+                <div className="px-6 py-4 bg-[#F9F8F6] border-b border-black/5">
+                  <p className="font-display text-base font-medium text-ink">{user.name}</p>
+                  <p className="font-body text-[11px] text-stone">{user.email}</p>
+                </div>
+
+                {/* Account links */}
+                {[
+                  { href: "/profile", label: "Profile" },
+                  { href: "/orders", label: "Orders" },
+                  { href: "/subscriptions", label: "Subscriptions" },
+                  { href: "/addresses", label: "Addresses" },
+                ].map(({ href, label }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center justify-between px-6 py-3.5 font-body text-[15px] text-ink hover:bg-[#F9F8F6] transition-colors border-b border-black/5"
+                  >
+                    {label}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone/40"><path d="m9 18 6-6-6-6"/></svg>
+                  </Link>
+                ))}
+
+                {walletBalanceRs !== null && (
+                  <Link
+                    href="/wallet"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center justify-between px-6 py-3.5 font-body text-[15px] text-ink hover:bg-[#F9F8F6] transition-colors border-b border-black/5"
+                  >
+                    <span className="flex items-center gap-2">
+                      Wallet
+                      <span className="font-body text-[11px] font-bold bg-terracotta/10 text-terracotta px-2 py-0.5 rounded-full">
+                        {formatCurrency(walletBalanceRs)}
+                      </span>
+                    </span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone/40"><path d="m9 18 6-6-6-6"/></svg>
+                  </Link>
+                )}
+
+                <Link
+                  href="/help"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center justify-between px-6 py-3.5 font-body text-[15px] text-stone hover:bg-[#F9F8F6] transition-colors border-b border-black/5"
+                >
+                  Help & Support
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone/40"><path d="m9 18 6-6-6-6"/></svg>
+                </Link>
+
+                <button
+                  onClick={async () => {
+                    await supabase.auth.signOut();
+                    setMenuOpen(false);
+                    router.push("/");
+                  }}
+                  className="flex items-center gap-2 px-6 py-4 font-body text-[15px] text-terracotta font-medium hover:bg-terracotta/5 transition-colors text-left"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

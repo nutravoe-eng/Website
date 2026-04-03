@@ -1,10 +1,9 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import Image from 'next/image';
 import type { Bowl, Subscription, IngredientCustomization } from '@/types';
 import { formatCurrency } from '@/lib/utils';
-import { STUB_PLANS as PLANS, BULK_DAY_OPTIONS } from '../../subscribe/PlanCard';
+import { STUB_PLANS as PLANS } from '../../subscribe/PlanCard';
 import BowlPicker from '../../subscribe/BowlPicker';
 import CustomizationModal from '@/components/CustomizationModal';
 import { useDialogAccessibility } from '@/lib/use-dialog-accessibility';
@@ -19,16 +18,12 @@ const TIME_SLOTS = [
 ] as const;
 
 interface EditState {
-  deliveryStyle: 'spread' | 'bulk' | 'flexible';
-  bulkDeliveryDay: string;
+  deliveryStyle: 'spread' | 'flexible';
   deliveryTimeSlot: string;
   selectedDays: string[];
   dayBowlMap: Record<string, string>;
-  bulkBowlCounts: Record<string, number>;
   dayCustomMap: Record<string, IngredientCustomization[]>;
   dayCustomCostMap: Record<string, number>;
-  bulkCustomMap: Record<string, IngredientCustomization[]>;
-  bulkCustomCostMap: Record<string, number>;
 }
 
 interface Props {
@@ -44,15 +39,11 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
   useDialogAccessibility(dialogRef, onClose);
 
   const [edit, setEdit] = useState<EditState>(() => ({
-    deliveryStyle: sub.deliveryStyle,
-    bulkDeliveryDay: sub.bulkDeliveryDay ?? 'next-day',
+    deliveryStyle: sub.deliveryStyle === 'flexible' ? 'flexible' : 'spread',
     deliveryTimeSlot: sub.deliveryTimeSlot ?? '',
     selectedDays: sub.deliveryStyle === 'spread' ? sub.dayConfigs.map(d => d.day) : [],
     dayBowlMap: sub.deliveryStyle === 'spread'
       ? Object.fromEntries(sub.dayConfigs.map(d => [d.day, d.bowlId]))
-      : {},
-    bulkBowlCounts: sub.deliveryStyle === 'bulk' && sub.bulkBowls
-      ? Object.fromEntries(sub.bulkBowls.map(b => [b.bowlId, b.quantity]))
       : {},
     dayCustomMap: sub.deliveryStyle === 'spread'
       ? Object.fromEntries(sub.dayConfigs.map(d => [d.day, d.customizations ?? []]))
@@ -60,32 +51,20 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
     dayCustomCostMap: sub.deliveryStyle === 'spread'
       ? Object.fromEntries(sub.dayConfigs.map(d => [d.day, d.customizationCost ?? 0]))
       : {},
-    bulkCustomMap: sub.deliveryStyle === 'bulk' && sub.bulkBowls
-      ? Object.fromEntries(sub.bulkBowls.map(b => [b.bowlId, b.customizations ?? []]))
-      : {},
-    bulkCustomCostMap: sub.deliveryStyle === 'bulk' && sub.bulkBowls
-      ? Object.fromEntries(sub.bulkBowls.map(b => [b.bowlId, b.customizationCost ?? 0]))
-      : {},
   }));
 
   const [customizingDay, setCustomizingDay] = useState<string | null>(null);
-  const [customizingBulkBowlId, setCustomizingBulkBowlId] = useState<string | null>(null);
 
   if (!plan) return null;
-
-  const bulkTotal = Object.values(edit.bulkBowlCounts).reduce((s, c) => s + c, 0);
 
   const isValid = (() => {
     if (edit.deliveryStyle === 'flexible') return true;
     if (!edit.deliveryTimeSlot) return false;
-    if (edit.deliveryStyle === 'bulk') {
-      return bulkTotal === plan.bowlsPerWeek;
-    }
     if (edit.selectedDays.length !== plan.bowlsPerWeek) return false;
     return edit.selectedDays.every(d => Boolean(edit.dayBowlMap[d]));
   })();
 
-  function switchStyle(style: 'spread' | 'bulk' | 'flexible') {
+  function switchStyle(style: 'spread' | 'flexible') {
     setEdit(e => ({ ...e, deliveryStyle: style }));
   }
 
@@ -107,19 +86,11 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
     setEdit(e => ({ ...e, dayBowlMap: { ...e.dayBowlMap, [day]: bowlId } }));
   }
 
-  function adjustCount(bowlId: string, delta: number) {
-    const current = edit.bulkBowlCounts[bowlId] ?? 0;
-    if (delta > 0 && plan && bulkTotal >= plan.bowlsPerWeek) return;
-    const next = Math.max(0, current + delta);
-    setEdit(e => ({ ...e, bulkBowlCounts: { ...e.bulkBowlCounts, [bowlId]: next } }));
-  }
-
   function handleSave() {
     if (!isValid) return;
     const updated: Subscription = {
       ...sub,
       deliveryStyle: edit.deliveryStyle,
-      bulkDeliveryDay: edit.deliveryStyle === 'bulk' ? edit.bulkDeliveryDay : undefined,
       deliveryTimeSlot: edit.deliveryStyle !== 'flexible' ? edit.deliveryTimeSlot : undefined,
       dayConfigs: edit.deliveryStyle === 'spread'
         ? edit.selectedDays.map(day => ({
@@ -131,17 +102,6 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
             customizationCost: edit.dayCustomCostMap[day] ?? 0,
           }))
         : [],
-      bulkBowls: edit.deliveryStyle === 'bulk'
-        ? Object.entries(edit.bulkBowlCounts)
-            .filter(([, c]) => c > 0)
-            .map(([bowlId, quantity]) => ({
-              bowlId,
-              bowlName: bowls.find(b => b._id === bowlId)?.name ?? '',
-              quantity,
-              customizations: edit.bulkCustomMap[bowlId] ?? [],
-              customizationCost: edit.bulkCustomCostMap[bowlId] ?? 0,
-            }))
-        : undefined,
     };
     onSave(updated);
   }
@@ -197,23 +157,6 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
               </button>
 
               <button
-                onClick={() => switchStyle('bulk')}
-                role="radio"
-                aria-checked={edit.deliveryStyle === 'bulk'}
-                className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${
-                  edit.deliveryStyle === 'bulk' ? 'border-sage bg-sage/10' : 'border-black/10 hover:border-sage/40'
-                }`}
-              >
-                <div className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${edit.deliveryStyle === 'bulk' ? 'border-sage' : 'border-stone/40'}`}>
-                  {edit.deliveryStyle === 'bulk' && <div className="w-2 h-2 rounded-full bg-sage" />}
-                </div>
-                <div>
-                  <p className="font-body text-[13px] font-semibold text-ink">Bulk delivery</p>
-                  <p className="font-body text-[11px] text-stone">All bowls on one day</p>
-                </div>
-              </button>
-
-              <button
                 onClick={() => switchStyle('flexible')}
                 role="radio"
                 aria-checked={edit.deliveryStyle === 'flexible'}
@@ -231,79 +174,6 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
               </button>
             </div>
           </div>
-
-          {/* ── Bulk config ────────────────────────────────────── */}
-          {edit.deliveryStyle === 'bulk' && (
-            <>
-              {/* Delivery day picker */}
-              <div>
-                <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-3">Delivery Day</p>
-                <div className="flex flex-wrap gap-2">
-                  {BULK_DAY_OPTIONS.map(({ value, label }) => (
-                    <button
-                      key={value}
-                      onClick={() => setEdit(e => ({ ...e, bulkDeliveryDay: value }))}
-                      className={`px-3.5 py-2 rounded-full font-body text-[12px] font-medium transition-all border ${
-                        edit.bulkDeliveryDay === value
-                          ? 'bg-sage text-white border-sage'
-                          : 'border-black/15 text-stone hover:border-sage/60'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Bowl quantities */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">Bowls</p>
-                  <span className={`font-body text-[13px] font-bold ${bulkTotal === plan.bowlsPerWeek ? 'text-sage' : 'text-ink'}`}>
-                    {bulkTotal} / {plan.bowlsPerWeek}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {bowls.map(bowl => {
-                    const count = edit.bulkBowlCounts[bowl._id] ?? 0;
-                    const hasCust = count > 0 && (edit.bulkCustomMap[bowl._id] ?? []).some(c => c.option !== 'default');
-                    return (
-                      <div key={bowl._id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${count > 0 ? 'border-sage/40 bg-sage/5' : 'border-black/8 bg-[#F9F8F6]'}`}>
-                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-white relative shrink-0">
-                          <Image src={bowl.image} alt={bowl.name} fill className="object-contain" sizes="40px" />
-                        </div>
-                        <p className="font-body text-[12px] font-medium text-ink flex-1 truncate">{bowl.name}</p>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {count > 0 && (
-                            <button
-                              onClick={() => setCustomizingBulkBowlId(bowl._id)}
-                              className="relative flex items-center gap-1 px-2 py-1 rounded-md border border-black/10 bg-white hover:bg-sage/5 hover:border-sage/30 font-body text-[11px] font-medium text-stone hover:text-sage-dark transition-colors"
-                            >
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                              </svg>
-                              {hasCust && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-terracotta border border-white" />}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => adjustCount(bowl._id, -1)}
-                            disabled={count === 0}
-                            className="w-7 h-7 rounded-full border border-black/10 flex items-center justify-center text-stone hover:text-ink disabled:opacity-30 transition-all"
-                          >−</button>
-                          <span className="font-body text-[14px] font-bold text-ink w-4 text-center">{count}</span>
-                          <button
-                            onClick={() => adjustCount(bowl._id, 1)}
-                            disabled={bulkTotal >= plan.bowlsPerWeek}
-                            className="w-7 h-7 rounded-full border border-black/10 flex items-center justify-center text-stone hover:text-ink disabled:opacity-30 transition-all"
-                          >+</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
 
           {/* ── Flexible info ──────────────────────────────────── */}
           {edit.deliveryStyle === 'flexible' && (
@@ -492,28 +362,6 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
               setCustomizingDay(null);
             }}
             onClose={() => setCustomizingDay(null)}
-          />
-        );
-      })()}
-
-      {/* Customization modal — bulk bowl */}
-      {customizingBulkBowlId && (() => {
-        const bowl = bowls.find(b => b._id === customizingBulkBowlId);
-        if (!bowl) return null;
-        return (
-          <CustomizationModal
-            bowl={bowl}
-            initialCustomizations={edit.bulkCustomMap[customizingBulkBowlId] ?? []}
-            mode="subscription"
-            onConfirm={(customizations, cost) => {
-              setEdit(e => ({
-                ...e,
-                bulkCustomMap: { ...e.bulkCustomMap, [customizingBulkBowlId]: customizations },
-                bulkCustomCostMap: { ...e.bulkCustomCostMap, [customizingBulkBowlId]: cost },
-              }));
-              setCustomizingBulkBowlId(null);
-            }}
-            onClose={() => setCustomizingBulkBowlId(null)}
           />
         );
       })()}

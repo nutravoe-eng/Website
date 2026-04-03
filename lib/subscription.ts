@@ -57,7 +57,6 @@ export async function getActiveSubscription(): Promise<Subscription | null> {
     startDate: sub.start_date,
     deliveryTimeSlot: sub.delivery_time_slot ?? undefined,
     dayConfigs,
-    bulkDeliveryDay: sub.bulk_delivery_date ?? undefined,
     walletBalancePaise: sub.wallet_balance_rs != null ? sub.wallet_balance_rs * 100 : 0,
     deliveryAddress: '',
     createdAt: sub.created_at,

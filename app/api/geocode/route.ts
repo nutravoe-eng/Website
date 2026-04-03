@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Valid pincode query param is required' }, { status: 400, headers: limited.headers });
   }
 
-  const query = `${pincode}, Bengaluru, Karnataka, India`;
+  const query = `${pincode}, India`;
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=in`;
 
   try {

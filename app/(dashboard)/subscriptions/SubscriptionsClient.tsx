@@ -43,13 +43,6 @@ function getNextDeliveryDate(dayConfigs: DayBowlConfig[]): string {
 }
 
 function deliverySummary(sub: Subscription): string {
-  if (sub.deliveryStyle === "bulk" && sub.bulkBowls?.length) {
-    const bowlList = sub.bulkBowls.map(b => `${b.quantity}× ${b.bowlName}`).join(", ");
-    const dayLabel = sub.bulkDeliveryDay === "next-day" || !sub.bulkDeliveryDay
-      ? "next day"
-      : `every ${sub.bulkDeliveryDay}`;
-    return `${bowlList} · Delivered ${dayLabel}`;
-  }
   if (sub.dayConfigs?.length) {
     return sub.dayConfigs.map(d => `${d.day}: ${d.bowlName}`).join(" · ");
   }
@@ -133,7 +126,6 @@ export default function SubscriptionsClient({ bowls }: Props) {
         startDate: sub.start_date,
         deliveryTimeSlot: sub.delivery_time_slot ?? undefined,
         dayConfigs,
-        bulkDeliveryDay: sub.bulk_delivery_date ?? undefined,
         walletBalancePaise: sub.wallet_balance_rs != null ? sub.wallet_balance_rs * 100 : 0,
         deliveryAddress: '',
         createdAt: sub.created_at,

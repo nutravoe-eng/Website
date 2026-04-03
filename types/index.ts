@@ -74,7 +74,7 @@ export interface CartItem {
   customizationCost: number;
 }
 
-export type DeliveryStyle = 'spread' | 'bulk' | 'flexible';
+export type DeliveryStyle = 'spread' | 'flexible';
 
 export interface WalletTransaction {
   id: string;
@@ -130,10 +130,8 @@ export interface Subscription {
   planId: PlanId;
   deliveryStyle: DeliveryStyle;
   billingCycle?: 'weekly' | 'monthly';
-  bulkDeliveryDay?: string; // 'next-day' | 'Mon' | 'Tue' | ... — only for bulk
   deliveryTimeSlot?: string; // e.g. '7:00 AM – 8:00 AM'
   dayConfigs: DayBowlConfig[];
-  bulkBowls?: { bowlId: string; bowlName: string; quantity: number; customizations?: IngredientCustomization[]; customizationCost?: number }[];
   weeklyPrice: number;
   deliveryAddress: string;
   createdAt: string;

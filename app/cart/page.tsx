@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartContext";
 import { buildCartOrderWhatsAppMessage, formatCurrency, getWhatsAppUrl } from "@/lib/utils";
 import { getActivePlanConfig } from "@/lib/subscription";
+import { getWallet } from "@/lib/wallet";
 import { geocodePincode } from "@/lib/geocodeCache";
 import { getNearestHub, getDeliveryFee, DELIVERY_FEE_RS } from "@/lib/delivery";
 import { createClient } from "@/lib/supabase/client";
@@ -77,6 +78,10 @@ export default function CartPage() {
   // Subscriber discount
   const [subscriberPricePerBowl, setSubscriberPricePerBowl] = useState<number | null>(null);
 
+  // Wallet payment
+  const [walletBalanceRs, setWalletBalanceRs] = useState<number>(0);
+  const [hasActivePaidSub, setHasActivePaidSub] = useState(false);
+
   // Delivery fee
   const [deliveryFee, setDeliveryFee] = useState<number>(0);
   const [deliveryFeeLoading, setDeliveryFeeLoading] = useState(true);
@@ -94,6 +99,23 @@ export default function CartPage() {
 
       const [planConfig] = await Promise.all([getActivePlanConfig()]);
       if (planConfig) setSubscriberPricePerBowl(planConfig.perBowl);
+
+      // Check wallet eligibility (active + paid subscription with balance)
+      if (authUser) {
+        const { data: paidSub } = await supabase
+          .from("subscriptions")
+          .select("id")
+          .eq("user_id", authUser.id)
+          .eq("status", "active")
+          .eq("payment_status", "paid")
+          .limit(1)
+          .maybeSingle();
+        if (paidSub) {
+          setHasActivePaidSub(true);
+          const wallet = await getWallet();
+          setWalletBalanceRs(wallet.balancePaise / 100);
+        }
+      }
 
       // Resolve delivery fee from Supabase addresses (fallback to localStorage cache)
       let pincode: string | null = null;
@@ -153,6 +175,43 @@ export default function CartPage() {
     const order = await res.json() as { id?: string };
     return order.id ? order.id.slice(-6).toUpperCase() : null;
   };
+
+  async function handlePayFromWallet() {
+    if (items.length === 0) { setError("Your cart is empty. Add some bowls first."); return; }
+    if (!selectedSlot) { setError("Please select a delivery slot before placing an order."); return; }
+    if (!user) { router.push("/signin"); return; }
+
+    setSubmitting(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/orders/wallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selectedSlot,
+          items: items.map((item) => ({
+            bowlSlug: item.bowl.slug,
+            quantity: item.quantity,
+            customizations: item.customizations,
+          })),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setError(typeof data?.error === "string" ? data.error : "Failed to place order. Please try again.");
+        return;
+      }
+
+      clearCart();
+      window.location.href = "/confirmation?source=wallet";
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function handlePlaceOrder() {
     if (items.length === 0) {
@@ -408,16 +467,34 @@ export default function CartPage() {
                   </div>
                 )}
 
+                {hasActivePaidSub && (
+                  <div className="mb-3">
+                    <button
+                      onClick={handlePayFromWallet}
+                      disabled={submitting || walletBalanceRs < grandTotal || deliveryFeeLoading}
+                      className="w-full bg-sage hover:bg-sage-dark disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>
+                      {walletBalanceRs >= grandTotal
+                        ? `Pay ${formatCurrency(grandTotal)} from Wallet`
+                        : `Wallet balance low (${formatCurrency(walletBalanceRs)} available)`}
+                    </button>
+                    <p className="font-body text-[11px] text-stone text-center mt-1.5">
+                      Order confirmed instantly · No WhatsApp needed
+                    </p>
+                  </div>
+                )}
+
                 <button
                   onClick={handlePlaceOrder}
                   disabled={submitting}
-                  className="w-full bg-terracotta hover:bg-[#D55F43] disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm"
+                  className={`w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm ${hasActivePaidSub ? "bg-black/20 hover:bg-black/30 text-ink" : "bg-terracotta hover:bg-[#D55F43]"}`}
                 >
-                  Place an order
+                  {hasActivePaidSub ? "Order via WhatsApp instead" : "Place an order"}
                 </button>
 
                 <p className="font-body text-[11px] text-stone text-center mt-4">
-                  {user ? "Your full order details will open in WhatsApp for confirmation." : "You will be asked to sign in to your Nutravoe account to continue."}
+                  {user ? (hasActivePaidSub ? "" : "Your full order details will open in WhatsApp for confirmation.") : "You will be asked to sign in to your Nutravoe account to continue."}
                 </p>
               </div>
             )}

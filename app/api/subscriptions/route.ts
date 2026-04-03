@@ -28,18 +28,7 @@ const DAY_NAME_TO_ENUM: Record<string, string> = {
   sat: "sat",
 };
 
-function getTomorrowDayEnum(): string {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-  return dayNames[tomorrow.getDay()]!;
-}
-
-function normalizeDayConfigDay(day: string, deliveryStyle: string): string | null {
-  if (deliveryStyle === "bulk" && day === "next-day") {
-    return getTomorrowDayEnum();
-  }
-
+function normalizeDayConfigDay(day: string): string | null {
   return DAY_NAME_TO_ENUM[day] ?? null;
 }
 
@@ -67,10 +56,9 @@ export async function POST(req: NextRequest) {
   const planId = typeof body?.planId === "string" ? body.planId : "";
   const deliveryStyle = typeof body?.deliveryStyle === "string" ? body.deliveryStyle : "";
   const deliveryTimeSlot = typeof body?.deliveryTimeSlot === "string" ? body.deliveryTimeSlot.trim() : "";
-  const bulkDeliveryDay = typeof body?.bulkDeliveryDay === "string" ? body.bulkDeliveryDay : null;
   const dayConfigs = Array.isArray(body?.dayConfigs) ? body.dayConfigs as DayConfigInput[] : [];
 
-  if (!planId || !["spread", "bulk", "flexible"].includes(deliveryStyle)) {
+  if (!planId || !["spread", "flexible"].includes(deliveryStyle)) {
     return NextResponse.json({ error: "Invalid subscription request" }, { status: 400, headers: limited.headers });
   }
 
@@ -134,10 +122,6 @@ export async function POST(req: NextRequest) {
       status: deliveryStyle === "flexible" ? "pending" : "active",
       start_date: nowIso,
       delivery_time_slot: deliveryStyle !== "flexible" ? deliveryTimeSlot : null,
-      bulk_bowls: deliveryStyle === "bulk"
-        ? dayConfigs.reduce((sum, config) => sum + Math.max(1, Math.trunc(config.quantity)), 0)
-        : null,
-      bulk_delivery_date: deliveryStyle === "bulk" ? bulkDeliveryDay : null,
       wallet_balance_rs: 0,
       total_amount_rs: quote.totalAmountRs,
       payment_status: "pending",
@@ -153,7 +137,7 @@ export async function POST(req: NextRequest) {
 
   if (dayConfigs.length > 0) {
     const configRows = dayConfigs.map((config) => {
-      const normalizedDay = normalizeDayConfigDay(config.day, deliveryStyle);
+      const normalizedDay = normalizeDayConfigDay(config.day);
       if (!normalizedDay) {
         throw new Error(`Invalid delivery day: ${config.day}`);
       }

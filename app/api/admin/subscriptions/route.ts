@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     .from('subscriptions')
     .select(`
       id, style, status, start_date, end_date,
-      delivery_time_slot, bulk_bowls, bulk_delivery_date,
+      delivery_time_slot,
       total_amount_rs, payment_status, payment_reference, admin_notes,
       notes, created_at,
       users!inner ( id, full_name, phone, email ),

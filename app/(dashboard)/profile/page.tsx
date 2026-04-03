@@ -21,6 +21,14 @@ export default function ProfilePage() {
   const deleteDialogRef = useRef<HTMLDivElement>(null);
   useDialogAccessibility(deleteDialogRef, () => setShowDeleteModal(false));
 
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState(false);
+  const passwordDialogRef = useRef<HTMLDivElement>(null);
+  useDialogAccessibility(passwordDialogRef, () => { setShowPasswordModal(false); setPwForm({ current: "", next: "", confirm: "" }); setPwError(""); setPwSuccess(false); });
+
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -66,6 +74,21 @@ export default function ProfilePage() {
     setOriginalData(formData);
     setSaving(false);
     setEditing(false);
+  };
+
+  const handleChangePassword = async () => {
+    setPwError("");
+    if (pwForm.next.length < 8) { setPwError("New password must be at least 8 characters."); return; }
+    if (pwForm.next !== pwForm.confirm) { setPwError("New passwords don't match."); return; }
+    setPwSaving(true);
+    // Verify current password by re-authenticating
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: formData.email, password: pwForm.current });
+    if (signInError) { setPwError("Current password is incorrect."); setPwSaving(false); return; }
+    const { error: updateError } = await supabase.auth.updateUser({ password: pwForm.next });
+    if (updateError) { setPwError("Failed to update password. Please try again."); setPwSaving(false); return; }
+    setPwSaving(false);
+    setPwSuccess(true);
+    setPwForm({ current: "", next: "", confirm: "" });
   };
 
   const handleDeleteAccount = async () => {
@@ -173,17 +196,123 @@ export default function ProfilePage() {
             )}
 
             {!editing && (
-              <button
-                type="button"
-                onClick={() => setShowDeleteModal(true)}
-                className="mt-8 text-terracotta hover:underline font-body text-[12px] font-medium transition-colors"
-              >
-                Delete my account
-              </button>
+              <div className="flex flex-col items-start gap-3 mt-2">
+                <button
+                  type="button"
+                  onClick={() => { setPwError(""); setPwSuccess(false); setPwForm({ current: "", next: "", confirm: "" }); setShowPasswordModal(true); }}
+                  className="font-body text-[13px] font-medium text-ink/70 hover:text-ink transition-colors flex items-center gap-1.5"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  Change Password
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(true)}
+                  className="mt-6 text-terracotta hover:underline font-body text-[12px] font-medium transition-colors"
+                >
+                  Delete my account
+                </button>
+              </div>
             )}
           </div>
         </form>
       </div>
+
+      {/* Change Password Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/70 backdrop-blur-sm animate-in fade-in duration-300">
+          <div
+            ref={passwordDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="change-password-title"
+            tabIndex={-1}
+            className="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 id="change-password-title" className="font-display text-2xl font-medium text-ink">Change Password</h3>
+              <button
+                onClick={() => { setShowPasswordModal(false); setPwForm({ current: "", next: "", confirm: "" }); setPwError(""); setPwSuccess(false); }}
+                aria-label="Close"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 text-stone hover:text-ink transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+
+            {pwSuccess ? (
+              <div className="flex flex-col items-center gap-4 py-4">
+                <div className="w-12 h-12 rounded-full bg-sage/10 flex items-center justify-center text-sage">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <p className="font-body text-[14px] text-ink text-center">Your password has been updated successfully.</p>
+                <button
+                  onClick={() => { setShowPasswordModal(false); setPwSuccess(false); }}
+                  className="bg-sage hover:bg-sage-dark text-white font-body text-[13px] font-bold px-6 py-2.5 rounded-md transition-colors shadow-sm"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label htmlFor="pw-current" className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Current Password</label>
+                  <input
+                    id="pw-current"
+                    type="password"
+                    value={pwForm.current}
+                    onChange={(e) => setPwForm(f => ({ ...f, current: e.target.value }))}
+                    className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage focus:shadow-[0_0_0_1px_rgba(125,155,118,1)] transition-all text-ink"
+                    placeholder="Enter current password"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="pw-new" className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">New Password</label>
+                  <input
+                    id="pw-new"
+                    type="password"
+                    value={pwForm.next}
+                    onChange={(e) => setPwForm(f => ({ ...f, next: e.target.value }))}
+                    className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage focus:shadow-[0_0_0_1px_rgba(125,155,118,1)] transition-all text-ink"
+                    placeholder="At least 8 characters"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="pw-confirm" className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Confirm New Password</label>
+                  <input
+                    id="pw-confirm"
+                    type="password"
+                    value={pwForm.confirm}
+                    onChange={(e) => setPwForm(f => ({ ...f, confirm: e.target.value }))}
+                    className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage focus:shadow-[0_0_0_1px_rgba(125,155,118,1)] transition-all text-ink"
+                    placeholder="Repeat new password"
+                  />
+                </div>
+
+                {pwError && (
+                  <p role="alert" className="font-body text-[12px] text-terracotta">{pwError}</p>
+                )}
+
+                <div className="flex gap-3 pt-1">
+                  <button
+                    onClick={handleChangePassword}
+                    disabled={pwSaving || !pwForm.current || !pwForm.next || !pwForm.confirm}
+                    className="flex-1 bg-sage hover:bg-sage-dark disabled:opacity-50 text-white font-body text-[13px] font-bold py-3 rounded-md transition-colors shadow-sm"
+                  >
+                    {pwSaving ? "Updating…" : "Update Password"}
+                  </button>
+                  <button
+                    onClick={() => { setShowPasswordModal(false); setPwForm({ current: "", next: "", confirm: "" }); setPwError(""); }}
+                    className="flex-[0.5] bg-white hover:bg-black/5 border border-black/10 text-ink font-body text-[13px] font-bold py-3 rounded-md transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Delete Account Modal */}
       {showDeleteModal && (

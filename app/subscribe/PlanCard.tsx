@@ -15,35 +15,22 @@ export interface PlanConfig {
 }
 
 export const STUB_PLANS: PlanConfig[] = [
-  { id: 'three-bowl', name: '3-Bowl / Week', bowlsPerWeek: 3, weeklyPrice: 852, perBowl: 284, billingCycle: 'weekly', savingsBadge: 'Save 5%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'bulk', 'flexible'] },
-  { id: 'five-bowl', name: '5-Bowl / Week', bowlsPerWeek: 5, weeklyPrice: 1346, perBowl: 269, billingCycle: 'weekly', savingsBadge: 'Save 10%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'bulk', 'flexible'] },
-  { id: 'daily', name: 'Daily Plan', bowlsPerWeek: 7, weeklyPrice: 1800, perBowl: 257, billingCycle: 'weekly', savingsBadge: 'Best Value', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'bulk', 'flexible'] },
+  { id: 'three-bowl', name: '3-Bowl / Week', bowlsPerWeek: 3, weeklyPrice: 852, perBowl: 284, billingCycle: 'weekly', savingsBadge: 'Save 5%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'flexible'] },
+  { id: 'five-bowl', name: '5-Bowl / Week', bowlsPerWeek: 5, weeklyPrice: 1346, perBowl: 269, billingCycle: 'weekly', savingsBadge: 'Save 10%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'flexible'] },
+  { id: 'daily', name: 'Daily Plan', bowlsPerWeek: 7, weeklyPrice: 1800, perBowl: 257, billingCycle: 'weekly', savingsBadge: 'Best Value', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'flexible'] },
 ];
-
-export const BULK_DAY_OPTIONS = [
-  { value: 'next-day', label: 'Next Day' },
-  { value: 'Mon', label: 'Mon' },
-  { value: 'Tue', label: 'Tue' },
-  { value: 'Wed', label: 'Wed' },
-  { value: 'Thu', label: 'Thu' },
-  { value: 'Fri', label: 'Fri' },
-  { value: 'Sat', label: 'Sat' },
-  { value: 'Sun', label: 'Sun' },
-] as const;
 
 interface Props {
   plan: PlanConfig;
   selected: boolean;
   deliveryStyle: DeliveryStyle | null;
-  bulkDeliveryDay: string;
   onSelect: () => void;
   onDeliveryStyle: (style: DeliveryStyle) => void;
-  onBulkDeliveryDay: (day: string) => void;
 }
 
 export default function PlanCard({
-  plan, selected, deliveryStyle, bulkDeliveryDay,
-  onSelect, onDeliveryStyle, onBulkDeliveryDay,
+  plan, selected, deliveryStyle,
+  onSelect, onDeliveryStyle,
 }: Props) {
   return (
     <div
@@ -101,24 +88,6 @@ export default function PlanCard({
               </button>
             )}
 
-            {/* Bulk option */}
-            {(!plan.deliveryStyles || plan.deliveryStyles.includes('bulk')) && (
-              <button
-                onClick={() => onDeliveryStyle('bulk')}
-                className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
-                  deliveryStyle === 'bulk' ? 'border-sage bg-sage/10' : 'border-black/10 bg-white hover:border-sage/50'
-                }`}
-              >
-                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${deliveryStyle === 'bulk' ? 'border-sage' : 'border-stone/40'}`}>
-                  {deliveryStyle === 'bulk' && <div className="w-2 h-2 rounded-full bg-sage" />}
-                </div>
-                <div>
-                  <p className="font-body text-[13px] font-semibold text-ink">Bulk delivery</p>
-                  <p className="font-body text-[11px] text-stone">All bowls on one day</p>
-                </div>
-              </button>
-            )}
-
             {/* Flexible / Wallet option */}
             {(!plan.deliveryStyles || plan.deliveryStyles.includes('flexible')) && (
               <button
@@ -135,28 +104,6 @@ export default function PlanCard({
                   <p className="font-body text-[11px] text-stone">Pay now, schedule freely all week</p>
                 </div>
               </button>
-            )}
-
-            {/* Bulk delivery day picker — shown when bulk is selected */}
-            {deliveryStyle === 'bulk' && (
-              <div className="mt-1 ml-7 pt-3 border-t border-black/5" onClick={e => e.stopPropagation()}>
-                <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">Delivery Day</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {BULK_DAY_OPTIONS.map(({ value, label }) => (
-                    <button
-                      key={value}
-                      onClick={() => onBulkDeliveryDay(value)}
-                      className={`px-3 py-1.5 rounded-full font-body text-[12px] font-medium transition-all border ${
-                        bulkDeliveryDay === value
-                          ? 'bg-sage text-white border-sage'
-                          : 'border-black/15 text-stone hover:border-sage/60'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
             )}
           </div>
         </div>

@@ -15,7 +15,6 @@ interface AdminSubscription {
   status: string;
   start_date: string;
   delivery_time_slot: string | null;
-  bulk_bowls: number | null;
   total_amount_rs: number | null;
   payment_status: string;
   payment_reference: string | null;
