@@ -109,7 +109,7 @@ export async function PATCH(
           await adminSupabase.rpc('create_subscription_delivery', {
             p_subscription_id: id,
             p_delivery_date: deliveryDate,
-            p_delivery_time_slot: oldSub.delivery_time_slot,
+            p_delivery_time_slot: config.delivery_time_slot ?? oldSub.delivery_time_slot,
             p_bowls: bowls
           });
         } catch (autoGenErr) {

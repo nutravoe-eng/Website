@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 export interface AdminOrder {
   id: string;
@@ -39,11 +39,31 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
   const [rescheduleSlot, setRescheduleSlot] = useState('');
   const [saving, setSaving]         = useState(false);
   const [toast, setToast]           = useState('');
+  const [sortByTime, setSortByTime] = useState(false);
 
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(''), 3000);
   }
+
+  function parseTimeSlotToMinutes(slot: string | null): number {
+    if (!slot) return 9999;
+    // e.g. "7:00 AM - 8:00 AM" → take first part "7:00 AM"
+    const part = slot.split('-')[0].trim();
+    const match = part.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!match) return 9999;
+    let hours = parseInt(match[1]);
+    const mins = parseInt(match[2]);
+    const meridiem = match[3].toUpperCase();
+    if (meridiem === 'PM' && hours !== 12) hours += 12;
+    if (meridiem === 'AM' && hours === 12) hours = 0;
+    return hours * 60 + mins;
+  }
+
+  const sortedOrders = useMemo(() => {
+    if (!sortByTime) return orders;
+    return [...orders].sort((a, b) => parseTimeSlotToMinutes(a.delivery_time_slot) - parseTimeSlotToMinutes(b.delivery_time_slot));
+  }, [orders, sortByTime]);
 
   async function patchOrder(id: string, body: Record<string, unknown>) {
     const res = await fetch(`/api/admin/orders/${id}`, {
@@ -161,8 +181,22 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
             <thead>
               <tr className="border-b border-black/5 bg-[#F9F8F6]">
                 {showDate && <Th>Date</Th>}
-                <Th>Slot</Th>
+                <th className="px-4 py-3 font-body text-[11px] font-bold uppercase tracking-wider text-stone whitespace-nowrap">
+                  <button
+                    onClick={() => setSortByTime(s => !s)}
+                    className={`flex items-center gap-1.5 hover:text-ink transition-colors ${sortByTime ? 'text-sage-dark' : 'text-stone'}`}
+                    title="Sort by delivery time"
+                  >
+                    Slot
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>
+                      <path d="m21 16-4 4-4-4"/><path d="M17 20V4"/>
+                    </svg>
+                    {sortByTime && <span className="text-[9px] bg-sage/20 text-sage-dark px-1 py-0.5 rounded">sorted</span>}
+                  </button>
+                </th>
                 <Th>Customer</Th>
+                <Th>Location</Th>
                 <Th>Items</Th>
                 <Th>Amount</Th>
                 <Th>Payment</Th>
@@ -171,7 +205,7 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
-              {orders.map(order => (
+              {sortedOrders.map(order => (
                 <tr key={order.id} className="hover:bg-[#F9F8F6]/60 transition-colors">
                   {showDate && (
                     <td className="px-4 py-3 font-body text-[12px] text-stone whitespace-nowrap">
@@ -199,6 +233,40 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                     </div>
                     {order.admin_notes && (
                       <p className="font-body text-[11px] text-stone/70 mt-1 italic">📝 {order.admin_notes}</p>
+                    )}
+                  </td>
+                  {/* Location column */}
+                  <td className="px-4 py-3 max-w-[180px]">
+                    {order.addresses ? (() => {
+                      const addr = `${order.addresses.line1}${order.addresses.line2 ? ', ' + order.addresses.line2 : ''}, ${order.addresses.city} ${order.addresses.pincode}`;
+                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
+                      return (
+                        <div className="space-y-1">
+                          <p className="font-body text-[11px] text-ink leading-snug">{addr}</p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(addr); showToast('Address copied!'); }}
+                              className="font-body text-[10px] text-stone hover:text-ink transition-colors flex items-center gap-1"
+                              title="Copy address"
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                              Copy
+                            </button>
+                            <a
+                              href={mapsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-body text-[10px] text-terracotta hover:opacity-70 transition-opacity flex items-center gap-1"
+                              title="Open in Google Maps"
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                              Map
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })() : (
+                      <p className="font-body text-[11px] text-stone/50 italic">No address</p>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -404,13 +472,16 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
             </div>
             <div>
               <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">New Time Slot (optional)</label>
-              <input
-                type="text"
+              <select
                 value={rescheduleSlot}
                 onChange={e => setRescheduleSlot(e.target.value)}
                 className="w-full border border-black/10 rounded-lg px-4 py-3 font-body text-sm text-ink bg-[#F9F8F6] focus:outline-none focus:ring-2 focus:ring-sage/40"
-                placeholder="e.g. 8:00 AM – 9:00 AM"
-              />
+              >
+                <option value="">— Keep existing —</option>
+                {['7:00 AM - 8:00 AM','8:00 AM - 9:00 AM','9:00 AM - 10:00 AM','10:00 AM - 11:00 AM','11:00 AM - 12:00 PM','12:00 PM - 1:00 PM','1:00 PM - 2:00 PM','2:00 PM - 3:00 PM','3:00 PM - 4:00 PM','4:00 PM - 5:00 PM','5:00 PM - 6:00 PM','6:00 PM - 7:00 PM','7:00 PM - 8:00 PM','8:00 PM - 9:00 PM'].map(slot => (
+                  <option key={slot} value={slot}>{slot}</option>
+                ))}
+              </select>
             </div>
             <div className="flex gap-3">
               <button

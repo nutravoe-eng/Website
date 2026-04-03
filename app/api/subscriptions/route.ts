@@ -9,6 +9,7 @@ type DayConfigInput = {
   bowlId: string;
   quantity: number;
   customizations?: Array<{ ingredientId: string; option: string }>;
+  deliveryTimeSlot?: string;
 };
 
 const DAY_NAME_TO_ENUM: Record<string, string> = {
@@ -147,6 +148,7 @@ export async function POST(req: NextRequest) {
         day_of_week: normalizedDay,
         bowl_slug: config.bowlId,
         quantity: Math.max(1, Math.trunc(config.quantity)),
+        delivery_time_slot: config.deliveryTimeSlot ?? null,
       };
     });
 

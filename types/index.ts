@@ -123,6 +123,7 @@ export interface DayBowlConfig {
   quantity: number;
   customizations?: IngredientCustomization[];
   customizationCost?: number;
+  deliveryTimeSlot?: string;
 }
 
 export interface Subscription {

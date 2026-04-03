@@ -17,10 +17,23 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 type Day = typeof DAYS[number];
 
 const TIME_SLOTS = [
-  '7:00 AM – 8:00 AM',
-  '8:00 AM – 9:00 AM',
-  '9:00 AM – 10:00 AM',
+  '7:00 AM - 8:00 AM',
+  '8:00 AM - 9:00 AM',
+  '9:00 AM - 10:00 AM',
+  '10:00 AM - 11:00 AM',
+  '11:00 AM - 12:00 PM',
+  '12:00 PM - 1:00 PM',
+  '1:00 PM - 2:00 PM',
+  '2:00 PM - 3:00 PM',
+  '3:00 PM - 4:00 PM',
+  '4:00 PM - 5:00 PM',
+  '5:00 PM - 6:00 PM',
+  '6:00 PM - 7:00 PM',
+  '7:00 PM - 8:00 PM',
+  '8:00 PM - 9:00 PM',
 ] as const;
+
+export type TimeSlotMode = 'same' | 'different' | null;
 
 interface WizardState {
   step: 1 | 2 | 3;
@@ -34,7 +47,9 @@ interface WizardState {
   dayBowlCounts: Record<string, Record<string, number>>;
   dayBowlCustomMap: Record<string, Record<string, IngredientCustomization[]>>;
   // Shared
-  deliveryTimeSlot: string;
+  timeSlotMode: TimeSlotMode;
+  deliveryTimeSlot: string;     // used if same time
+  dayTimeSlotMap: Record<string, string>; // used if different times
 }
 
 interface Props {
@@ -63,7 +78,9 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     dayCustomMap: {},
     dayBowlCounts: {},
     dayBowlCustomMap: {},
+    timeSlotMode: 'same',
     deliveryTimeSlot: '',
+    dayTimeSlotMap: {},
   });
 
   const [user, setUser] = useState<{ name: string; phone: string; email: string; id: string } | null>(null);
@@ -181,7 +198,11 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     if (scenario === 'D') return true;  // wallet — no pre-selection needed
 
     // All non-flexible scenarios require a time slot
-    if (!state.deliveryTimeSlot) return false;
+    if (state.timeSlotMode === 'same' && !state.deliveryTimeSlot) return false;
+    if (state.timeSlotMode === 'different') {
+      const hasAllDailySlots = state.selectedDays.every(day => Boolean(state.dayTimeSlotMap[day]));
+      if (!hasAllDailySlots) return false;
+    }
 
     if (scenario === 'A') {
       return spreadTotal === currentPlan.bowlsPerWeek;
@@ -374,6 +395,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                 state.dayBowlCustomMap[day]?.[bowlId] ?? [],
                 bowls.find(b => b._id === bowlId)
               ),
+              deliveryTimeSlot: state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot,
             }))
         )
       : scenario === 'C'
@@ -387,6 +409,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             state.dayCustomMap[day] ?? [],
             bowls.find(b => b._id === state.dayBowlMap[day])
           ),
+          deliveryTimeSlot: state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot,
         }))
       : [];
 
@@ -402,6 +425,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           bowlId: config.bowlId,
           quantity: config.quantity,
           customizations: config.customizations ?? [],
+          deliveryTimeSlot: config.deliveryTimeSlot,
         })),
       }),
     });
@@ -908,24 +932,80 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7D9B76" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">Preferred delivery time</p>
               </div>
-              <p className="font-body text-[12px] text-stone mb-3">All deliveries happen between 7:00 AM and 10:00 AM. Choose your preferred hour.</p>
-              <div className="flex flex-wrap gap-2">
-                {TIME_SLOTS.map(slot => (
-                  <button
-                    key={slot}
-                    onClick={() => setState(s => ({ ...s, deliveryTimeSlot: slot }))}
-                    className={`px-4 py-2.5 rounded-xl border font-body text-[13px] font-medium transition-all ${
-                      state.deliveryTimeSlot === slot
-                        ? 'border-sage bg-sage/10 text-sage-dark font-bold'
-                        : 'border-black/15 text-stone hover:border-sage/50'
-                    }`}
-                  >
-                    {slot}
-                  </button>
-                ))}
+
+              <div className="flex gap-4 mb-5">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="timeSlotMode" 
+                    checked={state.timeSlotMode === 'same'} 
+                    onChange={() => setState(s => ({ ...s, timeSlotMode: 'same' }))}
+                    className="text-sage focus:ring-sage"
+                  />
+                  <span className="font-body text-[13px] text-ink">Same time every day</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="timeSlotMode" 
+                    checked={state.timeSlotMode === 'different'} 
+                    onChange={() => setState(s => ({ ...s, timeSlotMode: 'different' }))}
+                    className="text-sage focus:ring-sage"
+                  />
+                  <span className="font-body text-[13px] text-ink">Different times for each day</span>
+                </label>
               </div>
-              {!state.deliveryTimeSlot && (
-                <p className="font-body text-[11px] text-terracotta mt-2">Please select a time slot to continue.</p>
+
+              {state.timeSlotMode === 'same' ? (
+                <>
+                  <p className="font-body text-[12px] text-stone mb-3">Choose one preferred hour spanning all deliveries.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {TIME_SLOTS.map(slot => (
+                      <button
+                        key={slot}
+                        onClick={() => setState(s => ({ ...s, deliveryTimeSlot: slot }))}
+                        className={`px-4 py-2.5 rounded-xl border font-body text-[13px] font-medium transition-all ${
+                          state.deliveryTimeSlot === slot
+                            ? 'border-sage bg-sage/10 text-sage-dark font-bold'
+                            : 'border-black/15 text-stone hover:border-sage/50'
+                        }`}
+                      >
+                        {slot}
+                      </button>
+                    ))}
+                  </div>
+                  {!state.deliveryTimeSlot && (
+                    <p className="font-body text-[11px] text-terracotta mt-2">Please select a time slot to continue.</p>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-4">
+                  {state.selectedDays.length === 0 ? (
+                    <p className="font-body text-[13px] text-stone">Select days above to choose times.</p>
+                  ) : (
+                    state.selectedDays.map(day => (
+                      <div key={day} className="flex flex-col md:flex-row md:items-center gap-3 p-3 bg-[#F9F8F6] rounded-lg border border-black/5">
+                        <span className="w-12 font-body text-[13px] font-bold text-ink shrink-0">{day}</span>
+                        <select 
+                          className="w-full md:w-auto px-3 py-2 rounded-lg border border-black/15 font-body text-[13px] text-ink bg-white focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage transition-all"
+                          value={state.dayTimeSlotMap[day] || ""}
+                          onChange={(e) => setState(s => ({ 
+                            ...s, 
+                            dayTimeSlotMap: { ...s.dayTimeSlotMap, [day]: e.target.value } 
+                          }))}
+                        >
+                          <option value="" disabled>Select time slot...</option>
+                          {TIME_SLOTS.map(slot => (
+                            <option key={slot} value={slot}>{slot}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))
+                  )}
+                  {!state.selectedDays.every(d => Boolean(state.dayTimeSlotMap[d])) && state.selectedDays.length > 0 && (
+                     <p className="font-body text-[11px] text-terracotta mt-2">Please select a time slot for all days.</p>
+                  )}
+                </div>
               )}
             </div>
           )}

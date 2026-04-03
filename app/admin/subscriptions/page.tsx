@@ -7,6 +7,7 @@ interface DayConfig {
   day_of_week: string;
   bowl_slug: string;
   quantity: number;
+  delivery_time_slot: string | null;
 }
 
 interface AdminSubscription {
@@ -251,11 +252,30 @@ export default function AdminSubscriptionsPage() {
                     )}
                   </div>
                   <p className="font-body text-[11px] text-stone">{sub.users.phone || sub.users.email}</p>
-                  {sub.addresses && (
-                    <p className="font-body text-[11px] text-stone mt-0.5">
-                      {sub.addresses.line1}, {sub.addresses.city} — {sub.addresses.pincode}
-                    </p>
-                  )}
+                  {sub.addresses && (() => {
+                    const addr = `${sub.addresses.line1}${sub.addresses.line2 ? ', ' + sub.addresses.line2 : ''}, ${sub.addresses.city} ${sub.addresses.pincode}`;
+                    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
+                    return (
+                      <div className="mt-1 space-y-0.5">
+                        <p className="font-body text-[11px] text-stone">{addr}</p>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => { navigator.clipboard.writeText(addr); showToast('Address copied!'); }}
+                            className="font-body text-[10px] text-stone hover:text-ink transition-colors flex items-center gap-1"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                            Copy
+                          </button>
+                          <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                            className="font-body text-[10px] text-terracotta hover:opacity-70 transition-opacity flex items-center gap-1"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                            Map
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Plan info */}
@@ -296,8 +316,11 @@ export default function AdminSubscriptionsPage() {
               {sub.subscription_day_configs.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {sub.subscription_day_configs.map(dc => (
-                    <span key={dc.id} className="bg-[#F9F8F6] border border-black/5 rounded-md px-2 py-1 font-body text-[11px] text-stone capitalize">
-                      {dc.day_of_week} — {dc.bowl_slug} ×{dc.quantity}
+                    <span key={dc.id} className="bg-[#F9F8F6] border border-black/5 rounded-md px-2 py-1 font-body text-[11px] text-stone capitalize flex flex-col leading-tight">
+                      <span className="font-semibold text-ink">{dc.day_of_week} — {dc.bowl_slug} ×{dc.quantity}</span>
+                      {dc.delivery_time_slot && (
+                        <span className="text-stone/70 text-[10px]">{dc.delivery_time_slot}</span>
+                      )}
                     </span>
                   ))}
                 </div>
