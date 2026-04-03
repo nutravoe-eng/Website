@@ -214,7 +214,7 @@ export default function ProfilePage() {
                   onClick={() => setShowDeleteModal(true)}
                   className="mt-6 text-terracotta hover:underline font-body text-[12px] font-medium transition-colors"
                 >
-                  Delete my account
+                  Deactivate my account
                 </button>
               </div>
             )}
