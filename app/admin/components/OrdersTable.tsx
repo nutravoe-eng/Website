@@ -180,6 +180,17 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                     )}
                   </td>
                   <td className="px-4 py-3">
+                    <div className="mb-1.5 flex flex-wrap gap-1">
+                      {order.order_type === 'subscription' && order.payment_method === 'wallet' && (
+                        <span className="font-body text-[9px] font-bold uppercase tracking-wider bg-terracotta/10 text-terracotta px-1.5 py-0.5 rounded-sm">Flex Wallet Sub</span>
+                      )}
+                      {order.order_type === 'subscription' && order.payment_method !== 'wallet' && (
+                        <span className="font-body text-[9px] font-bold uppercase tracking-wider bg-sage/20 text-sage-dark px-1.5 py-0.5 rounded-sm">Spread Sub</span>
+                      )}
+                      {order.order_type !== 'subscription' && (
+                        <span className="font-body text-[9px] font-bold uppercase tracking-wider bg-black/5 text-stone px-1.5 py-0.5 rounded-sm">One-Off Order</span>
+                      )}
+                    </div>
                     {order.order_items.map(item => (
                       <div key={item.id}>
                         <p className="font-body text-[12px] text-ink">{item.bowl_name} ×{item.quantity}</p>
