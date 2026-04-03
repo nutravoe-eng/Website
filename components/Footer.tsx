@@ -96,7 +96,7 @@ export default function Footer() {
       <div className="border-t border-white/5">
         <div className="max-w-7xl mx-auto px-6 lg:px-16 py-6 flex flex-col md:flex-row items-center justify-between gap-2">
           <p className="font-body text-xs text-[#706e6a]">
-            © 2025 Nutravoe. All rights reserved.
+            © {new Date().getFullYear()} Nutravoe. All rights reserved.
           </p>
           <span className="font-body text-xs text-sage tracking-wide">
             Bangalore, Karnataka
