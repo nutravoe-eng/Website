@@ -25,7 +25,11 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false });
 
   if (date === 'today') {
-    const today = new Date().toISOString().split('T')[0];
+    const nowIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    const y = nowIST.getFullYear();
+    const m = String(nowIST.getMonth() + 1).padStart(2, "0");
+    const d = String(nowIST.getDate()).padStart(2, "0");
+    const today = `${y}-${m}-${d}`;
     query = query.eq('delivery_date', today);
   } else if (date) {
     query = query.eq('delivery_date', date);
