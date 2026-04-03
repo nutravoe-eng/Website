@@ -8,13 +8,19 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-6 lg:px-16 py-20 grid grid-cols-1 md:grid-cols-3 gap-12">
         {/* Brand */}
         <div>
-          <Image
-            src="/nutravoe-wordmark.png"
-            alt="Nutravoe"
-            width={140}
-            height={36}
-            className="h-8 w-auto object-contain mb-5 brightness-0 invert"
-          />
+          <Link href="/" className="flex items-center gap-3.5 group mb-5 inline-flex">
+            <div className="relative w-8 h-8 md:w-9 md:h-9 transition-all duration-300">
+              <Image
+                src="/circular-logo-print-2400px.png"
+                alt="Nutravoe Circular Logo"
+                fill
+                className="object-contain"
+              />
+            </div>
+            <span className="font-display text-[22px] md:text-[26px] lowercase tracking-[0.3em] font-light transition-all duration-300 text-white">
+              nutravoe
+            </span>
+          </Link>
           <p className="font-body text-[13px] leading-relaxed text-[#9A9590] max-w-xs">
             Fresh protein yogurt bowls crafted daily and delivered to your door.
             7 AM–9 PM. Bangalore, Karnataka.
@@ -33,6 +39,8 @@ export default function Footer() {
               { href: "/about", label: "About" },
               { href: "/order", label: "Order" },
               { href: "/b2b", label: "B2B Partnerships" },
+              { href: "/privacy", label: "Privacy Notice" },
+              { href: "/terms", label: "Conditions of Use" },
             ].map(({ href, label }) => (
               <li key={href}>
                 <Link
