@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { adminSupabase } from "@/lib/supabase/admin";
+import { sendBrevoEmail } from "@/lib/brevo";
 
 export async function POST(_req: NextRequest) {
   const cookieStore = await cookies();
@@ -56,6 +57,18 @@ export async function POST(_req: NextRequest) {
     await adminSupabase.auth.admin.updateUserById(user.id, { ban_duration: "none" });
     console.error("Failed to record soft deletion:", softDeleteError);
     return NextResponse.json({ error: "Failed to deactivate account." }, { status: 500 });
+  }
+
+  // Trigger account deletion confirmation email
+  if (process.env.BREVO_ACCOUNT_DELETED_TEMPLATE_ID && user.email) {
+    await sendBrevoEmail({
+      toEmail: user.email,
+      toName: profile?.full_name ? profile.full_name.split(' ')[0] : 'there',
+      templateId: Number(process.env.BREVO_ACCOUNT_DELETED_TEMPLATE_ID),
+      params: {
+        user_name: profile?.full_name ? profile.full_name.split(' ')[0] : 'there'
+      }
+    });
   }
 
   return NextResponse.json({ success: true });

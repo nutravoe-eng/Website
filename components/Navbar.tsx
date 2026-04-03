@@ -276,7 +276,7 @@ export default function Navbar() {
                             onClick={async () => {
                               await supabase.auth.signOut();
                               setProfileDropdownOpen(false);
-                              router.push("/");
+                              window.location.href = "/";
                             }}
                             className="px-5 py-2 hover:bg-terracotta/5 font-body text-[13px] text-terracotta font-medium transition-colors text-left flex items-center justify-between group w-full"
                           >
@@ -428,7 +428,7 @@ export default function Navbar() {
                   onClick={async () => {
                     await supabase.auth.signOut();
                     setMenuOpen(false);
-                    router.push("/");
+                    window.location.href = "/";
                   }}
                   className="flex items-center gap-2 px-6 py-4 font-body text-[15px] text-terracotta font-medium hover:bg-terracotta/5 transition-colors text-left"
                 >

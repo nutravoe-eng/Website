@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
+import { sendBrevoEmail } from '@/lib/brevo';
 
 const ALLOWED_PAYMENT_STATUSES = new Set(['pending', 'paid', 'failed', 'refunded']);
 const ALLOWED_SUBSCRIPTION_STATUSES = new Set(['pending', 'active', 'paused', 'cancelled', 'expired']);
@@ -42,6 +43,21 @@ export async function PATCH(
     return NextResponse.json({ error: 'admin_notes must be a string under 2000 characters' }, { status: 422 });
   }
 
+  // Pre-fetch old subscription to detect status changes for emails
+  const { data: oldSub } = await adminSupabase
+    .from('subscriptions')
+    .select(`
+      *,
+      users:user_id (email, full_name),
+      subscription_plans:plan_id (name)
+    `)
+    .eq('id', id)
+    .single();
+
+  if (!oldSub) {
+    return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
+  }
+
   if (payment_status === 'paid') {
     const { data: approval, error: approvalError } = await adminSupabase.rpc('approve_subscription_payment', {
       p_subscription_id: id,
@@ -81,6 +97,30 @@ export async function PATCH(
 
   if (fetchError || !subscription) {
     return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
+  }
+
+  // Trigger Brevo approval email if status changed to active
+  if (oldSub.status !== 'active' && subscription.status === 'active' && process.env.BREVO_SUBSCRIPTION_APPROVED_TEMPLATE_ID) {
+    // Note: The users join returns an object but TS thinks it could be an array due to Supabase type generation quirks without generics. Use 'any' cast for safety here.
+    const user = oldSub.users as any;
+    const plan = oldSub.subscription_plans as any;
+    if (user && user.email) {
+      await sendBrevoEmail({
+        toEmail: user.email,
+        toName: user.full_name || 'Nutritionist',
+        templateId: Number(process.env.BREVO_SUBSCRIPTION_APPROVED_TEMPLATE_ID),
+        params: {
+          subscription_id: subscription.id,
+          user_name: user.full_name ? user.full_name.split(' ')[0] : 'there',
+          plan_name: plan?.name || 'Custom Plan',
+          total_amount: subscription.total_amount_rs,
+          delivery_style: subscription.style,
+          style_message: subscription.style === 'flexible'
+            ? "Your wallet balance has been updated! You can now place orders flexibly according to your needs."
+            : "Sit back and relax, we'll deliver the bowls at your scheduled day and time."
+        }
+      });
+    }
   }
 
   return NextResponse.json({ subscription });

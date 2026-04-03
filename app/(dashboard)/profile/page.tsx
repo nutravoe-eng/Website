@@ -86,6 +86,10 @@ export default function ProfilePage() {
     if (signInError) { setPwError("Current password is incorrect."); setPwSaving(false); return; }
     const { error: updateError } = await supabase.auth.updateUser({ password: pwForm.next });
     if (updateError) { setPwError("Failed to update password. Please try again."); setPwSaving(false); return; }
+    
+    // Trigger automated email
+    await fetch("/api/account/email/password-changed", { method: "POST" });
+    
     setPwSaving(false);
     setPwSuccess(true);
     setPwForm({ current: "", next: "", confirm: "" });
