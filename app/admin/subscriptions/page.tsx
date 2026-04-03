@@ -74,7 +74,11 @@ export default function AdminSubscriptionsPage() {
       const res = await fetch(`/api/admin/subscriptions/${payModal.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payment_status: 'paid', payment_reference: upiRef.trim() || null }),
+        body: JSON.stringify({
+          payment_status: 'paid',
+          status: 'active',
+          payment_reference: upiRef.trim() || null
+        }),
       });
       if (!res.ok) throw new Error('Failed');
       if (statusFilter === 'pending') {

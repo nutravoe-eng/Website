@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 import { sendBrevoEmail } from '@/lib/brevo';
+import { getNextDateForDayOfWeek } from '@/lib/subscription';
 
 const ALLOWED_PAYMENT_STATUSES = new Set(['pending', 'paid', 'failed', 'refunded']);
 const ALLOWED_SUBSCRIPTION_STATUSES = new Set(['pending', 'active', 'paused', 'cancelled', 'expired']);
@@ -43,13 +44,14 @@ export async function PATCH(
     return NextResponse.json({ error: 'admin_notes must be a string under 2000 characters' }, { status: 422 });
   }
 
-  // Pre-fetch old subscription to detect status changes for emails
+  // Pre-fetch old subscription to detect status changes for emails and get configs for auto-generation
   const { data: oldSub } = await adminSupabase
     .from('subscriptions')
     .select(`
       *,
       users:user_id (email, full_name),
-      subscription_plans:plan_id (name)
+      subscription_plans:plan_id (name, price_per_bowl),
+      subscription_day_configs (*)
     `)
     .eq('id', id)
     .single();
@@ -58,24 +60,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
   }
 
-  if (payment_status === 'paid') {
-    const { data: approval, error: approvalError } = await adminSupabase.rpc('approve_subscription_payment', {
-      p_subscription_id: id,
-      p_payment_reference: payment_reference ?? null,
-      p_admin_notes: admin_notes ?? null,
-    });
-
-    if (approvalError) {
-      const statusCode = approvalError.message.includes('already approved') ? 409 : 400;
-      return NextResponse.json({ error: approvalError.message }, { status: statusCode });
-    }
-  }
-
+  // 1. apply updates FIRST physically to DB so RPC sees 'active'
   const updates: Record<string, unknown> = {};
 
-  if (payment_status !== undefined && payment_status !== 'paid') updates.payment_status = payment_status;
-  if (payment_reference !== undefined && payment_status !== 'paid') updates.payment_reference = payment_reference;
-  if (admin_notes !== undefined && payment_status !== 'paid') updates.admin_notes = admin_notes;
+  if (payment_status !== undefined) updates.payment_status = payment_status;
+  if (payment_reference !== undefined) updates.payment_reference = payment_reference;
+  if (admin_notes !== undefined) updates.admin_notes = admin_notes;
   if (status !== undefined) updates.status = status;
 
   if (Object.keys(updates).length > 0) {
@@ -88,6 +78,50 @@ export async function PATCH(
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
   }
+
+  // 2. run payment approval RPC if marking as paid (and not previously paid)
+  if (payment_status === 'paid' && oldSub.payment_status !== 'paid') {
+    const { data: approval, error: approvalError } = await adminSupabase.rpc('approve_subscription_payment', {
+      p_subscription_id: id,
+      p_payment_reference: payment_reference ?? null,
+      p_admin_notes: admin_notes ?? null,
+    });
+
+    if (approvalError) {
+      const statusCode = approvalError.message.includes('already approved') ? 409 : 400;
+      return NextResponse.json({ error: approvalError.message }, { status: statusCode });
+    }
+
+    // --- SPREAD AUTOGENERATION LOGIC ---
+    if (oldSub.style === 'spread' && Array.isArray(oldSub.subscription_day_configs) && oldSub.subscription_day_configs.length > 0) {
+      const unitPrice = oldSub.subscription_plans?.price_per_bowl ?? 0;
+      
+      for (const config of oldSub.subscription_day_configs) {
+        try {
+          const deliveryDate = getNextDateForDayOfWeek(config.day_of_week);
+          const bowls = [{
+            bowl_slug: config.bowl_slug,
+            bowl_name: config.bowl_slug,
+            quantity: config.quantity,
+            unit_price: unitPrice
+          }];
+
+          await adminSupabase.rpc('create_subscription_delivery', {
+            p_subscription_id: id,
+            p_delivery_date: deliveryDate,
+            p_delivery_time_slot: oldSub.delivery_time_slot,
+            p_bowls: bowls
+          });
+        } catch (autoGenErr) {
+          console.error(`Failed to auto-generate spread order for day config: ${config.id}`, autoGenErr);
+          // Non-fatal: the admin can manually create it if it failed, but log it silently
+        }
+      }
+    }
+    // -----------------------------------
+  }
+
+  // Re-fetch the final state
 
   const { data: subscription, error: fetchError } = await adminSupabase
     .from('subscriptions')

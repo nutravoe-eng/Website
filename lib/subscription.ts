@@ -70,3 +70,29 @@ export async function getActivePlanConfig(): Promise<PlanConfig | null> {
   if (!sub) return null;
   return PLANS.find(p => p.id === sub.planId) ?? null;
 }
+
+export function getNextDateForDayOfWeek(daySlug: string): string {
+  const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  const targetIdx = days.indexOf(daySlug.substring(0, 3).toLowerCase());
+  
+  if (targetIdx === -1) {
+    throw new Error(`Invalid day slug: ${daySlug}`);
+  }
+
+  const nowIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const currentIdx = nowIST.getDay();
+  
+  let daysToAdd = targetIdx - currentIdx;
+  if (daysToAdd <= 0) {
+    daysToAdd += 7;
+  }
+
+  const nextDate = new Date(nowIST);
+  nextDate.setDate(nowIST.getDate() + daysToAdd);
+  
+  const y = nextDate.getFullYear();
+  const m = String(nextDate.getMonth() + 1).padStart(2, "0");
+  const d = String(nextDate.getDate()).padStart(2, "0");
+  
+  return `${y}-${m}-${d}`;
+}

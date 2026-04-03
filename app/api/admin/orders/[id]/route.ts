@@ -14,7 +14,7 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { payment_status, payment_reference, status, admin_notes } = body;
+  const { payment_status, payment_reference, status, admin_notes, delivery_date, delivery_time_slot } = body;
 
   if (payment_status !== undefined && !ALLOWED_PAYMENT_STATUSES.has(payment_status)) {
     return NextResponse.json({ error: 'Invalid payment status' }, { status: 422 });
@@ -31,12 +31,18 @@ export async function PATCH(
   if (admin_notes !== undefined && (typeof admin_notes !== 'string' || admin_notes.length > 2000)) {
     return NextResponse.json({ error: 'admin_notes must be a string under 2000 characters' }, { status: 422 });
   }
+  
+  if (delivery_date !== undefined && (typeof delivery_date !== 'string')) {
+    return NextResponse.json({ error: 'delivery_date must be a string' }, { status: 422 });
+  }
 
   const updates: Record<string, unknown> = {};
   if (payment_status    !== undefined) updates.payment_status    = payment_status;
   if (payment_reference !== undefined) updates.payment_reference = payment_reference;
   if (status            !== undefined) updates.status            = status;
   if (admin_notes       !== undefined) updates.admin_notes       = admin_notes;
+  if (delivery_date     !== undefined) updates.delivery_date     = delivery_date;
+  if (delivery_time_slot !== undefined) updates.delivery_time_slot = delivery_time_slot;
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });

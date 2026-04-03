@@ -32,8 +32,11 @@ interface Props {
 export default function OrdersTable({ orders, loading, onOrderUpdated, showDate = true }: Props) {
   const [payModal, setPayModal]     = useState<AdminOrder | null>(null);
   const [noteModal, setNoteModal]   = useState<AdminOrder | null>(null);
+  const [rescheduleModal, setRescheduleModal] = useState<AdminOrder | null>(null);
   const [upiRef, setUpiRef]         = useState('');
   const [noteText, setNoteText]     = useState('');
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleSlot, setRescheduleSlot] = useState('');
   const [saving, setSaving]         = useState(false);
   const [toast, setToast]           = useState('');
 
@@ -103,6 +106,25 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
       setNoteModal(null);
     } catch {
       showToast('Failed to save note.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRescheduleOrder() {
+    if (!rescheduleModal) return;
+    setSaving(true);
+    try {
+      if (!rescheduleDate) throw new Error("Delivery date is required");
+      await patchOrder(rescheduleModal.id, { 
+        delivery_date: rescheduleDate, 
+        delivery_time_slot: rescheduleSlot || null 
+      });
+      onOrderUpdated({ id: rescheduleModal.id, delivery_date: rescheduleDate, delivery_time_slot: rescheduleSlot || null });
+      showToast('Order rescheduled');
+      setRescheduleModal(null);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to reschedule. Try again.');
     } finally {
       setSaving(false);
     }
@@ -265,6 +287,18 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                         {order.admin_notes ? 'Edit Note' : 'Add Note'}
                       </ActionBtn>
                       {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                        <ActionBtn 
+                          onClick={() => { 
+                            setRescheduleModal(order); 
+                            setRescheduleDate(order.delivery_date); 
+                            setRescheduleSlot(order.delivery_time_slot ?? ''); 
+                          }} 
+                          color="stone"
+                        >
+                          Reschedule
+                        </ActionBtn>
+                      )}
+                      {order.status !== 'delivered' && order.status !== 'cancelled' && (
                         <ActionBtn onClick={() => handleCancelOrder(order)} color="red">
                           Cancel Order
                         </ActionBtn>
@@ -346,6 +380,51 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                 className="flex-1 bg-ink hover:bg-ink/80 disabled:bg-ink/30 text-white rounded-lg py-3 font-body text-sm font-bold transition-colors"
               >
                 {saving ? 'Saving…' : 'Save Note'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Reschedule Modal */}
+      {rescheduleModal && (
+        <Modal onClose={() => setRescheduleModal(null)} title="Reschedule Delivery">
+          <div className="space-y-4">
+            <p className="font-body text-[12px] text-stone">
+              Moving order for <strong className="text-ink">{rescheduleModal.users.full_name}</strong>.
+            </p>
+            <div>
+              <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">New Delivery Date</label>
+              <input
+                type="date"
+                value={rescheduleDate}
+                onChange={e => setRescheduleDate(e.target.value)}
+                className="w-full border border-black/10 rounded-lg px-4 py-3 font-body text-sm text-ink bg-[#F9F8F6] focus:outline-none focus:ring-2 focus:ring-sage/40"
+              />
+            </div>
+            <div>
+              <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">New Time Slot (optional)</label>
+              <input
+                type="text"
+                value={rescheduleSlot}
+                onChange={e => setRescheduleSlot(e.target.value)}
+                className="w-full border border-black/10 rounded-lg px-4 py-3 font-body text-sm text-ink bg-[#F9F8F6] focus:outline-none focus:ring-2 focus:ring-sage/40"
+                placeholder="e.g. 8:00 AM – 9:00 AM"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRescheduleModal(null)}
+                className="flex-1 border border-black/10 rounded-lg py-3 font-body text-sm font-bold text-stone hover:bg-black/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRescheduleOrder}
+                disabled={saving}
+                className="flex-1 bg-ink hover:bg-ink/80 disabled:bg-ink/30 text-white rounded-lg py-3 font-body text-sm font-bold transition-colors"
+              >
+                {saving ? 'Saving…' : 'Confirm New Date'}
               </button>
             </div>
           </div>
