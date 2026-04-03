@@ -8,10 +8,10 @@ export async function sendBrevoEmail({
   toName: string;
   templateId: number;
   params?: Record<string, any>;
-}) {
+}): Promise<{ success: boolean; error?: string }> {
   if (!process.env.BREVO_API_KEY) {
     console.error("BREVO_API_KEY is not defined - skipping email");
-    return false;
+    return { success: false, error: "BREVO_API_KEY is missing" };
   }
 
   try {
@@ -31,12 +31,12 @@ export async function sendBrevoEmail({
     if (!res.ok) {
       const err = await res.text();
       console.error("Failed to send Brevo email:", err);
-      return false;
+      return { success: false, error: err };
     }
 
-    return true;
-  } catch (error) {
+    return { success: true };
+  } catch (error: any) {
     console.error("Error sending Brevo email:", error);
-    return false;
+    return { success: false, error: error.message };
   }
 }

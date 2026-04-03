@@ -16,15 +16,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, warning: "Template ID not set" });
     }
 
-    // Send the email using our Brevo helper
-    const emailSent = await sendBrevoEmail({
+    const name = user.user_metadata?.full_name || "there";
+    
+    const emailResult = await sendBrevoEmail({
       toEmail: user.email as string,
-      toName: user.user_metadata?.full_name || "there",
+      toName: name,
       templateId: Number(process.env.BREVO_PASSWORD_CHANGED_TEMPLATE_ID),
+      params: {
+        user_name: name !== "there" ? name.split(" ")[0] : "there"
+      }
     });
 
-    if (!emailSent) {
-      return NextResponse.json({ error: "Failed to dispatch email via Brevo" }, { status: 500 });
+    if (!emailResult.success) {
+      return NextResponse.json({ error: `Brevo API Error: ${emailResult.error}` }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
