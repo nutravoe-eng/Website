@@ -60,18 +60,17 @@ export async function PATCH(
     return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
   }
 
-  // 1. apply updates FIRST physically to DB so RPC sees 'active'
-  const updates: Record<string, unknown> = {};
+  // 1. Apply non-payment updates immediately (notes, status changes that aren't approval)
+  const safeUpdates: Record<string, unknown> = {};
+  if (payment_reference !== undefined) safeUpdates.payment_reference = payment_reference;
+  if (admin_notes !== undefined) safeUpdates.admin_notes = admin_notes;
+  // Only persist status if it's NOT a payment approval (that's handled below with the RPC guard)
+  if (status !== undefined && payment_status !== 'paid') safeUpdates.status = status;
 
-  if (payment_status !== undefined) updates.payment_status = payment_status;
-  if (payment_reference !== undefined) updates.payment_reference = payment_reference;
-  if (admin_notes !== undefined) updates.admin_notes = admin_notes;
-  if (status !== undefined) updates.status = status;
-
-  if (Object.keys(updates).length > 0) {
+  if (Object.keys(safeUpdates).length > 0) {
     const { error: updateError } = await adminSupabase
       .from('subscriptions')
-      .update(updates)
+      .update(safeUpdates)
       .eq('id', id);
 
     if (updateError) {
@@ -79,7 +78,7 @@ export async function PATCH(
     }
   }
 
-  // 2. run payment approval RPC if marking as paid (and not previously paid)
+  // 2. Run payment approval RPC FIRST, then commit paid status only on success
   if (payment_status === 'paid' && oldSub.payment_status !== 'paid') {
     const { data: approval, error: approvalError } = await adminSupabase.rpc('approve_subscription_payment', {
       p_subscription_id: id,
@@ -90,6 +89,17 @@ export async function PATCH(
     if (approvalError) {
       const statusCode = approvalError.message.includes('already approved') ? 409 : 400;
       return NextResponse.json({ error: approvalError.message }, { status: statusCode });
+    }
+
+    void approval; // used by RPC, suppress unused warning
+
+    // The RPC already sets payment_status='paid' and status='active' internally.
+    // Only persist additional admin-supplied status override if it differs.
+    if (status !== undefined && status !== 'active') {
+      await adminSupabase
+        .from('subscriptions')
+        .update({ status })
+        .eq('id', id);
     }
 
     // --- SPREAD AUTOGENERATION LOGIC ---

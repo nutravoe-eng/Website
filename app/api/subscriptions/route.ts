@@ -71,6 +71,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid subscription bowl configuration" }, { status: 400, headers: limited.headers });
   }
 
+  // Validate all day names BEFORE touching the DB.
+  // If validation throws after the subscription row is inserted, the user gets locked
+  // out because they'd have a pending subscription with no day configs.
+  const invalidDay = dayConfigs.find((config) => !normalizeDayConfigDay(config.day));
+  if (invalidDay) {
+    return NextResponse.json({ error: `Invalid delivery day: "${invalidDay.day}". Use Mon, Tue, Wed, Thu, Fri, Sat, or Sun.` }, { status: 400, headers: limited.headers });
+  }
+
   const { data: existingActive } = await adminSupabase
     .from("subscriptions")
     .select("id")

@@ -82,8 +82,9 @@ export async function POST(req: NextRequest) {
 
   let quote;
   try {
-    const relatedPlans = activeSubscription?.subscription_plans as Array<{ slug?: string }> | undefined;
-    const activePlanSlug = relatedPlans?.[0]?.slug ?? null;
+    // subscription_plans is a many-to-one join — Supabase returns it as a single object, not an array.
+    const relatedPlan = activeSubscription?.subscription_plans as { slug?: string } | null | undefined;
+    const activePlanSlug = relatedPlan?.slug ?? null;
     quote = await buildAuthoritativeOrder(items, address, activePlanSlug);
   } catch {
     return NextResponse.json({ error: "Unable to price this order" }, { status: 400, headers: limited.headers });

@@ -7,11 +7,12 @@ function getClientIp(request: Request | NextRequest) {
   const realIp = request.headers.get('x-real-ip');
   if (realIp) return realIp.trim();
 
-  // Fall back to the last IP in x-forwarded-for (added by the nearest trusted proxy)
+  // Fall back to the FIRST IP in x-forwarded-for (the originating client).
+  // The last entry is the nearest proxy — using it would bucket many users together.
   const forwardedFor = request.headers.get('x-forwarded-for');
   if (forwardedFor) {
     const ips = forwardedFor.split(',');
-    return ips[ips.length - 1]?.trim() ?? 'unknown';
+    return ips[0]?.trim() ?? 'unknown';
   }
 
   return 'unknown';

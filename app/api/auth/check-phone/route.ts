@@ -7,10 +7,13 @@ export async function POST(req: NextRequest) {
   if (!limited.ok) return limited.response;
 
   const { phone } = await req.json();
-  const normalised = typeof phone === 'string' ? phone.replace(/\D/g, '') : '';
+  const digits = typeof phone === 'string' ? phone.replace(/\D/g, '') : '';
+  // Take only last 10 digits — strips country codes like +91/91 prefix silently.
+  // This matches what's stored in the DB (always 10-digit canonical form).
+  const normalised = digits.slice(-10);
 
-  if (normalised.length < 10) {
-    return NextResponse.json({ error: 'Valid phone required' }, { status: 400, headers: limited.headers });
+  if (normalised.length !== 10) {
+    return NextResponse.json({ error: 'Valid 10-digit phone required' }, { status: 400, headers: limited.headers });
   }
 
   const { data, error } = await adminSupabase
