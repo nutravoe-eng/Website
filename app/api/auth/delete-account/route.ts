@@ -43,7 +43,7 @@ export async function POST(_req: NextRequest) {
 
   if (banError) {
     console.error("Failed to deactivate auth user:", banError);
-    return NextResponse.json({ error: "Failed to deactivate account." }, { status: 500 });
+    return NextResponse.json({ error: `Auth Ban Error: ${banError.message}` }, { status: 500 });
   }
 
   const { error: softDeleteError } = await adminSupabase.rpc("soft_delete_account", {
@@ -56,7 +56,7 @@ export async function POST(_req: NextRequest) {
   if (softDeleteError) {
     await adminSupabase.auth.admin.updateUserById(user.id, { ban_duration: "none" });
     console.error("Failed to record soft deletion:", softDeleteError);
-    return NextResponse.json({ error: "Failed to deactivate account." }, { status: 500 });
+    return NextResponse.json({ error: `Database API Error: ${softDeleteError.message || JSON.stringify(softDeleteError)}` }, { status: 500 });
   }
 
   // Trigger account deletion confirmation email
