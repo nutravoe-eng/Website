@@ -1,11 +1,17 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export function useDialogAccessibility(
   containerRef: React.RefObject<HTMLElement>,
   onClose?: () => void
 ) {
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -23,7 +29,7 @@ export function useDialogAccessibility(
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
 
@@ -54,5 +60,5 @@ export function useDialogAccessibility(
       document.removeEventListener('keydown', handleKeyDown);
       previousActive?.focus?.();
     };
-  }, [containerRef, onClose]);
+  }, [containerRef]);
 }
