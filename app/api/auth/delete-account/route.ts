@@ -46,7 +46,7 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ error: `Auth Ban Error: ${banError.message}` }, { status: 500 });
   }
 
-  const { error: softDeleteError } = await adminSupabase.rpc("soft_delete_account", {
+  const { error: softDeleteError } = await supabase.rpc("soft_delete_account", {
     p_user_id: user.id,
     p_email: user.email!,
     p_phone: profile?.phone ?? null,
