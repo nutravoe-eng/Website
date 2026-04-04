@@ -109,7 +109,10 @@ export async function PATCH(
       // Compute all delivery dates together with rolling-window cutoff logic.
       // This ensures a Monday approved at 10 PM skips Monday and starts from Tuesday,
       // with the missed Monday pushed to next Monday instead of being lost.
-      const daySlugList = oldSub.subscription_day_configs.map((c: { day_of_week: string }) => c.day_of_week);
+      const daySlugList = oldSub.subscription_day_configs.map((c: { day_of_week: string; delivery_time_slot: string | null }) => ({
+        day: c.day_of_week,
+        timeSlot: c.delivery_time_slot ?? oldSub.delivery_time_slot ?? null,
+      }));
       const dateMap = scheduleDeliveryDates(daySlugList);
 
       for (const config of oldSub.subscription_day_configs) {

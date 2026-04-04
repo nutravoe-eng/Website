@@ -72,81 +72,101 @@ export async function getActivePlanConfig(): Promise<PlanConfig | null> {
 }
 
 
-// Cutoff hour in IST: if the current time is at or past this hour,
-// today's delivery cannot be accommodated — start from the next eligible day.
-const DELIVERY_CUTOFF_HOUR_IST = 21; // 9:00 PM
+// End of morning delivery window. After this hour, morning (7–10 AM) deliveries
+// for today are no longer achievable. Used for same-day eligibility checks.
+const MORNING_WINDOW_END_HOUR = 10;
+
+// Hours of prep needed for same-day non-morning delivery slots.
+const SAME_DAY_PREP_HOURS = 2;
 
 /**
- * Given a list of delivery day slugs (e.g. ['mon', 'wed', 'fri']),
- * returns a sorted list of YYYY-MM-DD dates using a rolling window:
- *
- * 1. Find the first eligible day from now, respecting the 9 PM cutoff.
- * 2. From that anchor, walk the sorted days forward, wrapping into
- *    the next week as needed.
- *
- * Example: Days = [Mon, Wed, Fri]. Approved Sunday 10 PM.
- *   - Monday is tomorrow but after cutoff for same-day → still eligible (tomorrow)
- *   - Result: Mon this week, Wed, Fri, (no wrap needed)
- *
- * Example: Days = [Mon, Wed, Fri]. Approved Monday 10 PM.
- *   - Monday has passed cutoff today → skip to Wed
- *   - Result: Wed this week, Fri, Mon next week
+ * Parse the start hour from a time slot string like "2:00 PM - 3:00 PM" → 14.
+ * Returns null if the slot string cannot be parsed.
  */
-export function scheduleDeliveryDates(daySlugList: string[]): Record<string, string> {
+function parseSlotStartHour(slot: string | null | undefined): number | null {
+  if (!slot) return null;
+  const part = slot.split('-')[0].trim();
+  const match = part.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!match) return null;
+  let h = parseInt(match[1]);
+  const meridiem = match[3].toUpperCase();
+  if (meridiem === 'PM' && h !== 12) h += 12;
+  if (meridiem === 'AM' && h === 12) h = 0;
+  return h;
+}
+
+/**
+ * Given the current IST hour and a day's delivery time slot, determine whether
+ * today is still a viable delivery date for that day.
+ *
+ * Rules:
+ *  - Before 10 AM: always eligible (morning window still open).
+ *  - At/after 10 AM with a non-morning slot: eligible only if slot starts
+ *    more than SAME_DAY_PREP_HOURS from now.
+ *  - At/after 10 AM with a morning slot (or no slot): ineligible today.
+ */
+function canDeliverTodayForSlot(currentHour: number, slotHour: number | null): boolean {
+  if (currentHour < MORNING_WINDOW_END_HOUR) return true;
+  if (slotHour !== null && slotHour >= MORNING_WINDOW_END_HOUR && slotHour > currentHour + SAME_DAY_PREP_HOURS) return true;
+  return false;
+}
+
+/**
+ * Given a list of day configs (each with a day slug and optional time slot),
+ * returns a map of { daySlug → YYYY-MM-DD } for each scheduled delivery.
+ *
+ * Each day is evaluated independently:
+ *  - If the day is today: check whether today's slot is still achievable.
+ *    If yes → schedule for today.
+ *    If no  → schedule for NEXT occurrence of that day (next week).
+ *  - If the day is a future weekday: schedule for the nearest upcoming date.
+ *  - If the day has already passed this week: schedule for next week.
+ *
+ * Edge case handled: admin approves Monday at 11 AM for a Monday 2 PM slot →
+ * Monday is correctly scheduled for today (not next Monday) because the slot
+ * is still 3 hours away with a 2-hour buffer.
+ */
+export function scheduleDeliveryDates(
+  dayConfigs: Array<{ day: string; timeSlot?: string | null }>
+): Record<string, string> {
   const DAY_INDEX: Record<string, number> = {
     sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
   };
 
-  // Normalise and sort the day slugs by their weekday index
-  const sortedDays = [...daySlugList]
-    .map(d => d.substring(0, 3).toLowerCase())
-    .filter(d => d in DAY_INDEX)
-    .sort((a, b) => DAY_INDEX[a] - DAY_INDEX[b]);
-
-  if (sortedDays.length === 0) return {};
-
-  // Current IST time
   const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const todayIdx = nowIST.getDay(); // 0=Sun, 1=Mon, ...
+  const todayIdx = nowIST.getDay();
   const currentHour = nowIST.getHours();
 
-  // Determine the earliest date we can schedule:
-  // - If current hour < cutoff → today is still eligible
-  // - If current hour >= cutoff → earliest is tomorrow
-  const earliestOffset = currentHour >= DELIVERY_CUTOFF_HOUR_IST ? 1 : 0;
-  const earliestDate = new Date(nowIST);
-  earliestDate.setDate(nowIST.getDate() + earliestOffset);
-  const earliestDayIdx = earliestDate.getDay();
-
-  // Find which of the sorted days to start from (first day >= earliestDayIdx IN THIS WEEK)
-  // If none qualify this week, wrap to next week starting from the first day.
-  let startPos = sortedDays.findIndex(d => DAY_INDEX[d] >= earliestDayIdx);
-  let weekOffset = 0;
-  if (startPos === -1) {
-    // All days are earlier in the week than today's cutoff — wrap to next week
-    startPos = 0;
-    weekOffset = 1;
-  }
-
-  // Generate one date per day, rolling forward from the anchor
   const result: Record<string, string> = {};
-  for (let i = 0; i < sortedDays.length; i++) {
-    const daySlug = sortedDays[(startPos + i) % sortedDays.length];
-    // After we've wrapped past the end of the sortedDays array, we're in next week
-    if ((startPos + i) >= sortedDays.length) weekOffset = 1;
 
-    const targetDayIdx = DAY_INDEX[daySlug];
-    // Days from today's date (not earliestDate) to the target in this calendar week
-    let daysFromToday = targetDayIdx - todayIdx + weekOffset * 7;
-    // Handle the case where targetDayIdx is earlier in the week but weekOffset hasn't fired yet
-    if (daysFromToday < earliestOffset) daysFromToday += 7;
+  for (const config of dayConfigs) {
+    const daySlug = config.day.substring(0, 3).toLowerCase();
+    if (!(daySlug in DAY_INDEX)) continue;
 
-    const deliveryDate = new Date(nowIST);
-    deliveryDate.setDate(nowIST.getDate() + daysFromToday);
+    const targetIdx = DAY_INDEX[daySlug];
+    const slotHour = parseSlotStartHour(config.timeSlot);
 
-    const y = deliveryDate.getFullYear();
-    const m = String(deliveryDate.getMonth() + 1).padStart(2, '0');
-    const d = String(deliveryDate.getDate()).padStart(2, '0');
+    let daysToAdd: number;
+
+    if (targetIdx === todayIdx) {
+      // This delivery day is today — check if slot is still achievable
+      if (canDeliverTodayForSlot(currentHour, slotHour)) {
+        daysToAdd = 0; // deliver today
+      } else {
+        daysToAdd = 7; // today's window passed — next occurrence is next week
+      }
+    } else {
+      // Future or past day this week
+      daysToAdd = targetIdx - todayIdx;
+      if (daysToAdd < 0) daysToAdd += 7; // already passed this week → next week
+    }
+
+    const date = new Date(nowIST);
+    date.setDate(nowIST.getDate() + daysToAdd);
+
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
     result[daySlug] = `${y}-${m}-${d}`;
   }
 
@@ -158,7 +178,7 @@ export function scheduleDeliveryDates(daySlugList: string[]): Record<string, str
  * Kept for backward compatibility with any single-day callers.
  */
 export function getNextDateForDayOfWeek(daySlug: string): string {
-  const dates = scheduleDeliveryDates([daySlug]);
+  const dates = scheduleDeliveryDates([{ day: daySlug }]);
   const key = daySlug.substring(0, 3).toLowerCase();
   return dates[key] ?? (() => { throw new Error(`Invalid day slug: ${daySlug}`); })();
 }

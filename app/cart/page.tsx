@@ -12,48 +12,49 @@ import { createClient } from "@/lib/supabase/client";
 import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
 import { getWhatsAppNumber } from "@/lib/contact";
 
-// Generate delivery slots dynamically combining Same-Day buffer and Next-Day 11PM cutoff rules
+// Delivery slot generation rules:
+// - Midnight to 7:59 AM  → floor: earliest same-day = 10:00 AM
+// - 8:00 AM to 8:59 AM   → earliest same-day = 11:00 AM (kitchen not yet running full prep)
+// - 9:00 AM onwards      → 2-hour prep buffer from current time
+// - Same-day closes at 7 PM
+// - After 11 PM          → tomorrow morning (7–9 AM) slots are hidden; earliest tomorrow = 10 AM
 const getDeliverySlots = () => {
-  const currentHour = new Date().getHours();
-  const slots = [];
+  const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const currentHour = nowIST.getHours();
+  const slots: string[] = [];
 
-  // --- 1. SAME DAY / TODAY SLOTS ---
-  // Same day delivery terminates at 7 PM (19:00).
-  if (currentHour < 19) {
-    let todayStartHour = 10;
-
-    if (currentHour >= 0 && currentHour < 6) {
-      // Ordered past midnight up to 6 AM: Earliest is 10 AM
-      todayStartHour = 10;
+  // --- 1. SAME-DAY SLOTS ---
+  if (currentHour < 19) { // same-day closes at 7 PM
+    let todayStartHour: number;
+    if (currentHour < 8) {
+      todayStartHour = 10;       // midnight–7:59 AM: floor at 10 AM
+    } else if (currentHour < 9) {
+      todayStartHour = 11;       // 8:00–8:59 AM: kitchen not at full prep yet
     } else {
-      // Ordered between 6 AM and 7 PM: Add 2-hour prep buffer
-      todayStartHour = currentHour + 2;
+      todayStartHour = currentHour + 2; // 9 AM+: 2-hour buffer
     }
 
-    // Ensure we don't exceed the 9 PM delivery limit
-    if (todayStartHour < 21) {
-      for (let i = Math.max(7, todayStartHour); i < 21; i++) {
-        const start = i > 12 ? `${i - 12}:00 PM` : i === 12 ? `12:00 PM` : `${i.toString().padStart(2, '0')}:00 AM`;
-        const endHour = i + 1;
-        const end = endHour > 12 ? `${endHour - 12}:00 PM` : endHour === 12 ? `12:00 PM` : `${endHour.toString().padStart(2, '0')}:00 AM`;
-        slots.push(`Today, ${start} - ${end}`);
-      }
+    for (let i = Math.max(10, todayStartHour); i < 21; i++) {
+      const start = i > 12 ? `${i - 12}:00 PM` : i === 12 ? '12:00 PM' : `${String(i).padStart(2, '0')}:00 AM`;
+      const e = i + 1;
+      const end = e > 12 ? `${e - 12}:00 PM` : e === 12 ? '12:00 PM' : `${String(e).padStart(2, '0')}:00 AM`;
+      slots.push(`Today, ${start} - ${end}`);
     }
   }
 
-  // --- 2. NEXT DAY / TOMORROW SLOTS ---
-  // "When a person is ordering after 11 PM [23:00], only 10 AM to 9 PM slots should be shown."
+  // --- 2. TOMORROW SLOTS ---
+  // After 11 PM, 7–9 AM tomorrow slots are hidden (too late to notify kitchen for early morning).
   const tomorrowStartHour = currentHour >= 23 ? 10 : 7;
-
   for (let i = tomorrowStartHour; i < 21; i++) {
-    const start = i > 12 ? `${i - 12}:00 PM` : i === 12 ? `12:00 PM` : `${i.toString().padStart(2, '0')}:00 AM`;
-    const endHour = i + 1;
-    const end = endHour > 12 ? `${endHour - 12}:00 PM` : endHour === 12 ? `12:00 PM` : `${endHour.toString().padStart(2, '0')}:00 AM`;
+    const start = i > 12 ? `${i - 12}:00 PM` : i === 12 ? '12:00 PM' : `${String(i).padStart(2, '0')}:00 AM`;
+    const e = i + 1;
+    const end = e > 12 ? `${e - 12}:00 PM` : e === 12 ? '12:00 PM' : `${String(e).padStart(2, '0')}:00 AM`;
     slots.push(`Tomorrow, ${start} - ${end}`);
   }
 
   return slots;
 };
+
 
 interface StoredUser {
   name: string;
@@ -543,6 +544,15 @@ export default function CartPage() {
 
             {/* Scrollable List */}
             <div className="p-5 overflow-y-auto flex-1 custom-scrollbar w-full bg-[#F9F8F6]">
+              {/* Delivery cutoff notice */}
+              <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 flex gap-3 items-start">
+                <span className="text-amber-500 mt-0.5 shrink-0">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                </span>
+                <p className="font-body text-[12px] text-amber-800 leading-relaxed">
+                  <strong>7:00–10:00 AM deliveries</strong> require ordering by <strong>11:00 PM</strong> the night before. Same-day delivery is available with <strong>2 hours&apos; notice</strong> after 9:00 AM.
+                </p>
+              </div>
               <div className="flex flex-col gap-3">
                 {deliverySlots.map(slot => (
                   <button

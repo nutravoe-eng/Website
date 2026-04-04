@@ -3,6 +3,8 @@ import { useState } from "react";
 
 const faqs = [
   {q: "What time do deliveries happen?", a: "All deliveries are completed between 7:00 AM and 9:00 PM. Our partners will leave the package at your door or with security if instructed."},
+  {q: "What are the cutoff times for ordering?", a: "For early morning deliveries (7:00–10:00 AM), please place your order before 11:00 PM the night before — this gives our kitchen overnight preparation time. For all other time slots (10:00 AM–9:00 PM), same-day delivery is available with at least 2 hours' notice after 9:00 AM. Orders placed before 9:00 AM are eligible from the 10:00 AM slot onwards."},
+  {q: "Can I order at midnight for a 7 AM delivery?", a: "Yes! As long as you place your order before 11:00 PM the previous night, your 7:00–10:00 AM delivery slot will be honoured. Orders placed after 11:00 PM will not show early morning slots for next-day delivery — the earliest available will be 10:00 AM."},
   {q: "Can I cancel my order?", a: "Once an order has been placed, cancellations are not processed through the website. If you need urgent help with an order, please contact Nutravoe support directly."},
   {q: "How do refunds work after cancellation?", a: "Refunds are not initiated through the website after an order has been placed. Any exceptional support cases are handled manually by the Nutravoe team."},
   {q: "What if I need urgent help after placing an order?", a: "Please reach out immediately via WhatsApp or our support form. Our team will review the order status and guide you on the next steps."},
@@ -16,6 +18,7 @@ const faqs = [
   {q: "How does billing work for subscriptions?", a: "Subscription payments are reviewed and approved by the Nutravoe team before the wallet is loaded for the selected plan cycle. Once approved, the credited amount is used against deliveries within that plan window."},
   {q: "How are the bowls packaged?", a: "We use premium, food-safe, environmentally conscious packaging that seals in freshness while minimising our carbon footprint. Please recycle the empty containers."},
 ];
+
 
 export default function HelpPage() {
   const [ticketSent, setTicketSent] = useState(false);
