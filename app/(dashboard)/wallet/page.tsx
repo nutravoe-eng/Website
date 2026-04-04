@@ -78,7 +78,7 @@ export default function WalletPage() {
         </div>
       </div>
 
-      <div className={`mb-6 rounded-xl border p-6 ${balancePaise > 0 ? 'border-sage/20 bg-sage/5' : 'border-black/8 bg-black/3'}`}>
+      <div className={`mb-6 rounded-xl border p-6 ${balancePaise > 0 ? 'border-sage/20 bg-sage/5' : 'border-amber-200 bg-amber-50/50'}`}>
         <p className="mb-2 font-body text-[11px] font-bold uppercase tracking-wider text-stone">Available balance</p>
         <p className={`mb-2 font-display text-5xl font-medium ${balancePaise > 0 ? 'text-sage-dark' : 'text-terracotta'}`}>
           {formatCurrency(balancePaise / 100)}
@@ -88,7 +88,12 @@ export default function WalletPage() {
             ? nextExpiryAt
               ? getExpiryLabel(nextExpiryAt)
               : 'Wallet funds available'
-            : 'No approved subscription funds in wallet yet'}
+            : nextExpiryAt && new Date(nextExpiryAt) < new Date()
+              ? `Your wallet balance expired on ${new Date(nextExpiryAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}. Contact Nutravoe to renew your subscription.`
+              : transactions.length > 0
+                ? 'Your subscription balance has been fully used. Contact Nutravoe to renew.'
+                : 'No funds yet — balance loads after Nutravoe approves your subscription payment.'
+          }
         </p>
       </div>
 

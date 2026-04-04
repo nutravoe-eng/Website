@@ -25,6 +25,21 @@ export async function POST(
     return NextResponse.json({ error: 'At least one bowl is required' }, { status: 400 });
   }
 
+  // Explicitly check wallet hasn't expired before calling the RPC.
+  // The RPC would catch this too, but gives a cryptic DB error. We return a clear message here.
+  const { data: walletLoads } = await adminSupabase
+    .from('wallet_loads')
+    .select('expires_at, remaining_amount_rs')
+    .eq('subscription_id', subscriptionId)
+    .gt('remaining_amount_rs', 0)
+    .order('expires_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (walletLoads && walletLoads.expires_at && new Date(walletLoads.expires_at) < new Date()) {
+    return NextResponse.json({ error: 'Wallet balance has expired. Please renew the subscription.' }, { status: 400 });
+  }
+
   const { data, error } = await adminSupabase.rpc('create_subscription_delivery', {
     p_subscription_id: subscriptionId,
     p_delivery_date: deliveryDate,

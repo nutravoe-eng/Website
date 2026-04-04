@@ -31,9 +31,29 @@ export async function PATCH(
   if (admin_notes !== undefined && (typeof admin_notes !== 'string' || admin_notes.length > 2000)) {
     return NextResponse.json({ error: 'admin_notes must be a string under 2000 characters' }, { status: 422 });
   }
-  
+
   if (delivery_date !== undefined && (typeof delivery_date !== 'string')) {
     return NextResponse.json({ error: 'delivery_date must be a string' }, { status: 422 });
+  }
+
+  // Cancellations go through the RPC so wallet is atomically refunded.
+  if (status === 'cancelled') {
+    const { data: rpcData, error: rpcError } = await adminSupabase
+      .rpc('cancel_subscription_order', { p_order_id: id });
+
+    if (rpcError) {
+      // RPC failed (e.g. already cancelled) — fall through to plain update so
+      // non-subscription orders can still be cancelled.
+      if (!rpcError.message.includes('only subscription orders')) {
+        return NextResponse.json({ error: rpcError.message }, { status: 400 });
+      }
+    } else {
+      const row = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+      return NextResponse.json({
+        order: { id, status: 'cancelled' },
+        refunded_amount_rs: row?.refunded_amount_rs ?? 0,
+      });
+    }
   }
 
   const updates: Record<string, unknown> = {};

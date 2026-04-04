@@ -15,6 +15,7 @@ interface AdminSubscription {
   style: string;
   status: string;
   start_date: string;
+  period_end_date: string | null;
   delivery_time_slot: string | null;
   total_amount_rs: number | null;
   payment_status: string;
@@ -295,6 +296,19 @@ export default function AdminSubscriptionsPage() {
                 <Stat label="Amount" value={sub.total_amount_rs ? `₹${Number(sub.total_amount_rs).toLocaleString('en-IN')}` : '—'} />
                 <Stat label="Deliveries" value={String(sub.deliveries_completed)} />
                 <Stat label="Since" value={new Date(sub.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} />
+                {sub.period_end_date && sub.status === 'active' && (() => {
+                  const daysLeft = Math.ceil((new Date(sub.period_end_date).getTime() - Date.now()) / 86_400_000);
+                  const color = daysLeft <= 0 ? 'text-terracotta bg-terracotta/10' : daysLeft <= 2 ? 'text-amber-700 bg-amber-50' : 'text-sage-dark bg-sage/10';
+                  const label = daysLeft <= 0 ? 'Period ended' : daysLeft === 1 ? 'Ends tomorrow' : `Ends in ${daysLeft}d`;
+                  return (
+                    <div>
+                      <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone mb-1">Period</p>
+                      <span className={`inline-flex items-center font-body text-[11px] font-bold px-2 py-0.5 rounded-full ${color}`}>
+                        {label}
+                      </span>
+                    </div>
+                  );
+                })()}
                 <div>
                   <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone mb-1">Payment</p>
                   {sub.payment_status === 'paid' ? (
