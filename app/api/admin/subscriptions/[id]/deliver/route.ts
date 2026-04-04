@@ -4,12 +4,12 @@ import { adminSupabase } from '@/lib/supabase/admin';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   const admin = await verifyAdmin();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const { id: subscriptionId } = await params;
+  const { id: subscriptionId } = params;
   const body = await req.json();
 
   const deliveryDate: string = body.delivery_date ?? new Date().toISOString().split('T')[0];

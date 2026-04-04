@@ -11,12 +11,12 @@ const ALLOWED_SUBSCRIPTION_STATUSES = new Set(['pending', 'active', 'paused', 'c
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   const admin = await verifyAdmin();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const { id } = await params;
+  const { id } = params;
   const body = await req.json();
   const {
     payment_status,
