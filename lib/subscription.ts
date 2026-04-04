@@ -71,28 +71,95 @@ export async function getActivePlanConfig(): Promise<PlanConfig | null> {
   return PLANS.find(p => p.id === sub.planId) ?? null;
 }
 
-export function getNextDateForDayOfWeek(daySlug: string): string {
-  const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-  const targetIdx = days.indexOf(daySlug.substring(0, 3).toLowerCase());
-  
-  if (targetIdx === -1) {
-    throw new Error(`Invalid day slug: ${daySlug}`);
+
+// Cutoff hour in IST: if the current time is at or past this hour,
+// today's delivery cannot be accommodated — start from the next eligible day.
+const DELIVERY_CUTOFF_HOUR_IST = 21; // 9:00 PM
+
+/**
+ * Given a list of delivery day slugs (e.g. ['mon', 'wed', 'fri']),
+ * returns a sorted list of YYYY-MM-DD dates using a rolling window:
+ *
+ * 1. Find the first eligible day from now, respecting the 9 PM cutoff.
+ * 2. From that anchor, walk the sorted days forward, wrapping into
+ *    the next week as needed.
+ *
+ * Example: Days = [Mon, Wed, Fri]. Approved Sunday 10 PM.
+ *   - Monday is tomorrow but after cutoff for same-day → still eligible (tomorrow)
+ *   - Result: Mon this week, Wed, Fri, (no wrap needed)
+ *
+ * Example: Days = [Mon, Wed, Fri]. Approved Monday 10 PM.
+ *   - Monday has passed cutoff today → skip to Wed
+ *   - Result: Wed this week, Fri, Mon next week
+ */
+export function scheduleDeliveryDates(daySlugList: string[]): Record<string, string> {
+  const DAY_INDEX: Record<string, number> = {
+    sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+  };
+
+  // Normalise and sort the day slugs by their weekday index
+  const sortedDays = [...daySlugList]
+    .map(d => d.substring(0, 3).toLowerCase())
+    .filter(d => d in DAY_INDEX)
+    .sort((a, b) => DAY_INDEX[a] - DAY_INDEX[b]);
+
+  if (sortedDays.length === 0) return {};
+
+  // Current IST time
+  const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const todayIdx = nowIST.getDay(); // 0=Sun, 1=Mon, ...
+  const currentHour = nowIST.getHours();
+
+  // Determine the earliest date we can schedule:
+  // - If current hour < cutoff → today is still eligible
+  // - If current hour >= cutoff → earliest is tomorrow
+  const earliestOffset = currentHour >= DELIVERY_CUTOFF_HOUR_IST ? 1 : 0;
+  const earliestDate = new Date(nowIST);
+  earliestDate.setDate(nowIST.getDate() + earliestOffset);
+  const earliestDayIdx = earliestDate.getDay();
+
+  // Find which of the sorted days to start from (first day >= earliestDayIdx IN THIS WEEK)
+  // If none qualify this week, wrap to next week starting from the first day.
+  let startPos = sortedDays.findIndex(d => DAY_INDEX[d] >= earliestDayIdx);
+  let weekOffset = 0;
+  if (startPos === -1) {
+    // All days are earlier in the week than today's cutoff — wrap to next week
+    startPos = 0;
+    weekOffset = 1;
   }
 
-  const nowIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  const currentIdx = nowIST.getDay();
-  
-  let daysToAdd = targetIdx - currentIdx;
-  if (daysToAdd <= 0) {
-    daysToAdd += 7;
+  // Generate one date per day, rolling forward from the anchor
+  const result: Record<string, string> = {};
+  for (let i = 0; i < sortedDays.length; i++) {
+    const daySlug = sortedDays[(startPos + i) % sortedDays.length];
+    // After we've wrapped past the end of the sortedDays array, we're in next week
+    if ((startPos + i) >= sortedDays.length) weekOffset = 1;
+
+    const targetDayIdx = DAY_INDEX[daySlug];
+    // Days from today's date (not earliestDate) to the target in this calendar week
+    let daysFromToday = targetDayIdx - todayIdx + weekOffset * 7;
+    // Handle the case where targetDayIdx is earlier in the week but weekOffset hasn't fired yet
+    if (daysFromToday < earliestOffset) daysFromToday += 7;
+
+    const deliveryDate = new Date(nowIST);
+    deliveryDate.setDate(nowIST.getDate() + daysFromToday);
+
+    const y = deliveryDate.getFullYear();
+    const m = String(deliveryDate.getMonth() + 1).padStart(2, '0');
+    const d = String(deliveryDate.getDate()).padStart(2, '0');
+    result[daySlug] = `${y}-${m}-${d}`;
   }
 
-  const nextDate = new Date(nowIST);
-  nextDate.setDate(nowIST.getDate() + daysToAdd);
-  
-  const y = nextDate.getFullYear();
-  const m = String(nextDate.getMonth() + 1).padStart(2, "0");
-  const d = String(nextDate.getDate()).padStart(2, "0");
-  
-  return `${y}-${m}-${d}`;
+  return result;
 }
+
+/**
+ * @deprecated Use scheduleDeliveryDates() for new spread subscription generation.
+ * Kept for backward compatibility with any single-day callers.
+ */
+export function getNextDateForDayOfWeek(daySlug: string): string {
+  const dates = scheduleDeliveryDates([daySlug]);
+  const key = daySlug.substring(0, 3).toLowerCase();
+  return dates[key] ?? (() => { throw new Error(`Invalid day slug: ${daySlug}`); })();
+}
+

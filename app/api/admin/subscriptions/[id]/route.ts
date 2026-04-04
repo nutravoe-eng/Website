@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 import { sendBrevoEmail } from '@/lib/brevo';
-import { getNextDateForDayOfWeek } from '@/lib/subscription';
+import { getNextDateForDayOfWeek, scheduleDeliveryDates } from '@/lib/subscription';
 
 const ALLOWED_PAYMENT_STATUSES = new Set(['pending', 'paid', 'failed', 'refunded']);
 const ALLOWED_SUBSCRIPTION_STATUSES = new Set(['pending', 'active', 'paused', 'cancelled', 'expired']);
@@ -105,10 +105,16 @@ export async function PATCH(
     // --- SPREAD AUTOGENERATION LOGIC ---
     if (oldSub.style === 'spread' && Array.isArray(oldSub.subscription_day_configs) && oldSub.subscription_day_configs.length > 0) {
       const unitPrice = oldSub.subscription_plans?.price_per_bowl ?? 0;
-      
+
+      // Compute all delivery dates together with rolling-window cutoff logic.
+      // This ensures a Monday approved at 10 PM skips Monday and starts from Tuesday,
+      // with the missed Monday pushed to next Monday instead of being lost.
+      const daySlugList = oldSub.subscription_day_configs.map((c: { day_of_week: string }) => c.day_of_week);
+      const dateMap = scheduleDeliveryDates(daySlugList);
+
       for (const config of oldSub.subscription_day_configs) {
         try {
-          const deliveryDate = getNextDateForDayOfWeek(config.day_of_week);
+          const deliveryDate = dateMap[config.day_of_week] ?? getNextDateForDayOfWeek(config.day_of_week);
           const bowls = [{
             bowl_slug: config.bowl_slug,
             bowl_name: config.bowl_slug,
@@ -124,11 +130,10 @@ export async function PATCH(
           });
         } catch (autoGenErr) {
           console.error(`Failed to auto-generate spread order for day config: ${config.id}`, autoGenErr);
-          // Non-fatal: the admin can manually create it if it failed, but log it silently
         }
       }
     }
-    // -----------------------------------
+    // ------------------------------------
   }
 
   // Re-fetch the final state
