@@ -33,7 +33,7 @@ export default function AboutPage() {
             </p>
             <p className="font-body text-[15px] font-light text-stone leading-loose max-w-lg">
               So she built one. Nutravoe is her answer to the gap: a premium daily ritual,
-              made by hand in small batches each day and delivered to your door before 10 AM.
+              made by hand in small batches each day and delivered to your doorstep.
               No apps, no aggregators — just you and a bowl worth looking forward to.
             </p>
           </div>

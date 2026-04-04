@@ -16,6 +16,11 @@ export async function POST(
   const deliverySlot: string | null = body.delivery_time_slot ?? null;
   const bowls: { bowl_slug: string; bowl_name: string; quantity: number; unit_price: number }[] = body.bowls ?? [];
 
+  // Validate date is in YYYY-MM-DD format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate)) {
+    return NextResponse.json({ error: 'delivery_date must be in YYYY-MM-DD format' }, { status: 400 });
+  }
+
   if (bowls.length === 0) {
     return NextResponse.json({ error: 'At least one bowl is required' }, { status: 400 });
   }

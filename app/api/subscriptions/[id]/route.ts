@@ -61,8 +61,15 @@ export async function PATCH(
 
   if (Array.isArray(body?.dayConfigs)) {
     const dayConfigs = body.dayConfigs as DayConfigInput[];
+    const VALID_DAYS = new Set(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
+
     if (dayConfigs.some((config) => !config?.day || !config?.bowlId || !Number.isFinite(config?.quantity) || Number(config.quantity) <= 0)) {
-      return NextResponse.json({ error: "Invalid day configuration" }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid day configuration' }, { status: 400 });
+    }
+
+    const invalidDay = dayConfigs.find((config) => !VALID_DAYS.has(config.day.toLowerCase()));
+    if (invalidDay) {
+      return NextResponse.json({ error: `Invalid day "${invalidDay.day}". Must be one of: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.` }, { status: 400 });
     }
 
     const { error: deleteError } = await adminSupabase
