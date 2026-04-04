@@ -71,7 +71,10 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error('Update failed');
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Update failed');
+    }
     const data = await res.json();
     return data.order;
   }
@@ -88,8 +91,8 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
       showToast('Payment marked as received');
       setPayModal(null);
       setUpiRef('');
-    } catch {
-      showToast('Failed to update. Try again.');
+    } catch (err: any) {
+      showToast(err instanceof Error ? err.message : 'Failed to update. Try again.');
     } finally {
       setSaving(false);
     }
