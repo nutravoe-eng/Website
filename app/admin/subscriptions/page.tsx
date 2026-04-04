@@ -97,8 +97,8 @@ export default function AdminSubscriptionsPage() {
       showToast('Subscription payment confirmed and wallet loaded');
       setPayModal(null);
       setUpiRef('');
-    } catch {
-      showToast('Failed to update. Try again.');
+    } catch (err: any) {
+      showToast(err instanceof Error ? err.message : 'Failed to update. Try again.');
     } finally {
       setSaving(false);
     }
