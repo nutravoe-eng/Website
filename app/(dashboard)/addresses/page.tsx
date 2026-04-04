@@ -10,14 +10,124 @@ interface Address {
   label: string;
   line1: string;
   line2: string | null;
+  city: string;
+  state: string | null;
   pincode: string;
   is_default: boolean;
   lat: number | null;
   lng: number | null;
 }
 
-type FormData = { label: string; line1: string; line2: string; pincode: string };
-const BLANK_FORM: FormData = { label: "Home", line1: "", line2: "", pincode: "560" };
+type FormData = { label: string; line1: string; line2: string; city: string; state: string; pincode: string };
+const BLANK_FORM: FormData = { label: "Home", line1: "", line2: "", city: "Bengaluru", state: "Karnataka", pincode: "" };
+
+// ── Shared form fields renderer ───────────────────────────────────────
+// DEFINED OUTSIDE common component to prevent unmounting on every keystroke
+function AddressFields({
+  form, setForm, mapOpen, setMapOpen, pLat, setPLat, pLng, setPLng, center,
+}: {
+  form: FormData;
+  setForm: (f: FormData) => void;
+  mapOpen: boolean;
+  setMapOpen: (v: boolean) => void;
+  pLat: number | null;
+  setPLat: (v: number | null) => void;
+  pLng: number | null;
+  setPLng: (v: number | null) => void;
+  center: { lat: number; lng: number } | undefined;
+}) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+      <div>
+        <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Address Tag</label>
+        <select
+          value={form.label}
+          onChange={e => setForm({ ...form, label: e.target.value })}
+          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
+        >
+          <option>Home</option>
+          <option>Office</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div>
+        <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Pincode</label>
+        <input
+          required type="text" maxLength={6} placeholder="5600xx"
+          value={form.pincode}
+          onChange={e => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "") })}
+          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
+        />
+      </div>
+      <div className="md:col-span-2">
+        <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Flat, House no., Building</label>
+        <input
+          required type="text" value={form.line1}
+          onChange={e => setForm({ ...form, line1: e.target.value })}
+          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
+        />
+      </div>
+      <div className="md:col-span-2">
+        <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Area, Street, Sector</label>
+        <input
+          required type="text" value={form.line2}
+          onChange={e => setForm({ ...form, line2: e.target.value })}
+          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
+        />
+      </div>
+      <div>
+        <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">City</label>
+        <input
+          required type="text" value={form.city}
+          onChange={e => setForm({ ...form, city: e.target.value })}
+          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
+        />
+      </div>
+      <div>
+        <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">State</label>
+        <input
+          required type="text" value={form.state}
+          onChange={e => setForm({ ...form, state: e.target.value })}
+          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
+        />
+      </div>
+      {/* Map pin picker */}
+      <div className="md:col-span-2 border border-dashed border-black/15 rounded-lg overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setMapOpen(!mapOpen)}
+          className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-black/[0.02] transition-colors"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sage shrink-0">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
+          </svg>
+          <span className="font-body text-[13px] text-ink font-medium">
+            {pLat && pLng ? "Change pin location" : "Pin your exact location"}
+          </span>
+          {pLat && pLng && (
+            <span className="font-body text-[11px] text-sage-dark font-bold ml-1">✓ Pinned</span>
+          )}
+          {!pLat && <span className="font-body text-[11px] text-stone ml-1">(optional)</span>}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`ml-auto text-stone transition-transform ${mapOpen ? "rotate-180" : ""}`}>
+            <path d="m6 9 6 6 6-6"/>
+          </svg>
+        </button>
+        {mapOpen && (
+          <div className="px-4 pb-4">
+            <p className="font-body text-[12px] text-stone mb-3">
+              Drag the pin or tap the map to mark your exact gate or building entrance.
+            </p>
+            <MapPicker
+              centerLat={center?.lat ?? pLat ?? undefined}
+              centerLng={center?.lng ?? pLng ?? undefined}
+              onChange={(lat, lng) => { setPLat(lat); setPLng(lng); }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function AddressesPage() {
   const supabase = createClient();
@@ -67,7 +177,7 @@ export default function AddressesPage() {
     if (!user) { setLoading(false); return; }
     const { data } = await supabase
       .from("addresses")
-      .select("id, label, line1, line2, pincode, is_default, lat, lng")
+      .select("id, label, line1, line2, city, state, pincode, is_default, lat, lng")
       .eq("user_id", user.id)
       .order("is_default", { ascending: false })
       .order("created_at", { ascending: true });
@@ -89,7 +199,14 @@ export default function AddressesPage() {
   // ── Start editing an address ──────────────────────────────────────────
   function openEdit(addr: Address) {
     setEditingId(addr.id);
-    setEditForm({ label: addr.label, line1: addr.line1, line2: addr.line2 ?? "", pincode: addr.pincode });
+    setEditForm({ 
+      label: addr.label, 
+      line1: addr.line1, 
+      line2: addr.line2 ?? "", 
+      city: addr.city || "Bengaluru", 
+      state: addr.state || "Karnataka", 
+      pincode: addr.pincode 
+    });
     setEditShowMap(false);
     setEditPinLat(addr.lat ?? null);
     setEditPinLng(addr.lng ?? null);
@@ -118,11 +235,13 @@ export default function AddressesPage() {
         label: editForm.label,
         line1: editForm.line1,
         line2: editForm.line2 || null,
+        city: editForm.city,
+        state: editForm.state,
         pincode: editForm.pincode,
         ...(editPinLat && editPinLng ? { lat: editPinLat, lng: editPinLng } : {}),
       })
       .eq("id", editingId)
-      .select("id, label, line1, line2, pincode, is_default, lat, lng")
+      .select("id, label, line1, line2, city, state, pincode, is_default, lat, lng")
       .single();
     if (!error && data) {
       const updated = addresses.map(a => a.id === editingId ? (data as Address) : a);
@@ -146,13 +265,13 @@ export default function AddressesPage() {
         label: formData.label,
         line1: formData.line1,
         line2: formData.line2 || null,
-        city: "Bengaluru",
-        state: "Karnataka",
+        city: formData.city,
+        state: formData.state,
         pincode: formData.pincode,
         is_default: addresses.length === 0,
         ...(showMap && pinLat && pinLng ? { lat: pinLat, lng: pinLng } : {}),
       })
-      .select("id, label, line1, line2, pincode, is_default, lat, lng")
+      .select("id, label, line1, line2, city, state, pincode, is_default, lat, lng")
       .single();
     if (!error && data) {
       const updated = [...addresses, data as Address];
@@ -192,96 +311,6 @@ export default function AddressesPage() {
     </div>
   );
 
-  // ── Shared form fields renderer ───────────────────────────────────────
-  function AddressFields({
-    form, setForm, mapOpen, setMapOpen, pLat, setPLat, pLng, setPLng, center,
-  }: {
-    form: FormData;
-    setForm: (f: FormData) => void;
-    mapOpen: boolean;
-    setMapOpen: (v: boolean) => void;
-    pLat: number | null;
-    setPLat: (v: number | null) => void;
-    pLng: number | null;
-    setPLng: (v: number | null) => void;
-    center: { lat: number; lng: number } | undefined;
-  }) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-        <div>
-          <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Address Tag</label>
-          <select
-            value={form.label}
-            onChange={e => setForm({ ...form, label: e.target.value })}
-            className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
-          >
-            <option>Home</option>
-            <option>Office</option>
-            <option>Other</option>
-          </select>
-        </div>
-        <div>
-          <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Pincode</label>
-          <input
-            required type="text" maxLength={6} placeholder="5600xx"
-            value={form.pincode}
-            onChange={e => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "") })}
-            className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
-          />
-        </div>
-        <div className="md:col-span-2">
-          <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Flat, House no., Building</label>
-          <input
-            required type="text" value={form.line1}
-            onChange={e => setForm({ ...form, line1: e.target.value })}
-            className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
-          />
-        </div>
-        <div className="md:col-span-2">
-          <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Area, Street, Sector</label>
-          <input
-            required type="text" value={form.line2}
-            onChange={e => setForm({ ...form, line2: e.target.value })}
-            className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
-          />
-        </div>
-        {/* Map pin picker */}
-        <div className="md:col-span-2 border border-dashed border-black/15 rounded-lg overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setMapOpen(!mapOpen)}
-            className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-black/[0.02] transition-colors"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sage shrink-0">
-              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
-            </svg>
-            <span className="font-body text-[13px] text-ink font-medium">
-              {pLat && pLng ? "Change pin location" : "Pin your exact location"}
-            </span>
-            {pLat && pLng && (
-              <span className="font-body text-[11px] text-sage-dark font-bold ml-1">✓ Pinned</span>
-            )}
-            {!pLat && <span className="font-body text-[11px] text-stone ml-1">(optional)</span>}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`ml-auto text-stone transition-transform ${mapOpen ? "rotate-180" : ""}`}>
-              <path d="m6 9 6 6 6-6"/>
-            </svg>
-          </button>
-          {mapOpen && (
-            <div className="px-4 pb-4">
-              <p className="font-body text-[12px] text-stone mb-3">
-                Drag the pin or tap the map to mark your exact gate or building entrance.
-              </p>
-              <MapPicker
-                centerLat={center?.lat ?? pLat ?? undefined}
-                centerLng={center?.lng ?? pLng ?? undefined}
-                onChange={(lat, lng) => { setPLat(lat); setPLng(lng); }}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -372,7 +401,7 @@ export default function AddressesPage() {
                       <p className="font-body text-[13px] text-stone mt-1 leading-relaxed">
                         {addr.line1}<br />
                         {addr.line2 && <>{addr.line2}<br /></>}
-                        Karnataka {addr.pincode}
+                        {addr.city}, {addr.state} {addr.pincode}
                       </p>
                       {addr.lat && addr.lng && (
                         <span className="inline-flex items-center gap-1 mt-2 font-body text-[11px] text-sage-dark font-medium">
