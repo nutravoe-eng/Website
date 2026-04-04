@@ -350,7 +350,8 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         customerPhone: user.phone,
         customerEmail: user.email,
         planName: currentPlan.name,
-        weeklyPrice: currentPlan.weeklyPrice,
+        weeklyPrice: totalWeeklyPrice,
+        customisationSurcharge: customisationSurcharge,
         deliveryAddress,
         deliveryStyle:
           getScenario() === "D"
@@ -446,7 +447,33 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     return newSub.id.slice(-6).toUpperCase();
   }
 
-  // ─── Derived values ───────────────────────────────────────────────────────────
+  // ─── Customization Pricing ───────────────────────────────────────────────────
+
+  function countCustomisedBowls(): number {
+    const scenario = getScenario();
+    if (scenario === "D") return 0; // flexible is charged later
+
+    if (scenario === "A") {
+      // Per-day, per-bowl counting
+      return Object.values(state.dayBowlCustomMap).reduce((acc, bowlMap) => {
+        const count = Object.values(bowlMap).filter(customs =>
+          customs.some(c => c.option === "extra" || c.option === "remove")
+        ).length;
+        return acc + count;
+      }, 0);
+    }
+
+    // Scenario C: Per-day counting
+    return Object.values(state.dayCustomMap).filter(customs =>
+      customs.some(c => c.option === "extra" || c.option === "remove")
+    ).length;
+  }
+
+  const customisedCount = countCustomisedBowls();
+  const customisationSurcharge = currentPlan
+    ? customisedCount * (currentPlan.customisationChargePerBowl ?? 0)
+    : 0;
+  const totalWeeklyPrice = currentPlan ? currentPlan.weeklyPrice + customisationSurcharge : 0;
 
   // Bowl being customised (for modal)
   const customizingDayBowl = customizingDay  // scenario C only
@@ -1187,7 +1214,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                   Week 1
                 </span>
                 <span className="font-display text-2xl font-medium text-sage-dark">
-                  {formatCurrency(currentPlan.weeklyPrice)}
+                  {formatCurrency(totalWeeklyPrice)}
                 </span>
               </div>
             </div>

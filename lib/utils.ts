@@ -101,6 +101,7 @@ export function buildSubscriptionWhatsAppMessage(input: {
   customerEmail?: string;
   planName: string;
   weeklyPrice: number;
+  customisationSurcharge?: number;
   deliveryAddress: string;
   deliveryStyle: string;
   deliveryTimeSlot?: string;
@@ -113,7 +114,14 @@ export function buildSubscriptionWhatsAppMessage(input: {
     `Name: ${input.customerName}`,
     `Phone: ${input.customerPhone || "NA"}`,
     `Email: ${input.customerEmail || "NA"}`,
-    `Plan: ${input.planName} (₹${input.weeklyPrice}/week)`,
+    `Plan: ${input.planName}`,
+    input.customisationSurcharge && input.customisationSurcharge > 0 
+      ? `Base Price: ₹${(input.weeklyPrice - input.customisationSurcharge).toLocaleString('en-IN')}/week`
+      : null,
+    input.customisationSurcharge && input.customisationSurcharge > 0 
+      ? `Customisation Surcharge: +₹${input.customisationSurcharge.toLocaleString('en-IN')}/week`
+      : null,
+    `Total Weekly Price: ₹${input.weeklyPrice.toLocaleString('en-IN')}/week`,
     `Delivery style: ${input.deliveryStyle}`,
     `Delivery slot: ${input.deliveryTimeSlot || "NA"}`,
     `Address: ${input.deliveryAddress || "NA"}`,
