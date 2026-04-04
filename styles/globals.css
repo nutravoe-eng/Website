@@ -76,8 +76,9 @@
 
 @keyframes marquee {
   from { transform: translateX(0); }
-  to { transform: translateX(-33.3333%); }
+  to { transform: translateX(-50%); }
 }
+
 
 /* Respect prefers-reduced-motion — pause the marquee */
 @media (prefers-reduced-motion: reduce) {

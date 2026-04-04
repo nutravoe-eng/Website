@@ -1,11 +1,8 @@
 // Reusable delivery info marquee — place below the hero on the home page
 // and at the top of the cart page (above cart items).
-// Pure CSS infinite scroll, no JS, respects prefers-reduced-motion.
+// Animation defined in styles/globals.css as @keyframes marquee.
 
 const ITEMS = [
-  { icon: "🌅", text: "7–10 AM deliveries if ordered before 11 PM" },
-  { icon: "⚡", text: "Same-day delivery with 2 hours' notice after 9 AM" },
-  { icon: "🚚", text: "Delivered 7 AM–9 PM across Bangalore" },
   { icon: "🌅", text: "7–10 AM deliveries if ordered before 11 PM" },
   { icon: "⚡", text: "Same-day delivery with 2 hours' notice after 9 AM" },
   { icon: "🚚", text: "Delivered 7 AM–9 PM across Bangalore" },
@@ -46,8 +43,11 @@ export default function DeliveryMarquee({ variant = "light" }: DeliveryMarqueePr
         }}
       />
 
-      {/* The scrolling track — duplicated for seamless loop */}
-      <div className="flex w-max animate-marquee py-3">
+      {/* Scrolling track — duplicated once for seamless loop (-50% translate in keyframe) */}
+      <div
+        className="flex w-max py-3"
+        style={{ animation: "marquee 28s linear infinite" }}
+      >
         {[...ITEMS, ...ITEMS].map((item, i) => (
           <span
             key={i}
@@ -61,19 +61,6 @@ export default function DeliveryMarquee({ variant = "light" }: DeliveryMarqueePr
           </span>
         ))}
       </div>
-
-      <style jsx>{`
-        @keyframes marquee {
-          from { transform: translateX(0); }
-          to   { transform: translateX(-50%); }
-        }
-        .animate-marquee {
-          animation: marquee 28s linear infinite;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .animate-marquee { animation: none; }
-        }
-      `}</style>
     </div>
   );
 }
