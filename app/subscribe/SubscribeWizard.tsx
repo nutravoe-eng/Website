@@ -320,7 +320,9 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           .map(([bowlId, qty]) => {
             const bowl = bowls.find(b => b._id === bowlId);
             const c = describeCustomizations(state.dayBowlCustomMap[day]?.[bowlId], bowl);
-            return `- ${day}: ${qty} x ${bowl?.name ?? bowlId}${c}`;
+            const slot = state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot;
+            const s = slot ? ` [${slot}]` : "";
+            return `- ${day}: ${qty} x ${bowl?.name ?? bowlId}${c}${s}`;
           });
         return lines.length > 0 ? lines : [`- ${day}: no bowls assigned`];
       });
@@ -329,7 +331,9 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
       const bowlId = state.dayBowlMap[day];
       const bowl = bowls.find(b => b._id === bowlId);
       const c = describeCustomizations(state.dayCustomMap[day], bowl);
-      return `- ${day}: ${bowl?.name ?? "Not selected"}${c}`;
+      const slot = state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot;
+      const s = slot ? ` [${slot}]` : "";
+      return `- ${day}: ${bowl?.name ?? "Not selected"}${c}${s}`;
     });
   };
 

@@ -63,7 +63,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid subscription request" }, { status: 400, headers: limited.headers });
   }
 
-  if (deliveryStyle !== "flexible" && !deliveryTimeSlot) {
+  const hasGlobalTimeSlot = !!deliveryTimeSlot;
+  const hasDailyTimeSlots = dayConfigs.length > 0 && dayConfigs.every(dc => !!dc.deliveryTimeSlot);
+
+  if (deliveryStyle !== "flexible" && !hasGlobalTimeSlot && !hasDailyTimeSlots) {
     return NextResponse.json({ error: "Delivery time slot is required" }, { status: 400, headers: limited.headers });
   }
 
