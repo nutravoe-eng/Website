@@ -139,4 +139,5 @@ export interface Subscription {
   status: 'active' | 'paused' | 'cancelled';
   nextDelivery: string;
   walletBalancePaise?: number;
+  periodEndDate?: string;
 }

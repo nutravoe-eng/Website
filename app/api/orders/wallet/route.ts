@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   // Require an active, paid subscription
   const { data: subscription } = await adminSupabase
     .from("subscriptions")
-    .select("id, subscription_plans ( slug )")
+    .select("id, billing_cycle, period_end_date, subscription_plans ( slug, bowls_per_cycle )")
     .eq("user_id", user.id)
     .eq("status", "active")
     .eq("payment_status", "paid")
@@ -92,11 +92,39 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Build authoritative pricing using subscription plan rates
+  // Calculate current cycle usage to determine if we use sub price or retail price
+  let isOverQuota = false;
+  const periodEndStr = (subscription.period_end_date as string) || "";
+  const planLimit = (subscription.subscription_plans as any)?.bowls_per_cycle ?? 0;
+
+  if (periodEndStr && planLimit > 0) {
+    const isWeekly = subscription.billing_cycle !== 'monthly';
+    const periodEndDate = new Date(periodEndStr);
+    const periodStartDate = new Date(periodEndDate.getTime() - (isWeekly ? 7 : 30) * 24 * 60 * 60 * 1000);
+    const periodStartStr = periodStartDate.toISOString().split('T')[0];
+
+    const { data: orderedData } = await adminSupabase
+      .from("orders")
+      .select("id, order_items ( quantity )")
+      .eq("subscription_id", subscription.id)
+      .in("status", ["confirmed", "delivered"])
+      .gte("delivery_date", periodStartStr)
+      .lte("delivery_date", periodEndStr);
+
+    const alreadyOrderedCount = (orderedData ?? []).reduce((acc, order: any) => {
+      const items = Array.isArray(order.order_items) ? order.order_items : [];
+      return acc + items.reduce((sum: number, item: any) => sum + (item?.quantity ?? 0), 0);
+    }, 0);
+
+    isOverQuota = alreadyOrderedCount >= planLimit;
+  }
+
+  // Build authoritative pricing
   let quote;
   try {
     const plan = subscription.subscription_plans as { slug?: string } | null;
-    quote = await buildAuthoritativeOrder(items, address, plan?.slug ?? null);
+    // If over quota, pass null for plan slug to use standard retail pricing
+    quote = await buildAuthoritativeOrder(items, address, isOverQuota ? null : (plan?.slug ?? null));
   } catch {
     return NextResponse.json({ error: "Unable to price this order" }, { status: 400, headers: limited.headers });
   }

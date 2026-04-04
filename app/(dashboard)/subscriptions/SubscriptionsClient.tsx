@@ -7,6 +7,7 @@ import { STUB_PLANS as PLANS } from "../../subscribe/PlanCard";
 import ManageModal from "./ManageModal";
 import CancelModal from "./CancelModal";
 import { createClient } from "@/lib/supabase/client";
+import TopupModal from "./TopupModal";
 
 const PLAN_LABELS = Object.fromEntries(PLANS.map(p => [p.id, p.name]));
 
@@ -69,6 +70,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [managingId, setManagingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [topupId, setTopupId] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -129,6 +131,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
         walletBalancePaise: sub.wallet_balance_rs != null ? sub.wallet_balance_rs * 100 : 0,
         deliveryAddress: '',
         createdAt: sub.created_at,
+        periodEndDate: sub.period_end_date,
       } as Subscription;
     });
 
@@ -272,6 +275,14 @@ export default function SubscriptionsClient({ bowls }: Props) {
                     >
                       Manage
                     </button>
+                    {sub.deliveryStyle === 'flexible' && (
+                      <button
+                        onClick={() => setTopupId(sub.id)}
+                        className="w-full bg-ink hover:bg-black text-white font-body text-[13px] font-bold py-2.5 rounded-md transition-colors shadow-sm"
+                      >
+                        Top up Wallet
+                      </button>
+                    )}
                     {paused ? (
                       <button
                         onClick={() => updateStatus(sub.id, "active")}
@@ -316,6 +327,13 @@ export default function SubscriptionsClient({ bowls }: Props) {
           onPause={() => updateStatus(cancellingSub.id, "paused")}
           onCancel={() => updateStatus(cancellingSub.id, "cancelled")}
           onClose={() => setCancellingId(null)}
+        />
+      )}
+
+      {topupId && subs.find(s => s.id === topupId) && (
+        <TopupModal
+          sub={subs.find(s => s.id === topupId)!}
+          onClose={() => setTopupId(null)}
         />
       )}
     </div>
