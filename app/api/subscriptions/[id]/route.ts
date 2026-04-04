@@ -99,3 +99,45 @@ export async function PATCH(
 
   return NextResponse.json({ success: true });
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+  }
+
+  // Only allow deleting pending or cancelled subscriptions owned by the user
+  const { data: subscription } = await adminSupabase
+    .from("subscriptions")
+    .select("status")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!subscription) {
+    return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
+  }
+
+  if (!["pending", "cancelled"].includes(subscription.status)) {
+    return NextResponse.json({ error: "Active subscriptions cannot be deleted" }, { status: 400 });
+  }
+
+  // Delete associated day configs first (to be safe, though DB should cascade)
+  await adminSupabase.from("subscription_day_configs").delete().eq("subscription_id", id);
+
+  const { error } = await adminSupabase.from("subscriptions").delete().eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: "Failed to delete subscription" }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}

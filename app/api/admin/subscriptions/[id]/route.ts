@@ -3,6 +3,8 @@ import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 import { sendBrevoEmail } from '@/lib/brevo';
 import { getNextDateForDayOfWeek, scheduleDeliveryDates } from '@/lib/subscription';
+import { buildSubscriptionQuote } from '@/lib/checkout-security';
+import { getAllBowls } from '@/lib/sanity';
 
 const ALLOWED_PAYMENT_STATUSES = new Set(['pending', 'paid', 'failed', 'refunded']);
 const ALLOWED_SUBSCRIPTION_STATUSES = new Set(['pending', 'active', 'paused', 'cancelled', 'expired']);
@@ -80,6 +82,36 @@ export async function PATCH(
 
   // 2. Run payment approval RPC FIRST, then commit paid status only on success
   if (payment_status === 'paid' && oldSub.payment_status !== 'paid') {
+    // RE-CALCULATE PRICING FOR PENDING SUBS AS REQUESTED BY USER
+    if (oldSub.status === 'pending') {
+      try {
+        const addrRecord = oldSub.addresses ? {
+          pincode: (oldSub.addresses as any).pincode,
+          lat: (oldSub.addresses as any).lat,
+          lng: (oldSub.addresses as any).lng
+        } : {};
+        
+        const dayConfigs = (oldSub.subscription_day_configs || []).map((c: any) => ({
+          bowlId: c.bowl_slug,
+          customizations: Array.isArray(c.customizations) ? c.customizations : []
+        }));
+
+        const quote = await buildSubscriptionQuote(oldSub.subscription_plans?.slug ?? oldSub.plan_id, addrRecord, dayConfigs);
+        
+        if (quote.totalAmountRs !== oldSub.total_amount_rs) {
+          console.log(`Updating pending sub ${id} total from ${oldSub.total_amount_rs} to ${quote.totalAmountRs}`);
+          await adminSupabase
+            .from('subscriptions')
+            .update({ total_amount_rs: quote.totalAmountRs })
+            .eq('id', id);
+          
+          oldSub.total_amount_rs = quote.totalAmountRs;
+        }
+      } catch (err) {
+        console.error("Failed to re-calculate price for pending sub:", err);
+      }
+    }
+
     const { data: approval, error: approvalError } = await adminSupabase.rpc('approve_subscription_payment', {
       p_subscription_id: id,
       p_payment_reference: payment_reference ?? null,
@@ -113,16 +145,17 @@ export async function PATCH(
         day: c.day_of_week,
         timeSlot: c.delivery_time_slot ?? oldSub.delivery_time_slot ?? null,
       }));
-      const dateMap = scheduleDeliveryDates(daySlugList);
+      const dateMap = scheduleDeliveryDates(daySlugList, true); // Admin override for same-day
 
       for (const config of oldSub.subscription_day_configs) {
         try {
           const deliveryDate = dateMap[config.day_of_week] ?? getNextDateForDayOfWeek(config.day_of_week);
           const bowls = [{
             bowl_slug: config.bowl_slug,
-            bowl_name: config.bowl_slug,
+            bowl_name: config.bowl_slug, // slug remains fallback name
             quantity: config.quantity,
-            unit_price: unitPrice
+            unit_price: unitPrice + (config.customization_cost_rs ?? 0),
+            customizations: config.customizations ?? []
           }];
 
           await adminSupabase.rpc('create_subscription_delivery', {

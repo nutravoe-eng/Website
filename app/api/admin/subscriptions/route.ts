@@ -13,14 +13,14 @@ export async function GET(req: NextRequest) {
   let query = adminSupabase
     .from('subscriptions')
     .select(`
-      id, style, status, start_date, end_date,
+      id, style, status, start_date, period_end_date,
       delivery_time_slot,
       total_amount_rs, payment_status, payment_reference, admin_notes,
       notes, created_at,
       users!inner ( id, full_name, phone, email ),
-      subscription_plans ( id, name, slug, price_per_bowl ),
-      addresses ( id, line1, line2, city, pincode ),
-      subscription_day_configs ( id, day_of_week, bowl_slug, quantity )
+      subscription_plans ( id, name, slug, price_near_per_bowl, price_far_per_bowl ),
+      addresses ( id, line1, line2, city, pincode, lat, lng ),
+      subscription_day_configs ( id, day_of_week, bowl_slug, quantity, customizations, customization_cost_rs )
     `)
     .order('created_at', { ascending: false });
 

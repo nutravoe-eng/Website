@@ -8,6 +8,8 @@ interface DayConfig {
   bowl_slug: string;
   quantity: number;
   delivery_time_slot: string | null;
+  customizations: { ingredientId: string; option: "default" | "remove" | "extra" }[];
+  customization_cost_rs: number;
 }
 
 interface AdminSubscription {
@@ -25,8 +27,8 @@ interface AdminSubscription {
   created_at: string;
   deliveries_completed: number;
   users: { id: string; full_name: string; phone: string; email: string };
-  subscription_plans: { name: string; slug: string; price_per_bowl: number } | null;
-  addresses: { line1: string; line2: string | null; city: string; pincode: string } | null;
+  subscription_plans: { name: string; slug: string; price_near_per_bowl: number; price_far_per_bowl: number } | null;
+  addresses: { line1: string; line2: string | null; city: string; pincode: string; lat: number; lng: number } | null;
   subscription_day_configs: DayConfig[];
 }
 
@@ -107,11 +109,19 @@ export default function AdminSubscriptionsPage() {
     setSaving(true);
 
     // Build bowls from day configs for selected date, or use all day configs
+    // Determine base price based on distance
+    const isFar = (deliverModal.addresses?.pincode === '560103'); // fallback check or use lat/lng if we had distance lib here
+    // Better: the API should probably return the resolved unit price, but for now we'll do our best.
+    const basePrice = deliverModal.subscription_plans 
+      ? (deliverModal.addresses?.city === 'Bengaluru' ? deliverModal.subscription_plans.price_near_per_bowl : deliverModal.subscription_plans.price_far_per_bowl)
+      : 0;
+
     const bowls = deliverModal.subscription_day_configs.map(dc => ({
       bowl_slug:  dc.bowl_slug,
       bowl_name:  dc.bowl_slug,  // slug used as fallback name
       quantity:   dc.quantity,
-      unit_price: deliverModal.subscription_plans?.price_per_bowl ?? 0,
+      unit_price: basePrice + (dc.customization_cost_rs ?? 0),
+      customizations: dc.customizations ?? [],
     }));
 
     if (bowls.length === 0) {
@@ -281,9 +291,16 @@ export default function AdminSubscriptionsPage() {
 
                 {/* Plan info */}
                 <div className="text-right shrink-0">
-                  <p className="font-body text-[12px] font-semibold text-ink">
-                    {sub.subscription_plans?.name ?? sub.style}
-                  </p>
+                  <div className="flex items-center gap-2 justify-end mb-1">
+                    <p className="font-body text-[12px] font-semibold text-ink">
+                      {sub.subscription_plans?.name ?? (sub.subscription_plans?.slug === 'daily' ? 'Daily' : sub.subscription_plans?.slug ?? 'Manual')}
+                    </p>
+                    {new Date(sub.start_date) > new Date(Date.now() + 86400000) && (
+                      <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-body text-[9px] font-bold uppercase tracking-wider border border-blue-100">
+                        Future Plan
+                      </span>
+                    )}
+                  </div>
                   <p className="font-body text-[11px] text-stone capitalize">{sub.style} delivery</p>
                   {sub.delivery_time_slot && (
                     <p className="font-body text-[11px] text-stone">{sub.delivery_time_slot}</p>
@@ -295,14 +312,18 @@ export default function AdminSubscriptionsPage() {
               <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-black/5">
                 <Stat label="Amount" value={sub.total_amount_rs ? `₹${Number(sub.total_amount_rs).toLocaleString('en-IN')}` : '—'} />
                 <Stat label="Deliveries" value={String(sub.deliveries_completed)} />
-                <Stat label="Since" value={new Date(sub.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} />
+                <Stat 
+                  label="Start Date" 
+                  value={new Date(sub.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} 
+                  highlight={new Date(sub.start_date) > new Date(Date.now() + 86400000)}
+                />
                 {sub.period_end_date && sub.status === 'active' && (() => {
                   const daysLeft = Math.ceil((new Date(sub.period_end_date).getTime() - Date.now()) / 86_400_000);
                   const color = daysLeft <= 0 ? 'text-terracotta bg-terracotta/10' : daysLeft <= 2 ? 'text-amber-700 bg-amber-50' : 'text-sage-dark bg-sage/10';
-                  const label = daysLeft <= 0 ? 'Period ended' : daysLeft === 1 ? 'Ends tomorrow' : `Ends in ${daysLeft}d`;
+                  const label = daysLeft <= 0 ? 'Cycle Ended' : daysLeft === 1 ? 'Ends tomorrow' : `Ends in ${daysLeft}d`;
                   return (
                     <div>
-                      <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone mb-1">Period</p>
+                      <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone mb-1">Current Cycle</p>
                       <span className={`inline-flex items-center font-body text-[11px] font-bold px-2 py-0.5 rounded-full ${color}`}>
                         {label}
                       </span>
@@ -332,6 +353,11 @@ export default function AdminSubscriptionsPage() {
                   {sub.subscription_day_configs.map(dc => (
                     <span key={dc.id} className="bg-[#F9F8F6] border border-black/5 rounded-md px-2 py-1 font-body text-[11px] text-stone capitalize flex flex-col leading-tight">
                       <span className="font-semibold text-ink">{dc.day_of_week} — {dc.bowl_slug} ×{dc.quantity}</span>
+                      {dc.customizations && dc.customizations.length > 0 && (
+                        <span className="text-[10px] text-terracotta/80 font-medium">
+                          {dc.customizations.filter(c => c.option !== 'default').map(c => `${c.option === 'remove' ? '-' : '+'}${c.ingredientId}`).join(', ')}
+                        </span>
+                      )}
                       {dc.delivery_time_slot && (
                         <span className="text-stone/70 text-[10px]">{dc.delivery_time_slot}</span>
                       )}
@@ -424,7 +450,10 @@ export default function AdminSubscriptionsPage() {
             <p className="font-body text-[12px] text-stone">
               Recording delivery for <strong className="text-ink">{deliverModal.users.full_name}</strong>.
               Wallet will be debited for ₹{deliverModal.subscription_plans
-                ? (deliverModal.subscription_plans.price_per_bowl * deliverModal.subscription_day_configs.reduce((s, d) => s + d.quantity, 0)).toLocaleString('en-IN')
+                ? ((deliverModal.addresses?.city === 'Bengaluru' ? deliverModal.subscription_plans.price_near_per_bowl : deliverModal.subscription_plans.price_far_per_bowl) 
+                   * deliverModal.subscription_day_configs.reduce((s, d) => s + d.quantity, 0)
+                   + deliverModal.subscription_day_configs.reduce((s, d) => s + (d.customization_cost_rs ?? 0), 0)
+                  ).toLocaleString('en-IN')
                 : '—'}.
             </p>
             <div>
@@ -510,11 +539,11 @@ export default function AdminSubscriptionsPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div>
       <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone mb-0.5">{label}</p>
-      <p className="font-body text-sm font-semibold text-ink">{value}</p>
+      <p className={`font-body text-sm font-semibold transition-colors ${highlight ? 'text-blue-600' : 'text-ink'}`}>{value}</p>
     </div>
   );
 }

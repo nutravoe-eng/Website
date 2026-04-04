@@ -127,7 +127,8 @@ function canDeliverTodayForSlot(currentHour: number, slotHour: number | null): b
  * is still 3 hours away with a 2-hour buffer.
  */
 export function scheduleDeliveryDates(
-  dayConfigs: Array<{ day: string; timeSlot?: string | null }>
+  dayConfigs: Array<{ day: string; timeSlot?: string | null }>,
+  forceToday: boolean = false
 ): Record<string, string> {
   const DAY_INDEX: Record<string, number> = {
     sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
@@ -150,7 +151,7 @@ export function scheduleDeliveryDates(
 
     if (targetIdx === todayIdx) {
       // This delivery day is today — check if slot is still achievable
-      if (canDeliverTodayForSlot(currentHour, slotHour)) {
+      if (forceToday || canDeliverTodayForSlot(currentHour, slotHour)) {
         daysToAdd = 0; // deliver today
       } else {
         daysToAdd = 7; // today's window passed — next occurrence is next week

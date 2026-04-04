@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { adminSupabase } from "@/lib/supabase/admin";
-import { buildSubscriptionQuote } from "@/lib/checkout-security";
+import { buildSubscriptionQuote, getCustomizationUpcharge } from "@/lib/checkout-security";
+import { getAllBowls } from "@/lib/sanity";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
 type DayConfigInput = {
   day: string;
   bowlId: string;
   quantity: number;
-  customizations?: Array<{ ingredientId: string; option: string }>;
+  customizations?: Array<{ ingredientId: string; option: "default" | "remove" | "extra" }>;
   deliveryTimeSlot?: string;
 };
 
@@ -33,12 +34,7 @@ function normalizeDayConfigDay(day: string): string | null {
   return DAY_NAME_TO_ENUM[day] ?? null;
 }
 
-function countCustomisedBowls(dayConfigs: DayConfigInput[]): number {
-  return dayConfigs.reduce((sum, config) => {
-    const hasCustomizations = Array.isArray(config.customizations) && config.customizations.some((item) => item?.option === "extra" || item?.option === "remove");
-    return sum + (hasCustomizations ? 1 : 0);
-  }, 0);
-}
+
 
 export async function POST(req: NextRequest) {
   const limited = await enforceRateLimit(req, "subscription-create", 5, 60);
@@ -58,6 +54,7 @@ export async function POST(req: NextRequest) {
   const deliveryStyle = typeof body?.deliveryStyle === "string" ? body.deliveryStyle : "";
   const deliveryTimeSlot = typeof body?.deliveryTimeSlot === "string" ? body.deliveryTimeSlot.trim() : "";
   const dayConfigs = Array.isArray(body?.dayConfigs) ? body.dayConfigs as DayConfigInput[] : [];
+  const requestedStartDate = typeof body?.startDate === "string" ? body.startDate : null;
 
   if (!planId || !["spread", "flexible"].includes(deliveryStyle)) {
     return NextResponse.json({ error: "Invalid subscription request" }, { status: 400, headers: limited.headers });
@@ -86,17 +83,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Invalid delivery day: "${invalidDay.day}". Use Mon, Tue, Wed, Thu, Fri, Sat, or Sun.` }, { status: 400, headers: limited.headers });
   }
 
-  const { data: existingActive } = await adminSupabase
+  // Check for existing subscriptions
+  const { data: existingSubs } = await adminSupabase
     .from("subscriptions")
-    .select("id")
+    .select("id, status, period_end_date")
     .eq("user_id", user.id)
-    .in("status", ["active", "pending"])
-    .limit(1)
-    .maybeSingle();
+    .in("status", ["active", "pending"]);
 
-  if (existingActive) {
-    return NextResponse.json({ error: "You already have an active or pending subscription" }, { status: 409, headers: limited.headers });
+  if (existingSubs && existingSubs.length > 0) {
+    // If there's already a pending one, block. User must discard first.
+    if (existingSubs.some(s => s.status === 'pending')) {
+      return NextResponse.json({ error: "You already have a pending subscription request. Please discard it before starting a new one." }, { status: 409, headers: limited.headers });
+    }
+
+    // If there's an active one, check for overlap
+    const activeSub = existingSubs.find(s => s.status === 'active');
+    if (activeSub && activeSub.period_end_date) {
+      if (!requestedStartDate) {
+        return NextResponse.json({ error: "You already have an active subscription. To schedule a new one, please provide a start date after the current period ends." }, { status: 409, headers: limited.headers });
+      }
+
+      const activeEnd = new Date(activeSub.period_end_date);
+      const newStart = new Date(requestedStartDate);
+      if (newStart <= activeEnd) {
+        return NextResponse.json({ error: `Your new subscription must start after your current one ends (after ${activeSub.period_end_date}).` }, { status: 409, headers: limited.headers });
+      }
+    } else if (activeSub) {
+      // Active but no period_end_date (edge case for manual subs)
+      return NextResponse.json({ error: "You already have an active subscription." }, { status: 409, headers: limited.headers });
+    }
   }
+
+  // Determine actual start date
+  // If not provided, use tomorrow (standard for first-time)
+  const finalStartDate = requestedStartDate || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   const { data: address, error: addressError } = await adminSupabase
     .from("addresses")
@@ -122,8 +142,9 @@ export async function POST(req: NextRequest) {
 
   let quote;
   try {
-    quote = await buildSubscriptionQuote(planId, address, countCustomisedBowls(dayConfigs));
-  } catch {
+    quote = await buildSubscriptionQuote(planId, address, dayConfigs);
+  } catch (e) {
+    console.error("Quote error:", e);
     return NextResponse.json({ error: "Unable to price this subscription" }, { status: 400, headers: limited.headers });
   }
 
@@ -136,7 +157,7 @@ export async function POST(req: NextRequest) {
       style: deliveryStyle,
       billing_cycle: quote.billingCycle,
       status: "pending",
-      start_date: nowIso,
+      start_date: finalStartDate,
       delivery_time_slot: deliveryStyle !== "flexible" ? deliveryTimeSlot : null,
       wallet_balance_rs: 0,
       total_amount_rs: quote.totalAmountRs,
@@ -152,11 +173,17 @@ export async function POST(req: NextRequest) {
   }
 
   if (dayConfigs.length > 0) {
+    const allBowls = await getAllBowls();
+    const bowlMap = new Map(allBowls.map(b => [b.slug, b]));
+
     const configRows = dayConfigs.map((config) => {
       const normalizedDay = normalizeDayConfigDay(config.day);
       if (!normalizedDay) {
         throw new Error(`Invalid delivery day: ${config.day}`);
       }
+
+      const bowl = bowlMap.get(config.bowlId);
+      const extraCost = bowl ? getCustomizationUpcharge(bowl, (config.customizations as any)) : 0;
 
       return {
         subscription_id: subscription.id,
@@ -165,6 +192,7 @@ export async function POST(req: NextRequest) {
         quantity: Math.max(1, Math.trunc(config.quantity)),
         delivery_time_slot: config.deliveryTimeSlot ?? null,
         customizations: config.customizations ?? [],
+        customization_cost_rs: extraCost,
       };
     });
 

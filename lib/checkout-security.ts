@@ -97,7 +97,7 @@ function summarizeCustomizations(
   };
 }
 
-function getCustomizationUpcharge(bowl: Bowl, customizations: IngredientCustomization[] | undefined): number {
+export function getCustomizationUpcharge(bowl: Bowl, customizations: IngredientCustomization[] | undefined): number {
   const list = customizations ?? [];
   return list
     .filter((item) => item.option === "extra")
@@ -164,18 +164,45 @@ export async function buildAuthoritativeOrder(
 export async function buildSubscriptionQuote(
   planSlug: string,
   address: AddressForPricing,
-  customisedBowlCount: number,
-): Promise<{ billingCycle: "weekly" | "monthly"; perBowl: number; bowlsPerCycle: number; totalAmountRs: number; customisationChargePerBowl: number }> {
-  const [plans, nearZone] = await Promise.all([getSubscriptionPlans(), isNearZoneAddress(address)]);
+  dayConfigs: { bowlId: string; customizations?: IngredientCustomization[] }[],
+): Promise<{ 
+  billingCycle: "weekly" | "monthly"; 
+  perBowl: number; 
+  bowlsPerCycle: number; 
+  totalAmountRs: number; 
+  customisationChargePerBowl: number;
+  totalIngredientExtrasRs: number;
+}> {
+  const [plans, bowls, nearZone] = await Promise.all([
+    getSubscriptionPlans(),
+    getAllBowls(),
+    isNearZoneAddress(address)
+  ]);
+  
   const plan = getPlanBySlug(plans, planSlug);
-
   if (!plan) {
     throw new Error(`Unknown subscription plan: ${planSlug}`);
   }
 
+  const bowlMap = new Map(bowls.map((b) => [b.slug, b]));
   const perBowl = nearZone ? plan.priceNearPerBowl : plan.priceFarPerBowl;
   const customisationChargePerBowl = plan.customisationChargePerBowl ?? 0;
-  const totalAmountRs = (perBowl * plan.bowlsPerCycle) + (customisedBowlCount * customisationChargePerBowl);
+  
+  let totalIngredientExtrasRs = 0;
+  let customisedBowlCount = 0;
+
+  for (const config of dayConfigs) {
+    const bowl = bowlMap.get(config.bowlId);
+    if (!bowl) continue;
+
+    const hasCustomizations = (config.customizations?.length ?? 0) > 0;
+    if (hasCustomizations) {
+      customisedBowlCount++;
+      totalIngredientExtrasRs += getCustomizationUpcharge(bowl, config.customizations);
+    }
+  }
+
+  const totalAmountRs = (perBowl * plan.bowlsPerCycle) + (customisedBowlCount * customisationChargePerBowl) + totalIngredientExtrasRs;
 
   return {
     billingCycle: plan.billingCycle,
@@ -183,5 +210,6 @@ export async function buildSubscriptionQuote(
     bowlsPerCycle: plan.bowlsPerCycle,
     totalAmountRs,
     customisationChargePerBowl,
+    totalIngredientExtrasRs,
   };
 }

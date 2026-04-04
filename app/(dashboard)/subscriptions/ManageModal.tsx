@@ -135,43 +135,16 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
         {/* Scrollable body */}
         <div className="overflow-y-auto p-6 space-y-6 flex-1">
 
-          {/* ── Delivery Type ─────────────────────────────────── */}
-          <div>
-            <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-3">Delivery Type</p>
-            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Delivery Type">
-              <button
-                onClick={() => switchStyle('spread')}
-                role="radio"
-                aria-checked={edit.deliveryStyle === 'spread'}
-                className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${
-                  edit.deliveryStyle === 'spread' ? 'border-sage bg-sage/10' : 'border-black/10 hover:border-sage/40'
-                }`}
-              >
-                <div className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${edit.deliveryStyle === 'spread' ? 'border-sage' : 'border-stone/40'}`}>
-                  {edit.deliveryStyle === 'spread' && <div className="w-2 h-2 rounded-full bg-sage" />}
-                </div>
-                <div>
-                  <p className="font-body text-[13px] font-semibold text-ink">Spread across the week</p>
-                  <p className="font-body text-[11px] text-stone">Pick specific delivery days</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => switchStyle('flexible')}
-                role="radio"
-                aria-checked={edit.deliveryStyle === 'flexible'}
-                className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${
-                  edit.deliveryStyle === 'flexible' ? 'border-terracotta bg-terracotta/5' : 'border-black/10 hover:border-terracotta/40'
-                }`}
-              >
-                <div className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${edit.deliveryStyle === 'flexible' ? 'border-terracotta' : 'border-stone/40'}`}>
-                  {edit.deliveryStyle === 'flexible' && <div className="w-2 h-2 rounded-full bg-terracotta" />}
-                </div>
-                <div>
-                  <p className="font-body text-[13px] font-semibold text-ink">Flexible — Wallet</p>
-                  <p className="font-body text-[11px] text-stone">Pay now, schedule freely all week</p>
-                </div>
-              </button>
+          {/* ── Delivery Type (LOCKED) ───────────────────────── */}
+          <div className="flex items-center justify-between p-4 bg-[#F9F8F6] border border-black/5 rounded-xl">
+            <div>
+              <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-0.5">Delivery Style</p>
+              <p className="font-body text-sm font-semibold text-ink">
+                {edit.deliveryStyle === 'spread' ? 'Spread across the week' : 'Flexible — Wallet'}
+              </p>
+            </div>
+            <div className={`px-2.5 py-1 rounded-full font-body text-[10px] font-bold uppercase tracking-widest ${edit.deliveryStyle === 'spread' ? 'bg-sage/10 text-sage' : 'bg-terracotta/10 text-terracotta'}`}>
+              Fixed
             </div>
           </div>
 

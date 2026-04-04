@@ -132,6 +132,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
         deliveryAddress: '',
         createdAt: sub.created_at,
         periodEndDate: sub.period_end_date,
+        deliveriesCompleted: sub.deliveries_completed ?? 0,
       } as Subscription;
     });
 
@@ -157,6 +158,21 @@ export default function SubscriptionsClient({ bowls }: Props) {
     }
 
     setSubs(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+  }
+
+  async function handleDiscard(id: string) {
+    if (!confirm('Are you sure you want to discard this request? This will permanently delete your configuration.')) return;
+    
+    const res = await fetch(`/api/subscriptions/${id}`, {
+      method: 'DELETE',
+    });
+
+    if (!res.ok) {
+      setError('Failed to discard request. Please try again.');
+      return;
+    }
+
+    setSubs(prev => prev.filter(s => s.id !== id));
   }
 
   async function handleManageSave(updated: Subscription) {
@@ -214,6 +230,31 @@ export default function SubscriptionsClient({ bowls }: Props) {
         </Link>
       </div>
 
+      {activeSubs.some(s => s.status === 'active' && s.periodEndDate && (Math.ceil((new Date(s.periodEndDate).getTime() - Date.now()) / 86400000) <= 2)) && (
+        <div className="mb-8 p-6 bg-sage/10 border border-sage/20 rounded-2xl animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-display text-lg font-medium text-sage-dark mb-1">Your plan is ending soon!</h3>
+              <p className="font-body text-[13px] text-stone">Renew now to keep your healthy habit going without any break.</p>
+            </div>
+            <div className="flex gap-3">
+              <Link
+                href="/subscribe"
+                className="px-5 py-2.5 bg-sage hover:bg-sage-dark text-white rounded-md font-body text-[13px] font-bold transition-colors shadow-sm"
+              >
+                Change My Plan
+              </Link>
+              <button
+                onClick={() => window.open(`https://wa.me/91XXXXXXXXXX?text=${encodeURIComponent("Hi Nutravoe, I want to renew my current subscription for the next cycle.")}`, "_blank")}
+                className="px-5 py-2.5 border border-sage/30 text-sage-dark hover:bg-sage/5 rounded-md font-body text-[13px] font-bold transition-colors"
+              >
+                Renew via WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeSubs.length === 0 ? (
         <div className="text-center py-12 px-4 bg-black/5 rounded-xl border border-black/5 border-dashed">
           <p className="font-body text-[14px] text-stone mb-4">You have no active subscriptions.</p>
@@ -231,9 +272,9 @@ export default function SubscriptionsClient({ bowls }: Props) {
             return (
               <div
                 key={sub.id}
-                className={`bg-white rounded-xl overflow-hidden shadow-sm relative transition-all duration-300 ${paused ? "border border-stone/30 opacity-80" : "border border-sage/30"}`}
+                className={`bg-white rounded-xl overflow-hidden shadow-sm relative transition-all duration-300 ${paused ? "border border-stone/30 opacity-80" : (sub.status === 'pending' ? "border border-terracotta/30" : "border border-sage/30")}`}
               >
-                <div className={`absolute top-0 left-0 w-1.5 h-full ${paused ? "bg-stone/50" : "bg-sage"}`} />
+                <div className={`absolute top-0 left-0 w-1.5 h-full ${paused ? "bg-stone/50" : (sub.status === 'pending' ? "bg-terracotta" : "bg-sage")}`} />
 
                 <div className="p-6 md:p-8 flex flex-col md:flex-row md:items-start justify-between gap-6">
                   <div className="flex gap-5 items-start">
@@ -247,8 +288,8 @@ export default function SubscriptionsClient({ bowls }: Props) {
                         <h3 className="font-display text-xl font-medium text-ink">
                           {PLAN_LABELS[sub.planId] ?? sub.planId}
                         </h3>
-                        <span className={`px-2.5 py-0.5 rounded-full font-body text-[10px] font-bold uppercase tracking-widest ${paused ? "bg-stone/10 text-stone" : "bg-sage/10 text-sage"}`}>
-                          {sub.status}
+                        <span className={`px-2.5 py-0.5 rounded-full font-body text-[10px] font-bold uppercase tracking-widest ${paused ? "bg-stone/10 text-stone" : (sub.status === 'pending' ? "bg-terracotta/10 text-terracotta" : "bg-sage/10 text-sage")}`}>
+                          {sub.status === 'pending' ? 'Pending Activation' : sub.status}
                         </span>
                       </div>
                       <p className="font-body text-[13px] text-stone mb-1">
@@ -265,44 +306,73 @@ export default function SubscriptionsClient({ bowls }: Props) {
                           <span className="font-semibold">{nextDeliveryLabel(sub.nextDelivery)}</span>
                         </p>
                       )}
+
+                      {sub.status === 'active' && sub.deliveriesCompleted !== undefined && (
+                        <div className="mt-4 pt-4 border-t border-black/5 max-w-[200px]">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-body text-[11px] font-bold text-stone uppercase tracking-wider">Usage Progress</span>
+                            <span className="font-body text-[11px] font-bold text-ink">{sub.deliveriesCompleted} bowls consumed</span>
+                          </div>
+                          <div className="h-1 bg-black/5 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-sage transition-all duration-500" 
+                              style={{ width: `${Math.min(100, (sub.deliveriesCompleted / (sub.planId === 'daily' ? 1 : (sub.planId === 'five-bowl' ? 5 : 3))) * 100)}%` }} 
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex flex-col gap-2 min-w-[150px]">
-                    <button
-                      onClick={() => setManagingId(sub.id)}
-                      className="w-full bg-sage hover:bg-sage-dark text-white font-body text-[13px] font-bold py-2.5 rounded-md transition-colors shadow-sm"
-                    >
-                      Manage
-                    </button>
-                    {sub.deliveryStyle === 'flexible' && (
+                    {sub.status === 'pending' ? (
                       <button
-                        onClick={() => setTopupId(sub.id)}
-                        className="w-full bg-ink hover:bg-black text-white font-body text-[13px] font-bold py-2.5 rounded-md transition-colors shadow-sm"
+                        onClick={() => window.open(`https://wa.me/91XXXXXXXXXX?text=${encodeURIComponent("Hi Nutravoe, following up on my subscription request (#NV-" + sub.id.slice(0, 4).toUpperCase() + "). Please let me know the activation status.")}`, "_blank")}
+                        className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-body text-[13px] font-bold py-2.5 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
                       >
-                        Top up Wallet
-                      </button>
-                    )}
-                    {paused ? (
-                      <button
-                        onClick={() => updateStatus(sub.id, "active")}
-                        className="w-full bg-ink hover:bg-black text-white font-body text-[13px] font-bold py-2.5 rounded-md transition-colors shadow-sm"
-                      >
-                        Resume Deliveries
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                        </svg>
+                        Resend WhatsApp
                       </button>
                     ) : (
-                      <button
-                        onClick={() => updateStatus(sub.id, "paused")}
-                        className="w-full border border-black/10 hover:bg-[#F9F8F6] text-ink font-body text-[13px] font-medium py-2.5 rounded-md transition-colors"
-                      >
-                        Pause
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setManagingId(sub.id)}
+                          className="w-full bg-sage hover:bg-sage-dark text-white font-body text-[13px] font-bold py-2.5 rounded-md transition-colors shadow-sm"
+                        >
+                          Manage
+                        </button>
+                        {sub.deliveryStyle === 'flexible' && (
+                          <button
+                            onClick={() => setTopupId(sub.id)}
+                            className="w-full bg-ink hover:bg-black text-white font-body text-[13px] font-bold py-2.5 rounded-md transition-colors shadow-sm"
+                          >
+                            Top up Wallet
+                          </button>
+                        )}
+                        {paused ? (
+                          <button
+                            onClick={() => updateStatus(sub.id, "active")}
+                            className="w-full bg-ink hover:bg-black text-white font-body text-[13px] font-bold py-2.5 rounded-md transition-colors shadow-sm"
+                          >
+                            Resume Deliveries
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => updateStatus(sub.id, "paused")}
+                            className="w-full border border-black/10 hover:bg-[#F9F8F6] text-ink font-body text-[13px] font-medium py-2.5 rounded-md transition-colors"
+                          >
+                            Pause
+                          </button>
+                        )}
+                      </>
                     )}
                     <button
-                      onClick={() => setCancellingId(sub.id)}
+                      onClick={() => sub.status === 'pending' ? handleDiscard(sub.id) : setCancellingId(sub.id)}
                       className="text-stone hover:text-terracotta font-body text-[12px] font-medium transition-colors mt-1 text-left"
                     >
-                      Cancel Plan
+                      {sub.status === 'pending' ? 'Discard Request' : 'Cancel Plan'}
                     </button>
                   </div>
                 </div>

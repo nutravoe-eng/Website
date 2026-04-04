@@ -93,6 +93,8 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   const [pendingApproval, setPendingApproval] = useState(false);
   const [flexibleWhatsAppUrl, setFlexibleWhatsAppUrl] = useState<string | null>(null);
   const [hasActiveSub, setHasActiveSub] = useState(false);
+  const [activeSubEndDate, setActiveSubEndDate] = useState<string | null>(null);
+  const [isRenewalFlow, setIsRenewalFlow] = useState(false);
 
   // Convert Sanity plans to PlanConfig using distance-based pricing
   const plans: PlanConfig[] = sanityPlans
@@ -137,13 +139,26 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
       // Check for active or pending subscription
       const { data: activeSub } = await supabase
         .from('subscriptions')
-        .select('id')
+        .select('id, status, period_end_date')
         .eq('user_id', authUser.id)
         .in('status', ['active', 'pending'])
-        .limit(1)
         .maybeSingle();
 
-      if (activeSub) setHasActiveSub(true);
+      if (activeSub) {
+        if (activeSub.status === 'pending') {
+          setHasActiveSub(true); // Still treat pending as "blocked" unless they discard
+        } else if (activeSub.status === 'active') {
+          const endDate = activeSub.period_end_date;
+          setActiveSubEndDate(endDate);
+          
+          const daysLeft = endDate ? Math.ceil((new Date(endDate).getTime() - Date.now()) / 86400000) : 99;
+          if (daysLeft > 2) {
+            setHasActiveSub(true);
+          } else {
+            setIsRenewalFlow(true);
+          }
+        }
+      }
 
       // Load default delivery address from Supabase
       const { data: addresses } = await supabase
@@ -370,9 +385,11 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         // For flexible, store the URL and let the user click it directly
         // (window.open after async/await is blocked by pop-up blockers)
         setFlexibleWhatsAppUrl(waUrl);
+        setFlexibleWhatsAppUrl(waUrl);
       } else {
+        // Universal flow for all other plans: open WhatsApp and show Pending screen
         window.open(waUrl, "_blank", "noopener,noreferrer");
-        setSuccess(true);
+        setPendingApproval(true);
       }
     } catch {
       setError('Something went wrong while creating your subscription. Please try again.');
@@ -432,6 +449,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           customizations: config.customizations ?? [],
           deliveryTimeSlot: config.deliveryTimeSlot,
         })),
+        startDate: activeSubEndDate ? new Date(new Date(activeSubEndDate).getTime() + 86400000).toISOString().split('T')[0] : null,
       }),
     });
 
@@ -551,57 +569,44 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   // ─── Pending approval screen (flexible wallet) ───────────────────────────────
 
   if (pendingApproval && currentPlan) {
+    const waUrl = flexibleWhatsAppUrl;
     return (
       <div className="max-w-lg mx-auto">
         <div className="bg-white rounded-2xl border border-black/10 p-10 text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] animate-in zoom-in-95 duration-400">
           <div className="w-16 h-16 rounded-full bg-terracotta/10 flex items-center justify-center mx-auto mb-6">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C4714A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
+              <path d="M22 2L11 13"/><path d="m22 2-7 20-4-9-9-4Z"/>
             </svg>
           </div>
-          <h2 className="font-display text-3xl font-medium text-ink mb-3">Request sent!</h2>
-          <p className="font-body text-[14px] text-stone leading-relaxed mb-2">
-            Your <strong className="text-ink">{currentPlan.name}</strong> wallet request has been sent via WhatsApp.
+          <h2 className="font-display text-3xl font-medium text-ink mb-3">Request Sent!</h2>
+          <p className="font-body text-[14px] text-stone leading-relaxed mb-6">
+            Your <strong className="text-ink">{currentPlan.name}</strong> request is waiting for activation. Please send the WhatsApp message to our team to confirm your subscription.
           </p>
-          <p className="font-body text-[13px] text-stone mb-8">
-            Your plan will become active once it has been approved. You'll hear from us shortly.
-          </p>
-          <Link
-            href="/subscriptions"
-            className="bg-terracotta hover:bg-[#D55F43] text-white font-body text-sm font-bold tracking-wide px-8 py-3 rounded-md transition-colors shadow-sm inline-block"
-          >
-            View My Subscription
-          </Link>
-        </div>
-      </div>
-    );
-  }
+          
+          <div className="space-y-4">
+            {waUrl && (
+              <button
+                onClick={() => window.open(waUrl, "_blank")}
+                className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                Send Request on WhatsApp
+              </button>
+            )}
 
-  // ─── Success screen ───────────────────────────────────────────────────────────
-
-  if (success && currentPlan) {
-    return (
-      <div className="max-w-lg mx-auto">
-        <div className="bg-white rounded-2xl border border-sage/20 p-10 text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] animate-in zoom-in-95 duration-400">
-          <div className="w-16 h-16 rounded-full bg-sage/10 flex items-center justify-center mx-auto mb-6">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7D9B76" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
+            <Link
+              href="/subscriptions"
+              className="block w-full text-stone hover:text-ink font-body text-[13px] font-medium py-2 transition-colors border border-black/5 rounded-md hover:bg-black/5"
+            >
+              Go to My Subscriptions →
+            </Link>
           </div>
-          <h2 className="font-display text-3xl font-medium text-ink mb-3">You're subscribed!</h2>
-          <p className="font-body text-[14px] text-stone leading-relaxed mb-2">
-            Your <strong className="text-ink">{currentPlan.name}</strong> plan is now active.
+          
+          <p className="font-body text-[12px] text-stone mt-6 italic">
+            Once approved, your plan will appear as "Active" in your dashboard.
           </p>
-          <p className="font-body text-[13px] text-stone mb-8">
-            First delivery arrives tomorrow.
-          </p>
-          <Link
-            href="/subscriptions"
-            className="bg-sage hover:bg-sage-dark text-white font-body text-sm font-bold tracking-wide px-8 py-3 rounded-md transition-colors shadow-sm inline-block"
-          >
-            View My Subscription
-          </Link>
         </div>
       </div>
     );
@@ -637,6 +642,22 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   if (state.step === 1) {
     return (
       <div className="max-w-3xl mx-auto">
+        {isRenewalFlow && (
+          <div className="mb-8 p-6 bg-sage/10 border border-sage/20 rounded-2xl animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-full bg-sage/20 flex items-center justify-center shrink-0 mt-0.5">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7D9B76" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+              </div>
+              <div>
+                <h3 className="font-display text-lg font-medium text-sage-dark mb-1">Plan Transition Mode</h3>
+                <p className="font-body text-[13px] text-stone leading-relaxed">
+                  You have an active plan ending on <strong className="text-ink">{activeSubEndDate}</strong>. 
+                  Your new selection will be scheduled to start automatically the very next day.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         <StepIndicator />
 
         <h2 className="font-display text-xl font-medium text-ink mb-6 text-center">Choose your plan</h2>
@@ -690,6 +711,22 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             </p>
           </div>
           <StepIndicator />
+
+          {isRenewalFlow && (
+            <div className="mb-8 p-5 bg-sage/10 border border-sage/20 rounded-xl animate-in fade-in slide-in-from-top-2 duration-500">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-sage/20 flex items-center justify-center shrink-0 mt-0.5">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7D9B76" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                </div>
+                <div>
+                  <p className="font-body text-[13px] font-bold text-sage-dark">Transitioning to next cycle</p>
+                  <p className="font-body text-[11px] text-stone leading-relaxed">
+                    Setting up your next plan to start on <strong className="text-ink">{activeSubEndDate ? new Date(new Date(activeSubEndDate).getTime() + 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '...'}</strong>.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <h2 className="font-display text-xl font-medium text-ink mb-6 text-center">
             {scenario === 'D' ? 'How your wallet works'
