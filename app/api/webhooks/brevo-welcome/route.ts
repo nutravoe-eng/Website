@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
         to: [{ email: newRecord.email, name: resolvedName }],
         templateId: Number(process.env.BREVO_WELCOME_TEMPLATE_ID),
         params: {
-          name: resolvedName, // Use {{ params.name }} in your Brevo template
+          user_name: resolvedName, // {{ params.user_name }} in Brevo template
         },
       }),
     });
