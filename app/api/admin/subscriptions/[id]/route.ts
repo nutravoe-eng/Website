@@ -47,13 +47,15 @@ export async function PATCH(
   }
 
   // Pre-fetch old subscription to detect status changes for emails and get configs for auto-generation
+  // NOTE: we also join addresses so the re-pricing step uses the correct delivery zone.
   const { data: oldSub } = await adminSupabase
     .from('subscriptions')
     .select(`
       *,
       users:user_id (email, full_name),
-      subscription_plans:plan_id (name, price_per_bowl),
-      subscription_day_configs (*)
+      subscription_plans:plan_id (name, price_per_bowl, slug),
+      subscription_day_configs (*),
+      addresses:delivery_address_id (pincode, lat, lng)
     `)
     .eq('id', id)
     .single();
@@ -82,34 +84,34 @@ export async function PATCH(
 
   // 2. Run payment approval RPC FIRST, then commit paid status only on success
   if (payment_status === 'paid' && oldSub.payment_status !== 'paid') {
-    // RE-CALCULATE PRICING FOR PENDING SUBS AS REQUESTED BY USER
-    if (oldSub.status === 'pending') {
-      try {
-        const addrRecord = oldSub.addresses ? {
-          pincode: (oldSub.addresses as any).pincode,
-          lat: (oldSub.addresses as any).lat,
-          lng: (oldSub.addresses as any).lng
-        } : {};
-        
-        const dayConfigs = (oldSub.subscription_day_configs || []).map((c: any) => ({
-          bowlId: c.bowl_slug,
-          customizations: Array.isArray(c.customizations) ? c.customizations : []
-        }));
+    // RE-CALCULATE PRICING — always recompute before crediting the wallet
+    // so total_amount_rs reflects the real payable amount including ingredient extras.
+    // addresses is now joined above, so zone detection is accurate.
+    try {
+      const addr = oldSub.addresses as any;
+      const addrRecord = addr
+        ? { pincode: addr.pincode ?? null, lat: addr.lat ?? null, lng: addr.lng ?? null }
+        : {};
 
-        const quote = await buildSubscriptionQuote(oldSub.subscription_plans?.slug ?? oldSub.plan_id, addrRecord, dayConfigs);
-        
-        if (quote.totalAmountRs !== oldSub.total_amount_rs) {
-          console.log(`Updating pending sub ${id} total from ${oldSub.total_amount_rs} to ${quote.totalAmountRs}`);
-          await adminSupabase
-            .from('subscriptions')
-            .update({ total_amount_rs: quote.totalAmountRs })
-            .eq('id', id);
-          
-          oldSub.total_amount_rs = quote.totalAmountRs;
-        }
-      } catch (err) {
-        console.error("Failed to re-calculate price for pending sub:", err);
+      const planSlug = (oldSub.subscription_plans as any)?.slug ?? oldSub.plan_id;
+      const dayConfigs = (oldSub.subscription_day_configs || []).map((c: any) => ({
+        bowlId: c.bowl_slug,
+        customizations: Array.isArray(c.customizations) ? c.customizations : [],
+      }));
+
+      const quote = await buildSubscriptionQuote(planSlug, addrRecord, dayConfigs);
+
+      if (quote.totalAmountRs !== oldSub.total_amount_rs) {
+        console.log(`Correcting sub ${id} total_amount_rs: ${oldSub.total_amount_rs} → ${quote.totalAmountRs}`);
+        await adminSupabase
+          .from('subscriptions')
+          .update({ total_amount_rs: quote.totalAmountRs })
+          .eq('id', id);
+        oldSub.total_amount_rs = quote.totalAmountRs;
       }
+    } catch (err) {
+      console.error('Failed to recompute quote before approval:', err);
+      // Non-fatal: proceed with stored total_amount_rs
     }
 
     const { data: approval, error: approvalError } = await adminSupabase.rpc('approve_subscription_payment', {
@@ -136,7 +138,7 @@ export async function PATCH(
 
     // --- SPREAD AUTOGENERATION LOGIC ---
     if (oldSub.style === 'spread' && Array.isArray(oldSub.subscription_day_configs) && oldSub.subscription_day_configs.length > 0) {
-      const unitPrice = oldSub.subscription_plans?.price_per_bowl ?? 0;
+      const unitPrice = (oldSub.subscription_plans as any)?.price_per_bowl ?? 0;
 
       // Compute all delivery dates together with rolling-window cutoff logic.
       // This ensures a Monday approved at 10 PM skips Monday and starts from Tuesday,
@@ -152,9 +154,10 @@ export async function PATCH(
           const deliveryDate = dateMap[config.day_of_week] ?? getNextDateForDayOfWeek(config.day_of_week);
           const bowls = [{
             bowl_slug: config.bowl_slug,
-            bowl_name: config.bowl_slug, // slug remains fallback name
+            bowl_name: config.bowl_slug,
             quantity: config.quantity,
-            unit_price: unitPrice + (config.customization_cost_rs ?? 0),
+            unit_price: unitPrice,                             // base price only
+            customization_unit_price: config.customization_cost_rs ?? 0, // split out
             customizations: config.customizations ?? []
           }];
 
@@ -162,7 +165,8 @@ export async function PATCH(
             p_subscription_id: id,
             p_delivery_date: deliveryDate,
             p_delivery_time_slot: config.delivery_time_slot ?? oldSub.delivery_time_slot,
-            p_bowls: bowls
+            p_bowls: bowls,
+            p_status: 'confirmed',  // admin marks each order delivered on the day
           });
         } catch (autoGenErr) {
           console.error(`Failed to auto-generate spread order for day config: ${config.id}`, autoGenErr);

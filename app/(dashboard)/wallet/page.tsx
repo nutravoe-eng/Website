@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getWalletWithTransactions } from '@/lib/wallet';
 import { formatCurrency } from '@/lib/utils';
-import type { WalletLoad, WalletTransaction } from '@/types';
+import type { WalletLoad, WalletTransaction, Subscription } from '@/types';
+import { createClient } from '@/lib/supabase/client';
+import TopupModal from '@/app/(dashboard)/subscriptions/TopupModal';
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-IN', {
@@ -45,6 +47,8 @@ export default function WalletPage() {
   const [activeLoads, setActiveLoads] = useState<WalletLoad[]>([]);
   const [nextExpiryAt, setNextExpiryAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [flexibleSub, setFlexibleSub] = useState<Subscription | null>(null);
+  const [showTopup, setShowTopup] = useState(false);
 
   const refresh = useCallback(async () => {
     const data = await getWalletWithTransactions();
@@ -53,6 +57,36 @@ export default function WalletPage() {
     setActiveLoads(data.activeLoads ?? []);
     setNextExpiryAt(data.nextExpiryAt ?? null);
     setLoading(false);
+  }, []);
+
+  // Fetch active flexible subscription — Top Up button only shown for flexible plans
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const { data } = await supabase
+        .from('subscriptions')
+        .select('id, plan_id, style, status, period_end_date, wallet_balance_rs')
+        .eq('user_id', user.id)
+        .eq('style', 'flexible')
+        .eq('status', 'active')
+        .maybeSingle();
+      if (data) {
+        setFlexibleSub({
+          id: data.id,
+          planId: data.plan_id as Subscription['planId'],
+          deliveryStyle: 'flexible',
+          status: 'active',
+          dayConfigs: [],
+          weeklyPrice: 0,
+          deliveryAddress: '',
+          createdAt: '',
+          nextDelivery: '',
+          periodEndDate: data.period_end_date ?? undefined,
+          walletBalancePaise: data.wallet_balance_rs ? data.wallet_balance_rs * 100 : 0,
+        });
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -69,6 +103,10 @@ export default function WalletPage() {
 
   return (
     <div>
+      {showTopup && flexibleSub && (
+        <TopupModal sub={flexibleSub} onClose={() => setShowTopup(false)} />
+      )}
+
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <h2 className="font-display text-2xl font-medium text-ink">Nutravoe Wallet</h2>
@@ -76,6 +114,17 @@ export default function WalletPage() {
             Funds load only after your subscription payment is approved.
           </p>
         </div>
+        {flexibleSub && (
+          <button
+            onClick={() => setShowTopup(true)}
+            className="shrink-0 flex items-center gap-2 bg-sage hover:bg-sage-dark text-white font-body text-[13px] font-bold px-4 py-2.5 rounded-lg transition-colors shadow-sm"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14"/><path d="M5 12h14"/>
+            </svg>
+            Top Up Wallet
+          </button>
+        )}
       </div>
 
       <div className={`mb-6 rounded-xl border p-6 ${balancePaise > 0 ? 'border-sage/20 bg-sage/5' : 'border-amber-200 bg-amber-50/50'}`}>

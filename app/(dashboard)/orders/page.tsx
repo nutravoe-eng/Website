@@ -13,6 +13,7 @@ interface DisplayOrder {
   slot: string | null;
   items: string;
   total: number;
+  isSubscriptionOrder: boolean;
 }
 
 export default function OrdersPage() {
@@ -31,7 +32,7 @@ export default function OrdersPage() {
 
       const { data: orderRows, error: ordersError } = await supabase
         .from('orders')
-        .select('id, status, payment_status, created_at, delivery_time_slot, total')
+        .select('id, status, payment_status, created_at, delivery_time_slot, total, subscription_id, order_type')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -70,6 +71,7 @@ export default function OrdersPage() {
         slot: o.delivery_time_slot ?? null,
         items: (itemsByOrder[o.id] ?? []).join(', ') || '—',
         total: o.total ?? 0,
+        isSubscriptionOrder: !!(o.subscription_id || o.order_type === 'subscription'),
       }));
 
       setOrders(mapped);
@@ -169,8 +171,21 @@ export default function OrdersPage() {
                   </div>
                 </div>
 
-                {/* Invoice download — only for delivered + paid orders */}
-                {order.status === 'delivered' && order.payment_status === 'paid' && (
+                {/* Subscription badge — wallet orders don't have invoices */}
+                {order.isSubscriptionOrder && (
+                  <Link
+                    href="/wallet"
+                    className="shrink-0 flex items-center gap-1.5 border border-sage/20 text-sage-dark/70 rounded-lg px-3 py-2 font-body text-[11px]"
+                    title="View wallet transactions"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
+                    </svg>
+                    Subscription · Wallet
+                  </Link>
+                )}
+                {/* Invoice download — only for standalone delivered + paid orders */}
+                {order.status === 'delivered' && order.payment_status === 'paid' && !order.isSubscriptionOrder && (
                   <a
                     href={`/invoice/${order.id}`}
                     target="_blank"

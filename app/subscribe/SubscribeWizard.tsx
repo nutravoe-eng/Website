@@ -495,7 +495,31 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   const customisationSurcharge = currentPlan
     ? customisedCount * (currentPlan.customisationChargePerBowl ?? 0)
     : 0;
-  const totalWeeklyPrice = currentPlan ? currentPlan.weeklyPrice + customisationSurcharge : 0;
+
+  // Sum actual per-ingredient extra costs (e.g. ₹X per extra topping) across all days/bowls.
+  // This is separate from the flat customisationChargePerBowl handling fee.
+  const totalIngredientExtras = (() => {
+    const scenario = getScenario();
+    if (scenario === 'D') return 0; // flexible — charged at wallet debit time
+    if (scenario === 'A') {
+      return Object.entries(state.dayBowlCustomMap).reduce((total, [day, bowlMap]) => {
+        return total + Object.entries(bowlMap).reduce((dayTotal, [bowlId, customs]) => {
+          const bowl = bowls.find(b => b._id === bowlId);
+          return dayTotal + calcCustomCost(customs, bowl);
+        }, 0);
+      }, 0);
+    }
+    // Scenario C
+    return Object.entries(state.dayCustomMap).reduce((total, [day, customs]) => {
+      const bowlId = state.dayBowlMap[day];
+      const bowl = bowls.find(b => b._id === bowlId);
+      return total + calcCustomCost(customs, bowl);
+    }, 0);
+  })();
+
+  const totalWeeklyPrice = currentPlan
+    ? currentPlan.weeklyPrice + customisationSurcharge + totalIngredientExtras
+    : 0;
 
   // Bowl being customised (for modal)
   const customizingDayBowl = customizingDay  // scenario C only
@@ -1250,13 +1274,35 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                 )}
               </div>
 
-              <div className="border-t border-black/5 mt-4 pt-4 flex items-center justify-between">
-                <span className="font-body text-sm font-bold uppercase tracking-wider text-ink/70">
-                  Week 1
-                </span>
-                <span className="font-display text-2xl font-medium text-sage-dark">
-                  {formatCurrency(totalWeeklyPrice)}
-                </span>
+              <div className="border-t border-black/5 mt-4 pt-4">
+                {(customisationSurcharge > 0 || totalIngredientExtras > 0) && currentPlan && (
+                  <div className="mb-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-body text-[11px] text-stone">Base plan</span>
+                      <span className="font-body text-[11px] text-stone">{formatCurrency(currentPlan.weeklyPrice)}</span>
+                    </div>
+                    {customisationSurcharge > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="font-body text-[11px] text-stone">Customisation fee ({customisedCount} bowl{customisedCount > 1 ? 's' : ''})</span>
+                        <span className="font-body text-[11px] text-stone">+ {formatCurrency(customisationSurcharge)}</span>
+                      </div>
+                    )}
+                    {totalIngredientExtras > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="font-body text-[11px] text-stone">Ingredient extras</span>
+                        <span className="font-body text-[11px] text-stone">+ {formatCurrency(totalIngredientExtras)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="font-body text-sm font-bold uppercase tracking-wider text-ink/70">
+                    Week 1
+                  </span>
+                  <span className="font-display text-2xl font-medium text-sage-dark">
+                    {formatCurrency(totalWeeklyPrice)}
+                  </span>
+                </div>
               </div>
             </div>
 

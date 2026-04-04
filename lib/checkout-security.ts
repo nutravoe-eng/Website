@@ -142,14 +142,13 @@ export async function buildAuthoritativeOrder(
     const quantity = Math.max(1, Math.trunc(item.quantity));
     const customizationUpcharge = getCustomizationUpcharge(bowl, item.customizations);
     const baseUnitPrice = subscriptionUnitPrice ?? bowl.price;
-    const unitPrice = baseUnitPrice + customizationUpcharge;
 
     return {
       bowl_slug: bowl.slug,
       bowl_name: bowl.name,
       quantity,
-      unit_price: unitPrice,
-      total_price: unitPrice * quantity,
+      unit_price: baseUnitPrice,                                    // base price only
+      total_price: (baseUnitPrice + customizationUpcharge) * quantity, // includes customization
       customizations: summarizeCustomizations(bowl, item.customizations),
     };
   });

@@ -62,6 +62,7 @@ export default async function InvoicePage({
     .select(`
       id, status, payment_status, payment_method, payment_reference,
       delivery_date, delivery_fee, subtotal, total, created_at,
+      subscription_id, order_type,
       users!inner ( full_name, email, phone ),
       addresses ( line1, line2, city, state, pincode ),
       order_items ( bowl_name, quantity, unit_price, total_price, customizations )
@@ -71,6 +72,8 @@ export default async function InvoicePage({
     .single();
 
   if (!order) notFound();
+  // Subscription orders are wallet transactions — no invoice generated for individual bowls.
+  if (order.subscription_id || order.order_type === 'subscription') redirect('/orders');
   if (order.status !== 'delivered' || order.payment_status !== 'paid') redirect('/orders');
 
   const o = order as unknown as OrderData;
