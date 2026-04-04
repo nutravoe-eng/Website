@@ -11,6 +11,7 @@ import { getNearestHub, getDeliveryFee, DELIVERY_FEE_RS } from "@/lib/delivery";
 import { createClient } from "@/lib/supabase/client";
 import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
 import { getWhatsAppNumber } from "@/lib/contact";
+import DeliveryMarquee from "@/components/DeliveryMarquee";
 
 // Delivery slot generation rules:
 // - Midnight to 7:59 AM  → floor: earliest same-day = 10:00 AM
@@ -295,7 +296,8 @@ export default function CartPage() {
 
   return (
     <>
-      <section className="pt-28 pb-20 px-6 lg:px-16 min-h-[80vh]">
+      <DeliveryMarquee variant="light" />
+      <section className="pt-16 pb-20 px-6 lg:px-16 min-h-[80vh]">
         <div className="max-w-2xl mx-auto">
           {/* Cart summary */}
           <div>

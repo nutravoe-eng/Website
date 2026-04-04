@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAllBowls } from "@/lib/sanity";
 import BowlCard from "@/components/BowlCard";
 import TestimonialsCarousel from "@/components/TestimonialsCarousel";
+import DeliveryMarquee from "@/components/DeliveryMarquee";
 import { getWhatsAppHref } from "@/lib/contact";
 
 export default async function HomePage() {
@@ -96,6 +97,9 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* ── Delivery marquee ─────────────────────────────── */}
+      <DeliveryMarquee variant="dark" />
 
       {/* ── Featured Bowls ──────────────────────────────── */}
       <section className="py-28 px-6 lg:px-16">
