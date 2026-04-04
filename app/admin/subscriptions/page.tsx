@@ -27,7 +27,7 @@ interface AdminSubscription {
   created_at: string;
   deliveries_completed: number;
   users: { id: string; full_name: string; phone: string; email: string };
-  subscription_plans: { name: string; slug: string; price_near_per_bowl: number; price_far_per_bowl: number } | null;
+  subscription_plans: { name: string; slug: string; price_per_bowl: number } | null;
   addresses: { line1: string; line2: string | null; city: string; pincode: string; lat: number; lng: number } | null;
   subscription_day_configs: DayConfig[];
 }
@@ -109,12 +109,8 @@ export default function AdminSubscriptionsPage() {
     setSaving(true);
 
     // Build bowls from day configs for selected date, or use all day configs
-    // Determine base price based on distance
-    const isFar = (deliverModal.addresses?.pincode === '560103'); // fallback check or use lat/lng if we had distance lib here
-    // Better: the API should probably return the resolved unit price, but for now we'll do our best.
-    const basePrice = deliverModal.subscription_plans 
-      ? (deliverModal.addresses?.city === 'Bengaluru' ? deliverModal.subscription_plans.price_near_per_bowl : deliverModal.subscription_plans.price_far_per_bowl)
-      : 0;
+    // Determine base price based on database field
+    const basePrice = deliverModal.subscription_plans?.price_per_bowl ?? 0;
 
     const bowls = deliverModal.subscription_day_configs.map(dc => ({
       bowl_slug:  dc.bowl_slug,
@@ -450,7 +446,7 @@ export default function AdminSubscriptionsPage() {
             <p className="font-body text-[12px] text-stone">
               Recording delivery for <strong className="text-ink">{deliverModal.users.full_name}</strong>.
               Wallet will be debited for ₹{deliverModal.subscription_plans
-                ? ((deliverModal.addresses?.city === 'Bengaluru' ? deliverModal.subscription_plans.price_near_per_bowl : deliverModal.subscription_plans.price_far_per_bowl) 
+                ? (deliverModal.subscription_plans.price_per_bowl
                    * deliverModal.subscription_day_configs.reduce((s, d) => s + d.quantity, 0)
                    + deliverModal.subscription_day_configs.reduce((s, d) => s + (d.customization_cost_rs ?? 0), 0)
                   ).toLocaleString('en-IN')

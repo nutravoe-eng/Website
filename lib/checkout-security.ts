@@ -115,7 +115,9 @@ export async function getSubscriptionUnitPrice(planSlug: string, address: Addres
   const [plans, nearZone] = await Promise.all([getSubscriptionPlans(), isNearZoneAddress(address)]);
   const plan = getPlanBySlug(plans, planSlug);
   if (!plan) return null;
-  return nearZone ? plan.priceNearPerBowl : plan.priceFarPerBowl;
+  
+  const base = nearZone ? plan.priceNearPerBowl : plan.priceFarPerBowl;
+  return base || plan.price_per_bowl || 0;
 }
 
 export async function buildAuthoritativeOrder(

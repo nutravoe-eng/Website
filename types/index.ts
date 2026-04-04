@@ -109,6 +109,7 @@ export interface SubscriptionPlan {
   billingCycle: 'weekly' | 'monthly';
   priceNearPerBowl: number; // ≤10 km zone
   priceFarPerBowl: number;  // >10 km zone
+  price_per_bowl?: number;  // Fallback from DB
   customisationChargePerBowl: number;
   deliveryStyles: DeliveryStyle[];
   savingsBadge?: string;

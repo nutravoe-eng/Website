@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
       total_amount_rs, payment_status, payment_reference, admin_notes,
       notes, created_at,
       users!inner ( id, full_name, phone, email ),
-      subscription_plans ( id, name, slug, price_near_per_bowl, price_far_per_bowl ),
+      subscription_plans ( id, name, slug, price_per_bowl ),
       addresses ( id, line1, line2, city, pincode, lat, lng ),
       subscription_day_configs ( id, day_of_week, bowl_slug, quantity, customizations, customization_cost_rs )
     `)
