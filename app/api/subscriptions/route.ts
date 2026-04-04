@@ -164,6 +164,7 @@ export async function POST(req: NextRequest) {
         bowl_slug: config.bowlId,
         quantity: Math.max(1, Math.trunc(config.quantity)),
         delivery_time_slot: config.deliveryTimeSlot ?? null,
+        customizations: config.customizations ?? [],
       };
     });
 
