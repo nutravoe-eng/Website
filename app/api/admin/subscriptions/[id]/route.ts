@@ -95,6 +95,7 @@ export async function PATCH(
 
       const planSlug = (oldSub.subscription_plans as any)?.slug ?? oldSub.plan_id;
       const dayConfigs = (oldSub.subscription_day_configs || []).map((c: any) => ({
+        day: c.day_of_week ?? undefined,
         bowlId: c.bowl_slug,
         customizations: Array.isArray(c.customizations) ? c.customizations : [],
       }));

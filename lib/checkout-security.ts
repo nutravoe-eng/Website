@@ -1,4 +1,4 @@
-import { DELIVERY_FEE_RS, FREE_ZONE_RADIUS_KM, getDeliveryFee, getNearestHub } from "@/lib/delivery";
+import { DELIVERY_FEE_RS, FREE_ZONE_RADIUS_KM, getDeliveryBreakdown, getDeliveryFee, getNearestHub, getSubscriptionWeeklyDeliveryFee, type DeliveryPriceBreakdown } from "@/lib/delivery";
 import { getAllBowls, getSubscriptionPlans } from "@/lib/sanity";
 import type { Bowl, IngredientCustomization, SubscriptionPlan } from "@/types";
 
@@ -74,6 +74,14 @@ export async function getAddressDeliveryFee(address: AddressForPricing): Promise
   // Fail safe: charge the standard delivery fee when coords are unavailable
   if (!coords) return DELIVERY_FEE_RS;
   return getDeliveryFee(coords.lat, coords.lng);
+}
+
+export async function getAddressDeliveryBreakdown(
+  address: AddressForPricing,
+): Promise<({ isFree: true; distanceKm: number } | ({ isFree: false } & DeliveryPriceBreakdown)) | null> {
+  const coords = await resolveAddressCoordinates(address);
+  if (!coords) return null;
+  return getDeliveryBreakdown(coords.lat, coords.lng);
 }
 
 function summarizeCustomizations(
@@ -165,21 +173,24 @@ export async function buildAuthoritativeOrder(
 export async function buildSubscriptionQuote(
   planSlug: string,
   address: AddressForPricing,
-  dayConfigs: { bowlId: string; customizations?: IngredientCustomization[] }[],
-): Promise<{ 
-  billingCycle: "weekly" | "monthly"; 
-  perBowl: number; 
-  bowlsPerCycle: number; 
-  totalAmountRs: number; 
+  dayConfigs: { bowlId: string; day?: string; customizations?: IngredientCustomization[] }[],
+): Promise<{
+  billingCycle: "weekly" | "monthly";
+  perBowl: number;
+  bowlsPerCycle: number;
+  bowlsAmountRs: number;
+  totalAmountRs: number;
   customisationChargePerBowl: number;
   totalIngredientExtrasRs: number;
+  weeklyDeliveryFeeRs: number;
 }> {
-  const [plans, bowls, nearZone] = await Promise.all([
+  const [plans, bowls, nearZone, coords] = await Promise.all([
     getSubscriptionPlans(),
     getAllBowls(),
-    isNearZoneAddress(address)
+    isNearZoneAddress(address),
+    resolveAddressCoordinates(address),
   ]);
-  
+
   const plan = getPlanBySlug(plans, planSlug);
   if (!plan) {
     throw new Error(`Unknown subscription plan: ${planSlug}`);
@@ -188,7 +199,7 @@ export async function buildSubscriptionQuote(
   const bowlMap = new Map(bowls.map((b) => [b.slug, b]));
   const perBowl = nearZone ? plan.priceNearPerBowl : plan.priceFarPerBowl;
   const customisationChargePerBowl = plan.customisationChargePerBowl ?? 0;
-  
+
   let totalIngredientExtrasRs = 0;
   let customisedBowlCount = 0;
 
@@ -203,14 +214,22 @@ export async function buildSubscriptionQuote(
     }
   }
 
-  const totalAmountRs = (perBowl * plan.bowlsPerCycle) + (customisedBowlCount * customisationChargePerBowl) + totalIngredientExtrasRs;
+  const bowlsAmountRs = (perBowl * plan.bowlsPerCycle) + (customisedBowlCount * customisationChargePerBowl) + totalIngredientExtrasRs;
+
+  // Count unique delivery days to calculate weekly delivery fee
+  const uniqueDeliveryDays = new Set(dayConfigs.map((c) => c.day).filter(Boolean)).size;
+  const weeklyDeliveryFeeRs = coords
+    ? getSubscriptionWeeklyDeliveryFee(coords.lat, coords.lng, uniqueDeliveryDays)
+    : uniqueDeliveryDays * DELIVERY_FEE_RS; // failsafe: ₹60/trip ≈ ceil(12)×5
 
   return {
     billingCycle: plan.billingCycle,
     perBowl,
     bowlsPerCycle: plan.bowlsPerCycle,
-    totalAmountRs,
+    bowlsAmountRs,
+    totalAmountRs: bowlsAmountRs + weeklyDeliveryFeeRs,
     customisationChargePerBowl,
     totalIngredientExtrasRs,
+    weeklyDeliveryFeeRs,
   };
 }

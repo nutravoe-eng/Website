@@ -116,7 +116,8 @@ export default function AdminSubscriptionsPage() {
       bowl_slug:  dc.bowl_slug,
       bowl_name:  dc.bowl_slug,  // slug used as fallback name
       quantity:   dc.quantity,
-      unit_price: basePrice + (dc.customization_cost_rs ?? 0),
+      unit_price: basePrice,
+      customization_unit_price: dc.customization_cost_rs ?? 0,
       customizations: dc.customizations ?? [],
     }));
 

@@ -138,6 +138,7 @@ export interface Subscription {
   deliveryAddress: string;
   createdAt: string;
   status: 'active' | 'paused' | 'cancelled' | 'pending';
+  paymentStatus?: string;
   nextDelivery: string;
   walletBalancePaise?: number;
   periodEndDate?: string;

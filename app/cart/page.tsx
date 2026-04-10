@@ -7,7 +7,7 @@ import { buildCartOrderWhatsAppMessage, formatCurrency, getWhatsAppUrl } from "@
 import { getActivePlanConfig } from "@/lib/subscription";
 import { getWallet } from "@/lib/wallet";
 import { geocodePincode } from "@/lib/geocodeCache";
-import { getNearestHub, getDeliveryFee, DELIVERY_FEE_RS } from "@/lib/delivery";
+import { getNearestHub, getDeliveryBreakdown, type DeliveryPriceBreakdown } from "@/lib/delivery";
 import { createClient } from "@/lib/supabase/client";
 import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
 import { getWhatsAppNumber } from "@/lib/contact";
@@ -86,6 +86,7 @@ export default function CartPage() {
 
   // Delivery fee
   const [deliveryFee, setDeliveryFee] = useState<number>(0);
+  const [deliveryBreakdown, setDeliveryBreakdown] = useState<({ isFree: false } & DeliveryPriceBreakdown) | { isFree: true; distanceKm: number } | null>(null);
   const [deliveryFeeLoading, setDeliveryFeeLoading] = useState(true);
   const [nearestHubName, setNearestHubName] = useState<string>('');
   const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
@@ -140,10 +141,12 @@ export default function CartPage() {
       if (pincode) {
         const coords = await geocodePincode(pincode);
         if (coords) {
-          const { hub, distanceKm } = getNearestHub(coords.lat, coords.lng);
-          setDeliveryFee(getDeliveryFee(coords.lat, coords.lng));
+          const { hub } = getNearestHub(coords.lat, coords.lng);
+          const breakdown = getDeliveryBreakdown(coords.lat, coords.lng);
+          setDeliveryBreakdown(breakdown);
+          setDeliveryFee(breakdown.isFree ? 0 : breakdown.customerPaysRs);
           setNearestHubName(hub.name);
-          setDeliveryDistanceKm(Math.round(distanceKm * 10) / 10);
+          setDeliveryDistanceKm(Math.round(breakdown.distanceKm * 10) / 10);
         }
       }
       setDeliveryFeeLoading(false);
@@ -279,6 +282,9 @@ export default function CartPage() {
         subtotal: total,
         subscriberDiscount,
         deliveryFee,
+        deliveryBreakdown: deliveryBreakdown && !deliveryBreakdown.isFree
+          ? { totalCostRs: deliveryBreakdown.totalCostRs, nutravoeCoverageRs: deliveryBreakdown.nutravoeCoverageRs }
+          : null,
         grandTotal,
         orderRef: orderRef ?? undefined,
       });
@@ -423,19 +429,37 @@ export default function CartPage() {
                       </div>
                     </>
                   )}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-body text-[13px] text-stone">Delivery</span>
-                      {deliveryDistanceKm !== null && (
-                        <span className="font-body text-[10px] text-stone/60">({deliveryDistanceKm} km from {nearestHubName})</span>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-body text-[13px] text-stone">Delivery</span>
+                        {deliveryDistanceKm !== null && (
+                          <span className="font-body text-[10px] text-stone/60">({deliveryDistanceKm} km from {nearestHubName})</span>
+                        )}
+                      </div>
+                      {deliveryFeeLoading ? (
+                        <span className="font-body text-[12px] text-stone animate-pulse">Checking…</span>
+                      ) : deliveryFee === 0 ? (
+                        <span className="font-body text-[13px] font-bold text-sage-dark">Free</span>
+                      ) : (
+                        <span className="font-body text-[13px] font-bold text-terracotta">+ {formatCurrency(deliveryFee)}</span>
                       )}
                     </div>
-                    {deliveryFeeLoading ? (
-                      <span className="font-body text-[12px] text-stone animate-pulse">Checking…</span>
-                    ) : deliveryFee === 0 ? (
-                      <span className="font-body text-[13px] font-bold text-sage-dark">Free</span>
-                    ) : (
-                      <span className="font-body text-[13px] font-bold text-terracotta">+ {formatCurrency(DELIVERY_FEE_RS)}</span>
+                    {!deliveryFeeLoading && deliveryBreakdown && !deliveryBreakdown.isFree && (
+                      <div className="rounded-lg bg-sage/5 border border-sage/15 px-3 py-2 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-body text-[11px] text-stone/70">Total delivery cost</span>
+                          <span className="font-body text-[11px] text-stone/70">{formatCurrency(deliveryBreakdown.totalCostRs)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-body text-[11px] text-sage-dark font-medium">Nutravoe covers</span>
+                          <span className="font-body text-[11px] text-sage-dark font-medium">− {formatCurrency(deliveryBreakdown.nutravoeCoverageRs)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-body text-[11px] font-bold text-ink">You pay</span>
+                          <span className="font-body text-[11px] font-bold text-ink">{formatCurrency(deliveryBreakdown.customerPaysRs)}</span>
+                        </div>
+                      </div>
                     )}
                   </div>
                   <div className="flex items-center justify-between pt-1">

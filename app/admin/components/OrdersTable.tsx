@@ -98,6 +98,16 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
     }
   }
 
+  async function handleMarkDispatched(order: AdminOrder) {
+    try {
+      await patchOrder(order.id, { status: 'out_for_delivery' });
+      onOrderUpdated({ id: order.id, status: 'out_for_delivery' });
+      showToast('Marked as out for delivery');
+    } catch {
+      showToast('Failed to update. Try again.');
+    }
+  }
+
   async function handleMarkDelivered(order: AdminOrder) {
     try {
       await patchOrder(order.id, { status: 'delivered' });
@@ -322,19 +332,7 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {order.status === 'delivered' ? (
-                      <span className="inline-flex items-center gap-1 bg-sage/10 text-sage-dark font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
-                        ✓ Delivered
-                      </span>
-                    ) : order.status === 'cancelled' ? (
-                      <span className="inline-flex items-center bg-red-50 text-red-600 font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
-                        Cancelled
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center bg-stone/10 text-stone font-body text-[11px] font-bold px-2 py-0.5 rounded-full capitalize">
-                        {order.status}
-                      </span>
-                    )}
+                    <DeliveryStatusBadge status={order.status} />
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1.5">
@@ -346,7 +344,12 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                           Mark Paid
                         </ActionBtn>
                       )}
-                      {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                      {order.status !== 'delivered' && order.status !== 'cancelled' && order.status !== 'out_for_delivery' && (
+                        <ActionBtn onClick={() => handleMarkDispatched(order)} color="sage">
+                          Mark Dispatched
+                        </ActionBtn>
+                      )}
+                      {order.status === 'out_for_delivery' && (
                         <ActionBtn onClick={() => handleMarkDelivered(order)} color="sage">
                           Mark Delivered
                         </ActionBtn>
@@ -534,6 +537,22 @@ function ActionBtn({ children, onClick, color }: {
     >
       {children}
     </button>
+  );
+}
+
+function DeliveryStatusBadge({ status }: { status: string }) {
+  const config: Record<string, { label: string; className: string }> = {
+    pending:          { label: 'Pending',         className: 'bg-amber-50 text-amber-700' },
+    confirmed:        { label: 'To Be Dispatched', className: 'bg-blue-50 text-blue-700' },
+    out_for_delivery: { label: 'Out for Delivery', className: 'bg-terracotta/10 text-terracotta' },
+    delivered:        { label: '✓ Delivered',      className: 'bg-sage/10 text-sage-dark' },
+    cancelled:        { label: 'Cancelled',        className: 'bg-red-50 text-red-600' },
+  };
+  const c = config[status] ?? { label: status, className: 'bg-stone/10 text-stone' };
+  return (
+    <span className={`inline-flex items-center font-body text-[11px] font-bold px-2 py-0.5 rounded-full ${c.className}`}>
+      {c.label}
+    </span>
   );
 }
 

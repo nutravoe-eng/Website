@@ -57,8 +57,57 @@ export function getNearestHub(
   return { hub: nearest, distanceKm: minDist };
 }
 
-/** Returns 0 (free) or DELIVERY_FEE_RS (₹60) based on distance from nearest hub */
+export interface DeliveryPriceBreakdown {
+  distanceKm: number;
+  ceilKm: number;
+  totalCostRs: number;        // ceil(km) × 10
+  nutravoeCoverageRs: number; // ceil(km) × 5 — Nutravoe covers half
+  customerPaysRs: number;     // ceil(km) × 5
+}
+
+/**
+ * Returns a full pricing breakdown for the nearest hub.
+ * isFree: true when within the free zone (≤ 10km).
+ */
+export function getDeliveryBreakdown(
+  lat: number,
+  lng: number,
+): { isFree: true; distanceKm: number } | ({ isFree: false } & DeliveryPriceBreakdown) {
+  const { distanceKm } = getNearestHub(lat, lng);
+  if (distanceKm <= FREE_ZONE_RADIUS_KM) {
+    return { isFree: true, distanceKm };
+  }
+  const ceilKm = Math.ceil(distanceKm);
+  const totalCostRs = ceilKm * 10;
+  const half = ceilKm * 5;
+  return {
+    isFree: false,
+    distanceKm,
+    ceilKm,
+    totalCostRs,
+    nutravoeCoverageRs: half,
+    customerPaysRs: half,
+  };
+}
+
+/**
+ * Weekly delivery fee for a subscription.
+ * uniqueDeliveryDays = number of distinct days per week that receive a delivery.
+ * Returns 0 if within the free zone.
+ */
+export function getSubscriptionWeeklyDeliveryFee(
+  lat: number,
+  lng: number,
+  uniqueDeliveryDays: number,
+): number {
+  const { distanceKm } = getNearestHub(lat, lng);
+  if (distanceKm <= FREE_ZONE_RADIUS_KM) return 0;
+  return Math.ceil(distanceKm) * 5 * uniqueDeliveryDays;
+}
+
+/** Returns the customer-facing delivery fee for a single order. 0 if free zone. */
 export function getDeliveryFee(lat: number, lng: number): number {
   const { distanceKm } = getNearestHub(lat, lng);
-  return distanceKm <= FREE_ZONE_RADIUS_KM ? 0 : DELIVERY_FEE_RS;
+  if (distanceKm <= FREE_ZONE_RADIUS_KM) return 0;
+  return Math.ceil(distanceKm) * 5;
 }

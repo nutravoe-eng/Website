@@ -46,6 +46,7 @@ export function buildCartOrderWhatsAppMessage(input: {
   subtotal: number;
   subscriberDiscount: number;
   deliveryFee: number;
+  deliveryBreakdown?: { totalCostRs: number; nutravoeCoverageRs: number } | null;
   grandTotal: number;
   orderRef?: string;
 }): string {
@@ -71,7 +72,11 @@ export function buildCartOrderWhatsAppMessage(input: {
   const totals = [
     `Subtotal: ₹${input.subtotal}`,
     input.subscriberDiscount > 0 ? `Subscriber discount: -₹${input.subscriberDiscount}` : null,
-    `Delivery fee: ₹${input.deliveryFee}`,
+    input.deliveryFee === 0
+      ? `Delivery: Free`
+      : input.deliveryBreakdown
+        ? `Delivery: ₹${input.deliveryFee} (total ₹${input.deliveryBreakdown.totalCostRs}, Nutravoe covers ₹${input.deliveryBreakdown.nutravoeCoverageRs})`
+        : `Delivery fee: ₹${input.deliveryFee}`,
     `Grand total: ₹${input.grandTotal}`,
   ].filter(Boolean);
 
@@ -102,6 +107,7 @@ export function buildSubscriptionWhatsAppMessage(input: {
   planName: string;
   weeklyPrice: number;
   customisationSurcharge?: number;
+  weeklyDeliveryFeeRs?: number;
   deliveryAddress: string;
   deliveryStyle: string;
   deliveryTimeSlot?: string;
@@ -115,11 +121,14 @@ export function buildSubscriptionWhatsAppMessage(input: {
     `Phone: ${input.customerPhone || "NA"}`,
     `Email: ${input.customerEmail || "NA"}`,
     `Plan: ${input.planName}`,
-    input.customisationSurcharge && input.customisationSurcharge > 0 
-      ? `Base Price: ₹${(input.weeklyPrice - input.customisationSurcharge).toLocaleString('en-IN')}/week`
+    input.customisationSurcharge && input.customisationSurcharge > 0
+      ? `Base Price: ₹${(input.weeklyPrice - input.customisationSurcharge - (input.weeklyDeliveryFeeRs ?? 0)).toLocaleString('en-IN')}/week`
       : null,
-    input.customisationSurcharge && input.customisationSurcharge > 0 
+    input.customisationSurcharge && input.customisationSurcharge > 0
       ? `Customisation Surcharge: +₹${input.customisationSurcharge.toLocaleString('en-IN')}/week`
+      : null,
+    input.weeklyDeliveryFeeRs && input.weeklyDeliveryFeeRs > 0
+      ? `Delivery: ₹${input.weeklyDeliveryFeeRs.toLocaleString('en-IN')}/week (total ₹${(input.weeklyDeliveryFeeRs * 2).toLocaleString('en-IN')}, Nutravoe covers ₹${input.weeklyDeliveryFeeRs.toLocaleString('en-IN')})`
       : null,
     `Total Weekly Price: ₹${input.weeklyPrice.toLocaleString('en-IN')}/week`,
     `Delivery style: ${input.deliveryStyle}`,

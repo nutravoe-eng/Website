@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { adminSupabase } from "@/lib/supabase/admin";
 import { buildSubscriptionQuote, getCustomizationUpcharge } from "@/lib/checkout-security";
+import { FREE_ZONE_RADIUS_KM, getNearestHub } from "@/lib/delivery";
 import { getAllBowls } from "@/lib/sanity";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
@@ -148,6 +149,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unable to price this subscription" }, { status: 400, headers: limited.headers });
   }
 
+  // Compute per-trip delivery fee to store in subscriptions.delivery_fee
+  // (used by create_subscription_delivery when generating individual delivery orders)
+  const addrCoords = (typeof address.lat === "number" && typeof address.lng === "number")
+    ? { lat: address.lat, lng: address.lng }
+    : null;
+  const addrDistanceKm = addrCoords ? getNearestHub(addrCoords.lat, addrCoords.lng).distanceKm : 12;
+  const perTripDeliveryFee = addrDistanceKm <= FREE_ZONE_RADIUS_KM ? 0 : Math.ceil(addrDistanceKm) * 5;
+
   const nowIso = new Date().toISOString();
   const { data: subscription, error: subscriptionError } = await adminSupabase
     .from("subscriptions")
@@ -161,6 +170,7 @@ export async function POST(req: NextRequest) {
       delivery_time_slot: deliveryStyle !== "flexible" ? deliveryTimeSlot : null,
       wallet_balance_rs: 0,
       total_amount_rs: quote.totalAmountRs,
+      delivery_fee: perTripDeliveryFee,
       payment_status: "pending",
       delivery_address_id: address.id,
       notes: "requested_via_whatsapp",
@@ -212,5 +222,6 @@ export async function POST(req: NextRequest) {
     bowlsPerCycle: quote.bowlsPerCycle,
     perBowl: quote.perBowl,
     totalAmountRs: quote.totalAmountRs,
+    weeklyDeliveryFeeRs: quote.weeklyDeliveryFeeRs,
   }, { headers: limited.headers });
 }

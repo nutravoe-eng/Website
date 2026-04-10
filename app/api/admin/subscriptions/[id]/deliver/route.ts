@@ -14,11 +14,12 @@ export async function POST(
 
   const deliveryDate: string = body.delivery_date ?? new Date().toISOString().split('T')[0];
   const deliverySlot: string | null = body.delivery_time_slot ?? null;
-  const bowls: { 
-    bowl_slug: string; 
-    bowl_name: string; 
-    quantity: number; 
+  const bowls: {
+    bowl_slug: string;
+    bowl_name: string;
+    quantity: number;
     unit_price: number;
+    customization_unit_price?: number;
     customizations?: any[];
   }[] = body.bowls ?? [];
 

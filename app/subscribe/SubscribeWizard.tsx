@@ -87,6 +87,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryPincode, setDeliveryPincode] = useState('');
   const [isNearZone, setIsNearZone] = useState(true); // default near; updated after geocode
+  const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -178,6 +179,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           if (coords) {
             const { distanceKm } = getNearestHub(coords.lat, coords.lng);
             setIsNearZone(distanceKm <= FREE_ZONE_RADIUS_KM);
+            setDeliveryDistanceKm(Math.round(distanceKm * 10) / 10);
           }
         }
       }
@@ -371,6 +373,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         planName: currentPlan.name,
         weeklyPrice: totalWeeklyPrice,
         customisationSurcharge: customisationSurcharge,
+        weeklyDeliveryFeeRs: weeklyDeliveryFeeRs > 0 ? weeklyDeliveryFeeRs : undefined,
         deliveryAddress,
         deliveryStyle:
           getScenario() === "D"
@@ -517,8 +520,16 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     }, 0);
   })();
 
+  const scenario = getScenario();
+  const weeklyDeliveryFeeRs = (() => {
+    if (scenario === 'D') return 0; // flexible wallet — delivery charged per cart order
+    if (!deliveryDistanceKm || deliveryDistanceKm <= FREE_ZONE_RADIUS_KM) return 0;
+    const uniqueDeliveryDays = state.selectedDays.length;
+    return Math.ceil(deliveryDistanceKm) * 5 * uniqueDeliveryDays;
+  })();
+
   const totalWeeklyPrice = currentPlan
-    ? currentPlan.weeklyPrice + customisationSurcharge + totalIngredientExtras
+    ? currentPlan.weeklyPrice + customisationSurcharge + totalIngredientExtras + weeklyDeliveryFeeRs
     : 0;
 
   // Bowl being customised (for modal)
@@ -1275,7 +1286,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
               </div>
 
               <div className="border-t border-black/5 mt-4 pt-4">
-                {(customisationSurcharge > 0 || totalIngredientExtras > 0) && currentPlan && (
+                {(customisationSurcharge > 0 || totalIngredientExtras > 0 || weeklyDeliveryFeeRs > 0) && currentPlan && (
                   <div className="mb-3 space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="font-body text-[11px] text-stone">Base plan</span>
@@ -1292,6 +1303,30 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                         <span className="font-body text-[11px] text-stone">Ingredient extras</span>
                         <span className="font-body text-[11px] text-stone">+ {formatCurrency(totalIngredientExtras)}</span>
                       </div>
+                    )}
+                    {weeklyDeliveryFeeRs > 0 && scenario !== 'D' && (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="font-body text-[11px] text-stone">
+                            Delivery ({state.selectedDays.length} day{state.selectedDays.length > 1 ? 's' : ''} × {formatCurrency(Math.ceil(deliveryDistanceKm!) * 5)}/day)
+                          </span>
+                          <span className="font-body text-[11px] text-stone">+ {formatCurrency(weeklyDeliveryFeeRs)}</span>
+                        </div>
+                        <div className="rounded-lg bg-sage/5 border border-sage/15 px-3 py-2 space-y-1 mt-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-body text-[10px] text-stone/70">Total delivery cost/week</span>
+                            <span className="font-body text-[10px] text-stone/70">{formatCurrency(weeklyDeliveryFeeRs * 2)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="font-body text-[10px] text-sage-dark font-medium">Nutravoe covers</span>
+                            <span className="font-body text-[10px] text-sage-dark font-medium">− {formatCurrency(weeklyDeliveryFeeRs)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="font-body text-[10px] font-bold text-ink">You pay/week</span>
+                            <span className="font-body text-[10px] font-bold text-ink">{formatCurrency(weeklyDeliveryFeeRs)}</span>
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
