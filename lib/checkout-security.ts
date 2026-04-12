@@ -173,7 +173,7 @@ export async function buildAuthoritativeOrder(
 export async function buildSubscriptionQuote(
   planSlug: string,
   address: AddressForPricing,
-  dayConfigs: { bowlId: string; day?: string; customizations?: IngredientCustomization[] }[],
+  dayConfigs: { bowlId: string; day?: string; customizations?: IngredientCustomization[] | IngredientCustomization[][] }[],
 ): Promise<{
   billingCycle: "weekly" | "monthly";
   perBowl: number;
@@ -221,7 +221,7 @@ export async function buildSubscriptionQuote(
       }
     } else {
       // Legacy flat format: IngredientCustomization[]
-      const flat = config.customizations;
+      const flat = config.customizations as IngredientCustomization[] | undefined;
       if ((flat?.length ?? 0) > 0) {
         customisedBowlCount++;
         totalIngredientExtrasRs += getCustomizationUpcharge(bowl, flat);
