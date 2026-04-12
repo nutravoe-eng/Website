@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { Bowl, Subscription, DayBowlConfig } from "@/types";
 import { formatCurrency } from "@/lib/utils";
+import { getWhatsAppNumber } from "@/lib/contact";
 import { STUB_PLANS as PLANS } from "../../subscribe/PlanCard";
 import ManageModal from "./ManageModal";
 import CancelModal from "./CancelModal";
@@ -246,7 +247,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
                 Change My Plan
               </Link>
               <button
-                onClick={() => window.open(`https://wa.me/91XXXXXXXXXX?text=${encodeURIComponent("Hi Nutravoe, I want to renew my current subscription for the next cycle.")}`, "_blank")}
+                onClick={() => window.open(`https://wa.me/${getWhatsAppNumber()}?text=${encodeURIComponent("Hi Nutravoe, I want to renew my current subscription for the next cycle.")}`, "_blank")}
                 className="px-5 py-2.5 border border-sage/30 text-sage-dark hover:bg-sage/5 rounded-md font-body text-[13px] font-bold transition-colors"
               >
                 Renew via WhatsApp
@@ -328,7 +329,21 @@ export default function SubscriptionsClient({ bowls }: Props) {
                   <div className="flex flex-col gap-2 min-w-[150px]">
                     {sub.status === 'pending' ? (
                       <button
-                        onClick={() => window.open(`https://wa.me/91XXXXXXXXXX?text=${encodeURIComponent("Hi Nutravoe, following up on my subscription request (#NV-" + sub.id.slice(0, 4).toUpperCase() + "). Please let me know the activation status.")}`, "_blank")}
+                        onClick={() => {
+                          const ref = sub.id.slice(-6).toUpperCase();
+                          const planName = PLAN_LABELS[sub.planId] ?? sub.planId;
+                          const lines = [
+                            `Hi Nutravoe! Resending my subscription request for activation.`,
+                            ``,
+                            `Plan: ${planName}`,
+                            `Delivery style: ${sub.deliveryStyle}`,
+                            sub.deliveryTimeSlot ? `Delivery slot: ${sub.deliveryTimeSlot}` : null,
+                            `Subscription Ref: #NV-SUB-${ref}`,
+                            ``,
+                            `Please activate my subscription. Thank you!`,
+                          ].filter(Boolean).join('\n');
+                          window.open(`https://wa.me/${getWhatsAppNumber()}?text=${encodeURIComponent(lines)}`, "_blank");
+                        }}
                         className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-body text-[13px] font-bold py-2.5 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">

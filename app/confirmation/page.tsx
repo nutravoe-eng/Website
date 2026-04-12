@@ -2,8 +2,8 @@ import Link from "next/link";
 import { getWhatsAppHref } from "@/lib/contact";
 
 export const metadata = {
-  title: "Order Confirmed — Nutravoe",
-  description: "Your Nutravoe bowl is being prepared. Delivery today, 7 AM–9 PM.",
+  title: "Order Received — Nutravoe",
+  description: "Your Nutravoe order has been received. We'll confirm via WhatsApp shortly.",
 };
 
 export default function ConfirmationPage({
@@ -26,8 +26,11 @@ export default function ConfirmationPage({
           className="section-heading text-ink mb-6"
           style={{ fontSize: "clamp(36px, 5vw, 56px)" }}
         >
-          Your bowl is<br />
-          <em className="text-sage">on its way.</em>
+          {isWallet ? (
+            <>Your bowl is<br /><em className="text-sage">on its way.</em></>
+          ) : (
+            <>Request<br /><em className="text-sage">received!</em></>
+          )}
         </h1>
 
         {isWallet ? (
