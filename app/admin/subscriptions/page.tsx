@@ -47,6 +47,7 @@ export default function AdminSubscriptionsPage() {
   const [saving, setSaving]               = useState(false);
   const [toast, setToast]                 = useState('');
   const [statusFilter, setStatusFilter]   = useState('pending');
+  const [generatingOrders, setGeneratingOrders] = useState<string | null>(null);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -171,6 +172,36 @@ export default function AdminSubscriptionsPage() {
       showToast('Failed to save note.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleGenerateOrders(sub: AdminSubscription) {
+    setGeneratingOrders(sub.id);
+    try {
+      const res = await fetch(`/api/admin/subscriptions/${sub.id}/generate-orders`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed');
+
+      const results: { day: string; date: string; success: boolean; error?: string }[] = data.results ?? [];
+      const created = results.filter(r => r.success);
+      const skipped = results.filter(r => !r.success && r.error?.includes('already recorded'));
+      const failed  = results.filter(r => !r.success && !r.error?.includes('already recorded'));
+
+      if (created.length > 0) {
+        const dateList = created.map(r => `${r.day} ${r.date}`).join(', ');
+        showToast(`Created ${created.length} order${created.length !== 1 ? 's' : ''}: ${dateList}`);
+      } else if (skipped.length > 0) {
+        const dateList = skipped.map(r => `${r.day.charAt(0).toUpperCase() + r.day.slice(1)} ${r.date}`).join(', ');
+        showToast(`Orders already exist for: ${dateList} — find them in the Orders dashboard`);
+      } else if (failed.length > 0) {
+        showToast(`Failed: ${failed[0].error ?? 'Unknown error'}`);
+      } else {
+        showToast('No orders to generate');
+      }
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Failed to generate orders.');
+    } finally {
+      setGeneratingOrders(null);
     }
   }
 
@@ -388,6 +419,15 @@ export default function AdminSubscriptionsPage() {
                   }}>
                     Record Delivery
                   </Btn>
+                )}
+                {sub.style === 'spread' && sub.status === 'active' && sub.payment_status === 'paid' && (
+                  <button
+                    onClick={() => handleGenerateOrders(sub)}
+                    disabled={generatingOrders === sub.id}
+                    className="border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-40 rounded-lg px-4 py-2 font-body text-[12px] font-bold transition-colors"
+                  >
+                    {generatingOrders === sub.id ? 'Generating…' : 'Generate Orders'}
+                  </button>
                 )}
                 <Btn color="stone" onClick={() => { setNoteModal(sub); setNoteText(sub.admin_notes ?? ''); }}>
                   {sub.admin_notes ? 'Edit Note' : 'Add Note'}

@@ -38,7 +38,7 @@ export default async function HomePage() {
         {/* Content — perfectly centered vertically between nav and trust strip */}
         <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-16 w-full -mt-4">
           <div className="max-w-2xl">
-            <p className="font-body text-[11px] font-medium tracking-[0.25em] mb-4 text-[#FF8A66]" style={{ textShadow: "0 2px 10px rgba(0,0,0,0.3)" }}>
+            <p className="font-body text-[11px] font-medium tracking-[0.25em] mb-4 text-sage-light" style={{ textShadow: "0 2px 10px rgba(0,0,0,0.3)" }}>
               FRESH · BANGALORE · DELIVERED 7 AM–9 PM
             </p>
             <h1 className="font-display text-white mb-5"
@@ -52,7 +52,7 @@ export default async function HomePage() {
               no added sugar — a complete meal you'll actually look forward to.
             </p>
             <div className="flex flex-wrap gap-4 items-center">
-              <Link href="/menu" className="btn-sage shadow-[0_4px_20px_rgba(125,155,118,0.35)] hover:shadow-[0_4px_25px_rgba(125,155,118,0.55)] transition-all duration-300">
+              <Link href="/menu" className="btn-sage shadow-[0_4px_20px_rgba(196,165,116,0.35)] hover:shadow-[0_4px_25px_rgba(196,165,116,0.55)] transition-all duration-300">
                 See the Menu
               </Link>
               <Link
@@ -157,15 +157,15 @@ export default async function HomePage() {
         </div>
         <div
           className="relative flex items-center justify-center min-h-[320px]"
-          style={{ background: "linear-gradient(135deg, #4E6B49 0%, #3a5235 100%)" }}
+          style={{ background: "linear-gradient(135deg, #C4A574 0%, #9A7B4A 100%)" }}
         >
           <div className="px-12 py-16 text-center">
-            <blockquote className="font-display text-[22px] font-light italic text-white/90 leading-relaxed">
+            <blockquote className="font-display text-[22px] font-light italic text-white/95 leading-relaxed">
               "Healthy food doesn't have to be<br />
               bland or inconvenient.<br />
               I built Nutravoe to prove that."
             </blockquote>
-            <cite className="block mt-6 font-body text-xs tracking-[0.18em] uppercase text-sage-light not-italic">
+            <cite className="block mt-6 font-body text-xs tracking-[0.18em] uppercase text-white/70 not-italic">
               Harshita · Nutravoe · Bangalore
             </cite>
           </div>

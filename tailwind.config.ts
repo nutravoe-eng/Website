@@ -11,19 +11,21 @@ const config: Config = {
     extend: {
       colors: {
         white: "#FFFFFF",
+        // Brand palette — Nutravoe
         sage: {
-          DEFAULT: "#7D9B76",
-          light: "#B8CDB4",
-          dark: "#4E6B49",
+          DEFAULT: "#C4A574", // Muted Gold — accent / CTA
+          light: "#DBC99A",
+          dark: "#9A7B4A",
         },
         terracotta: {
-          DEFAULT: "#C4714A",
-          light: "#E8B49A",
-          dark: "#8C4A2F",
+          DEFAULT: "#9A7B4A", // Deeper gold — secondary actions
+          light: "#C4A574",
+          dark: "#6E5530",
         },
-        ink: "#1C1C1A",
-        stone: "#9A9590",
-        cream: "#FDFCFA",
+        ink: "#2C2C2C",       // Off Black — text / borders
+        stone: "#A39888",     // Stone — body text
+        cream: "#FAF9F6",     // Off White — primary BG
+        beige: "#E8E3DA",     // Warm Beige — secondary BG
       },
       fontFamily: {
         display: ["var(--font-display)", "serif"],

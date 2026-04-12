@@ -184,7 +184,7 @@ export default function CartPage() {
   async function handlePayFromWallet() {
     if (items.length === 0) { setError("Your cart is empty. Add some bowls first."); return; }
     if (!selectedSlot) { setError("Please select a delivery slot before placing an order."); return; }
-    if (!user) { router.push("/signin"); return; }
+    if (!user) { router.push("/signin?next=/cart"); return; }
 
     setSubmitting(true);
     setError("");
@@ -229,7 +229,7 @@ export default function CartPage() {
     }
 
     if (!user) {
-      router.push("/signin");
+      router.push("/signin?next=/cart");
       return;
     }
 

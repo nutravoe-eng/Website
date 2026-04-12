@@ -99,24 +99,16 @@ export async function hasActiveFlexibleSubscription(): Promise<boolean> {
 
   if (!user) return false;
 
-  const [ { data: sub }, { data: wallet } ] = await Promise.all([
-    supabase
-      .from('subscriptions')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('style', 'flexible')
-      .neq('status', 'cancelled')
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from('wallet_accounts')
-      .select('balance_rs')
-      .eq('user_id', user.id)
-      .limit(1)
-      .maybeSingle()
-  ]);
+  const { data: sub } = await supabase
+    .from('subscriptions')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('style', 'flexible')
+    .neq('status', 'cancelled')
+    .limit(1)
+    .maybeSingle();
 
-  return sub !== null || (Number(wallet?.balance_rs) || 0) > 0;
+  return sub !== null;
 }
 
 export async function getWalletWithTransactions(): Promise<Wallet> {

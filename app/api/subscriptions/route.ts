@@ -6,11 +6,13 @@ import { FREE_ZONE_RADIUS_KM, getNearestHub } from "@/lib/delivery";
 import { getAllBowls } from "@/lib/sanity";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
+type SingleCustomization = { ingredientId: string; option: "default" | "remove" | "extra" };
 type DayConfigInput = {
   day: string;
   bowlId: string;
   quantity: number;
-  customizations?: Array<{ ingredientId: string; option: "default" | "remove" | "extra" }>;
+  // Either a flat array (legacy) or a per-instance array-of-arrays (new multi-instance format)
+  customizations?: SingleCustomization[] | SingleCustomization[][];
   deliveryTimeSlot?: string;
 };
 
@@ -193,7 +195,15 @@ export async function POST(req: NextRequest) {
       }
 
       const bowl = bowlMap.get(config.bowlId);
-      const extraCost = bowl ? getCustomizationUpcharge(bowl, (config.customizations as any)) : 0;
+      const customsRaw = config.customizations;
+      const isPerInstance = Array.isArray(customsRaw?.[0]);
+      const extraCost = bowl
+        ? isPerInstance
+          ? (customsRaw as SingleCustomization[][]).reduce(
+              (sum, inst) => sum + getCustomizationUpcharge(bowl, inst), 0
+            )
+          : getCustomizationUpcharge(bowl, customsRaw as SingleCustomization[])
+        : 0;
 
       return {
         subscription_id: subscription.id,
@@ -201,7 +211,7 @@ export async function POST(req: NextRequest) {
         bowl_slug: config.bowlId,
         quantity: Math.max(1, Math.trunc(config.quantity)),
         delivery_time_slot: config.deliveryTimeSlot ?? null,
-        customizations: config.customizations ?? [],
+        customizations: customsRaw ?? [],
         customization_cost_rs: extraCost,
       };
     });

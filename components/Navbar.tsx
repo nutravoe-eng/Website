@@ -91,6 +91,8 @@ export default function Navbar() {
         setUser(null);
         setSavedAddresses([]);
         setWalletBalanceRs(null);
+        setSavedPincode("560001");
+        localStorage.removeItem("nutravoe_addresses");
       }
     };
 
@@ -360,6 +362,28 @@ export default function Navbar() {
                 </li>
               ))}
             </ul>
+
+            {/* Location selector — mobile */}
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                setInputPincode("");
+                setLocationState("idle");
+                setDeliveryZone(null);
+                setShowLocationModal(true);
+              }}
+              className="flex items-center gap-3 px-6 py-4 border-b border-black/5 w-full text-left hover:bg-[#F9F8F6] transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" className="text-stone shrink-0">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+              </svg>
+              <div className="flex flex-col items-start leading-tight">
+                <span className="font-body text-[11px] text-stone font-medium tracking-wide">
+                  {savedPincode?.startsWith("56") ? "Delivering to Bengaluru" : savedPincode ? "Not delivering here yet" : "Delivering to Bengaluru"}
+                </span>
+                <span className="font-body text-[15px] text-ink font-bold">{savedPincode}</span>
+              </div>
+            </button>
 
             {/* Account section */}
             {!user ? (

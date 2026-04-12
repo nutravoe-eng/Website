@@ -142,35 +142,46 @@ export async function PATCH(
       const unitPrice = (oldSub.subscription_plans as any)?.price_per_bowl ?? 0;
 
       // Compute all delivery dates together with rolling-window cutoff logic.
-      // This ensures a Monday approved at 10 PM skips Monday and starts from Tuesday,
-      // with the missed Monday pushed to next Monday instead of being lost.
       const daySlugList = oldSub.subscription_day_configs.map((c: { day_of_week: string; delivery_time_slot: string | null }) => ({
         day: c.day_of_week,
         timeSlot: c.delivery_time_slot ?? oldSub.delivery_time_slot ?? null,
       }));
-      const dateMap = scheduleDeliveryDates(daySlugList, true); // Admin override for same-day
+      const dateMap = scheduleDeliveryDates(daySlugList, true); // admin override for same-day
 
+      // Group configs by day_of_week — one order per delivery day, all bowls as line items.
+      // Without this, multiple bowl types on the same day each try to create a separate order
+      // and every one after the first fails with "delivery already recorded".
+      const configsByDay: Record<string, typeof oldSub.subscription_day_configs> = {};
       for (const config of oldSub.subscription_day_configs) {
-        try {
-          const deliveryDate = dateMap[config.day_of_week] ?? getNextDateForDayOfWeek(config.day_of_week);
-          const bowls = [{
-            bowl_slug: config.bowl_slug,
-            bowl_name: config.bowl_slug,
-            quantity: config.quantity,
-            unit_price: unitPrice,                             // base price only
-            customization_unit_price: config.customization_cost_rs ?? 0, // split out
-            customizations: config.customizations ?? []
-          }];
+        const key = config.day_of_week;
+        if (!configsByDay[key]) configsByDay[key] = [];
+        configsByDay[key].push(config);
+      }
 
-          await adminSupabase.rpc('create_subscription_delivery', {
-            p_subscription_id: id,
-            p_delivery_date: deliveryDate,
-            p_delivery_time_slot: config.delivery_time_slot ?? oldSub.delivery_time_slot,
-            p_bowls: bowls,
-            p_status: 'confirmed',  // admin marks each order delivered on the day
-          });
-        } catch (autoGenErr) {
-          console.error(`Failed to auto-generate spread order for day config: ${config.id}`, autoGenErr);
+      for (const [daySlug, dayConfigs] of Object.entries(configsByDay)) {
+        const deliveryDate = dateMap[daySlug] ?? getNextDateForDayOfWeek(daySlug);
+        const bowls = dayConfigs.map((config: any) => ({
+          bowl_slug: config.bowl_slug,
+          bowl_name: config.bowl_name ?? config.bowl_slug,
+          quantity: config.quantity,
+          unit_price: unitPrice,
+          customization_unit_price: config.customization_cost_rs ?? 0,
+          customizations: config.customizations ?? [],
+        }));
+        // Use time slot from first config for this day (they share a day so same slot)
+        const deliveryTimeSlot = dayConfigs[0].delivery_time_slot ?? oldSub.delivery_time_slot;
+
+        const { error: rpcError } = await adminSupabase.rpc('create_subscription_delivery', {
+          p_subscription_id: id,
+          p_delivery_date: deliveryDate,
+          p_delivery_time_slot: deliveryTimeSlot,
+          p_bowls: bowls,
+          p_status: 'confirmed',
+        });
+
+        if (rpcError) {
+          console.error(`Auto-gen failed for ${daySlug} (${deliveryDate}): ${rpcError.message}`);
+          // Non-fatal — continue creating other days
         }
       }
     }

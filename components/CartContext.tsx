@@ -1,7 +1,27 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
 import { Bowl, CartItem, IngredientCustomization } from "@/types";
+
+const CART_STORAGE_KEY = "nutravoe_cart";
+
+function loadCartFromStorage(): CartItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CART_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as CartItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCartToStorage(items: CartItem[]) {
+  try {
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    // storage quota exceeded or private browsing — silently ignore
+  }
+}
 
 interface CartContextValue {
   items: CartItem[];
@@ -18,6 +38,17 @@ const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
+
+  // Hydrate from localStorage once on mount
+  useEffect(() => {
+    const stored = loadCartFromStorage();
+    if (stored.length > 0) setItems(stored);
+  }, []);
+
+  // Persist to localStorage on every change
+  useEffect(() => {
+    saveCartToStorage(items);
+  }, [items]);
 
   const addItem = useCallback(
     (bowl: Bowl, customizations?: IngredientCustomization[], customizationCost?: number) => {
@@ -72,7 +103,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const clearCart = useCallback(() => setItems([]), []);
+  const clearCart = useCallback(() => {
+    setItems([]);
+    try { localStorage.removeItem(CART_STORAGE_KEY); } catch { /* ignore */ }
+  }, []);
 
   const total = items.reduce(
     (sum, i) => sum + (i.bowl.price + i.customizationCost) * i.quantity,

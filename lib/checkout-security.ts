@@ -207,10 +207,25 @@ export async function buildSubscriptionQuote(
     const bowl = bowlMap.get(config.bowlId);
     if (!bowl) continue;
 
-    const hasCustomizations = (config.customizations?.length ?? 0) > 0;
-    if (hasCustomizations) {
-      customisedBowlCount++;
-      totalIngredientExtrasRs += getCustomizationUpcharge(bowl, config.customizations);
+    const customsRaw = config.customizations as unknown;
+    const isPerInstance = Array.isArray((customsRaw as unknown[])?.[0]);
+
+    if (isPerInstance) {
+      // Per-instance format: IngredientCustomization[][]
+      const instances = customsRaw as IngredientCustomization[][];
+      for (const inst of instances) {
+        if (inst.some(c => c.option === 'extra' || c.option === 'remove')) {
+          customisedBowlCount++;
+        }
+        totalIngredientExtrasRs += getCustomizationUpcharge(bowl, inst);
+      }
+    } else {
+      // Legacy flat format: IngredientCustomization[]
+      const flat = config.customizations;
+      if ((flat?.length ?? 0) > 0) {
+        customisedBowlCount++;
+        totalIngredientExtrasRs += getCustomizationUpcharge(bowl, flat);
+      }
     }
   }
 

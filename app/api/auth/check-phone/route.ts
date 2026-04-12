@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await adminSupabase
     .from('users')
-    .select('id')
+    .select('id, email')
     .eq('phone', normalised)
     .limit(1)
     .maybeSingle();
@@ -27,5 +27,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unable to check phone' }, { status: 500, headers: limited.headers });
   }
 
-  return NextResponse.json({ exists: Boolean(data) }, { headers: limited.headers });
+  if (!data) {
+    return NextResponse.json({ exists: false }, { headers: limited.headers });
+  }
+
+  return NextResponse.json({ exists: true, email: data.email }, { headers: limited.headers });
 }

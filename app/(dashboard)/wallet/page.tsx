@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getWalletWithTransactions } from '@/lib/wallet';
 import { formatCurrency } from '@/lib/utils';
 import type { WalletLoad, WalletTransaction, Subscription } from '@/types';
@@ -42,12 +43,14 @@ function getLoadLabel(load: WalletLoad) {
 }
 
 export default function WalletPage() {
+  const router = useRouter();
   const [balancePaise, setBalancePaise] = useState(0);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [activeLoads, setActiveLoads] = useState<WalletLoad[]>([]);
   const [nextExpiryAt, setNextExpiryAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [flexibleSub, setFlexibleSub] = useState<Subscription | null>(null);
+  const [flexibleCheckDone, setFlexibleCheckDone] = useState(false);
   const [showTopup, setShowTopup] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -59,11 +62,11 @@ export default function WalletPage() {
     setLoading(false);
   }, []);
 
-  // Fetch active flexible subscription — Top Up button only shown for flexible plans
+  // Fetch active flexible subscription — redirect away if user has no flexible plan
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
+      if (!user) { setFlexibleCheckDone(true); return; }
       const { data } = await supabase
         .from('subscriptions')
         .select('id, plan_id, style, status, period_end_date, wallet_balance_rs')
@@ -85,15 +88,20 @@ export default function WalletPage() {
           periodEndDate: data.period_end_date ?? undefined,
           walletBalancePaise: data.wallet_balance_rs ? data.wallet_balance_rs * 100 : 0,
         });
+      } else {
+        // No flexible subscription — wallet doesn't apply, send to subscriptions
+        router.replace('/subscriptions');
+        return;
       }
+      setFlexibleCheckDone(true);
     });
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  if (loading) {
+  if (loading || !flexibleCheckDone) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-sage border-t-transparent" />

@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+
+const WIZARD_SESSION_KEY = "nutravoe_subscribe_wizard";
 import Link from "next/link";
 import Image from "next/image";
 import type { Bowl, PlanId, DeliveryStyle, DayBowlConfig, IngredientCustomization, SubscriptionPlan } from "@/types";
@@ -45,7 +47,8 @@ interface WizardState {
   dayCustomMap: Record<string, IngredientCustomization[]>;
   // Scenario A (spread) — multiple bowls + quantities per day
   dayBowlCounts: Record<string, Record<string, number>>;
-  dayBowlCustomMap: Record<string, Record<string, IngredientCustomization[]>>;
+  // Per-instance customizations: [day][bowlId][instanceIndex] = IngredientCustomization[]
+  dayBowlCustomMap: Record<string, Record<string, IngredientCustomization[][]>>;
   // Shared
   timeSlotMode: TimeSlotMode;
   deliveryTimeSlot: string;     // used if same time
@@ -69,19 +72,34 @@ function calcCustomCost(customizations: IngredientCustomization[], bowl?: Bowl |
 }
 
 export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPlans }: Props) {
-  const [state, setState] = useState<WizardState>({
-    step: 1,
-    planId: null,
-    deliveryStyle: null,
-    selectedDays: [],
-    dayBowlMap: {},
-    dayCustomMap: {},
-    dayBowlCounts: {},
-    dayBowlCustomMap: {},
-    timeSlotMode: 'same',
-    deliveryTimeSlot: '',
-    dayTimeSlotMap: {},
+  const [state, setState] = useState<WizardState>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = sessionStorage.getItem(WIZARD_SESSION_KEY);
+        if (raw) return JSON.parse(raw) as WizardState;
+      } catch { /* ignore */ }
+    }
+    return {
+      step: 1,
+      planId: null,
+      deliveryStyle: null,
+      selectedDays: [],
+      dayBowlMap: {},
+      dayCustomMap: {},
+      dayBowlCounts: {},
+      dayBowlCustomMap: {},
+      timeSlotMode: 'same',
+      deliveryTimeSlot: '',
+      dayTimeSlotMap: {},
+    };
   });
+
+  // Persist wizard state so it survives the sign-in redirect
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    try { sessionStorage.setItem(WIZARD_SESSION_KEY, JSON.stringify(state)); } catch { /* ignore */ }
+  }, [state]);
 
   const [user, setUser] = useState<{ name: string; phone: string; email: string; id: string } | null>(null);
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -117,7 +135,8 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
   // Customization modal triggers
   const [customizingDay, setCustomizingDay] = useState<string | null>(null);  // scenario C
-  const [customizingSpreadKey, setCustomizingSpreadKey] = useState<{ day: string; bowlId: string } | null>(null);  // scenario A
+  const [customizingSpreadKey, setCustomizingSpreadKey] = useState<{ day: string; bowlId: string; instanceIndex: number } | null>(null);  // scenario A
+  const [repeatChoiceKey, setRepeatChoiceKey] = useState<{ day: string; bowlId: string } | null>(null);  // scenario A — repeat/customise sheet
 
   useEffect(() => {
     const supabase = createClient();
@@ -291,14 +310,52 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     if (!currentPlan) return;
     if (delta > 0 && spreadTotal >= currentPlan.bowlsPerWeek) return;
     const current = state.dayBowlCounts[day]?.[bowlId] ?? 0;
+
+    if (delta > 0 && current >= 1) {
+      const bowl = bowls.find(b => b._id === bowlId);
+      if (bowl?.customizableIngredients?.length) {
+        setRepeatChoiceKey({ day, bowlId });
+        return; // increment happens via the choice sheet
+      }
+    }
+
     const next = Math.max(0, current + delta);
-    setState(s => ({
-      ...s,
-      dayBowlCounts: {
-        ...s.dayBowlCounts,
-        [day]: { ...(s.dayBowlCounts[day] ?? {}), [bowlId]: next },
-      },
-    }));
+    setState(s => {
+      const currentInstances = s.dayBowlCustomMap[day]?.[bowlId] ?? [];
+      const newInstances = delta > 0
+        ? [...currentInstances, [] as IngredientCustomization[]]
+        : currentInstances.slice(0, -1);
+      return {
+        ...s,
+        dayBowlCounts: {
+          ...s.dayBowlCounts,
+          [day]: { ...(s.dayBowlCounts[day] ?? {}), [bowlId]: next },
+        },
+        dayBowlCustomMap: {
+          ...s.dayBowlCustomMap,
+          [day]: { ...(s.dayBowlCustomMap[day] ?? {}), [bowlId]: newInstances },
+        },
+      };
+    });
+  }
+
+  // Applies the confirmed repeat-choice: increments count and pushes the given customizations as a new instance
+  function doIncrementBowl(day: string, bowlId: string, customizations: IngredientCustomization[]) {
+    setState(s => {
+      const currentCount = s.dayBowlCounts[day]?.[bowlId] ?? 0;
+      const currentInstances = s.dayBowlCustomMap[day]?.[bowlId] ?? [];
+      return {
+        ...s,
+        dayBowlCounts: {
+          ...s.dayBowlCounts,
+          [day]: { ...(s.dayBowlCounts[day] ?? {}), [bowlId]: currentCount + 1 },
+        },
+        dayBowlCustomMap: {
+          ...s.dayBowlCustomMap,
+          [day]: { ...(s.dayBowlCustomMap[day] ?? {}), [bowlId]: [...currentInstances, customizations] },
+        },
+      };
+    });
   }
 
   const describeCustomizations = (
@@ -334,12 +391,24 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         const dayCounts = state.dayBowlCounts[day] ?? {};
         const lines = Object.entries(dayCounts)
           .filter(([, qty]) => qty > 0)
-          .map(([bowlId, qty]) => {
+          .flatMap(([bowlId, qty]) => {
             const bowl = bowls.find(b => b._id === bowlId);
-            const c = describeCustomizations(state.dayBowlCustomMap[day]?.[bowlId], bowl);
+            const instances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
             const slot = state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot;
             const s = slot ? ` [${slot}]` : "";
-            return `- ${day}: ${qty} x ${bowl?.name ?? bowlId}${c}${s}`;
+            // If all instances share the same customizations, collapse into one line
+            const allSame = instances.length <= 1 || instances.every((inst, i) =>
+              i === 0 || JSON.stringify(inst) === JSON.stringify(instances[0])
+            );
+            if (qty === 1 || allSame) {
+              const c = describeCustomizations(instances[0] ?? [], bowl);
+              return [`- ${day}: ${qty} x ${bowl?.name ?? bowlId}${c}${s}`];
+            }
+            // Different customizations per instance — list each bowl separately
+            return instances.map((inst, i) => {
+              const c = describeCustomizations(inst, bowl);
+              return `- ${day}: 1 x ${bowl?.name ?? bowlId} [Bowl ${i + 1}]${c}${s}`;
+            });
           });
         return lines.length > 0 ? lines : [`- ${day}: no bowls assigned`];
       });
@@ -384,6 +453,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         subscriptionRef: subRef,
       });
       const waUrl = getWhatsAppUrl(whatsappNumber, message);
+      try { sessionStorage.removeItem(WIZARD_SESSION_KEY); } catch { /* ignore */ }
       if (getScenario() === 'D') {
         // For flexible, store the URL and let the user click it directly
         // (window.open after async/await is blocked by pop-up blockers)
@@ -410,18 +480,22 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
       ? Object.entries(state.dayBowlCounts).flatMap(([day, bowlCounts]) =>
           Object.entries(bowlCounts)
             .filter(([, count]) => count > 0)
-            .map(([bowlId, quantity]) => ({
-              day: day as DayBowlConfig['day'],
-              bowlId,
-              bowlName: bowls.find(b => b._id === bowlId)?.name ?? '',
-              quantity,
-              customizations: state.dayBowlCustomMap[day]?.[bowlId] ?? [],
-              customizationCost: calcCustomCost(
-                state.dayBowlCustomMap[day]?.[bowlId] ?? [],
-                bowls.find(b => b._id === bowlId)
-              ),
-              deliveryTimeSlot: state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot,
-            }))
+            .map(([bowlId, quantity]) => {
+              const bowl = bowls.find(b => b._id === bowlId);
+              const instances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
+              // Pad to match quantity in case instances array is shorter
+              const paddedInstances = Array.from({ length: quantity }, (_, i) => instances[i] ?? []);
+              return {
+                day: day as DayBowlConfig['day'],
+                bowlId,
+                bowlName: bowl?.name ?? '',
+                quantity,
+                // Send per-instance array; API and checkout-security handle [][] format
+                customizations: paddedInstances as unknown as IngredientCustomization[],
+                customizationCost: paddedInstances.reduce((sum, inst) => sum + calcCustomCost(inst, bowl), 0),
+                deliveryTimeSlot: state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot,
+              };
+            })
         )
       : scenario === 'C'
       ? state.selectedDays.map(day => ({
@@ -479,12 +553,13 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     if (scenario === "D") return 0; // flexible is charged later
 
     if (scenario === "A") {
-      // Per-day, per-bowl counting
-      return Object.values(state.dayBowlCustomMap).reduce((acc, bowlMap) => {
-        const count = Object.values(bowlMap).filter(customs =>
-          customs.some(c => c.option === "extra" || c.option === "remove")
-        ).length;
-        return acc + count;
+      // Count how many individual bowl instances have any customisation
+      return Object.entries(state.dayBowlCustomMap).reduce((acc, [, bowlMap]) => {
+        return acc + Object.values(bowlMap).reduce((dayAcc, instances) => {
+          return dayAcc + instances.filter(inst =>
+            inst.some(c => c.option === "extra" || c.option === "remove")
+          ).length;
+        }, 0);
       }, 0);
     }
 
@@ -506,9 +581,10 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     if (scenario === 'D') return 0; // flexible — charged at wallet debit time
     if (scenario === 'A') {
       return Object.entries(state.dayBowlCustomMap).reduce((total, [day, bowlMap]) => {
-        return total + Object.entries(bowlMap).reduce((dayTotal, [bowlId, customs]) => {
+        return total + Object.entries(bowlMap).reduce((dayTotal, [bowlId, instances]) => {
           const bowl = bowls.find(b => b._id === bowlId);
-          return dayTotal + calcCustomCost(customs, bowl);
+          // Sum cost across each individual instance
+          return dayTotal + instances.reduce((instTotal, inst) => instTotal + calcCustomCost(inst, bowl), 0);
         }, 0);
       }, 0);
     }
@@ -587,7 +663,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             href={flexibleWhatsAppUrl}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => { setTimeout(() => setPendingApproval(true), 500); }}
+            onClick={() => { try { sessionStorage.removeItem(WIZARD_SESSION_KEY); } catch { /* ignore */ } setTimeout(() => setPendingApproval(true), 500); }}
             className="bg-[#25D366] hover:bg-[#1ebe5d] text-white font-body text-sm font-bold tracking-wide px-8 py-3.5 rounded-md transition-colors shadow-sm inline-flex items-center gap-2"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
@@ -838,8 +914,8 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                         <div className="space-y-2">
                           {bowls.map(bowl => {
                             const count = dayCounts[bowl._id] ?? 0;
-                            const customs = state.dayBowlCustomMap[day]?.[bowl._id] ?? [];
-                            const hasCustoms = customs.some(c => c.option !== 'default');
+                            const instances = state.dayBowlCustomMap[day]?.[bowl._id] ?? [];
+                            const hasAnyCustom = instances.some(inst => inst.some(c => c.option !== 'default'));
 
                             return (
                               <div key={bowl._id} className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${count > 0 ? 'border-sage/40 bg-sage/5' : 'border-black/6 bg-[#F9F8F6]'}`}>
@@ -849,13 +925,23 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                                 <div className="flex-1 min-w-0">
                                   <p className="font-body text-[12px] font-medium text-ink truncate">{bowl.name}</p>
                                   {count > 0 && (
-                                    <button
-                                      onClick={() => setCustomizingSpreadKey({ day, bowlId: bowl._id })}
-                                      className="font-body text-[10px] text-sage font-semibold hover:underline flex items-center gap-0.5 cursor-pointer mt-0.5"
-                                    >
-                                      {hasCustoms ? 'Edit customisation' : 'Customise'} →
-                                      {hasCustoms && <span className="w-1.5 h-1.5 rounded-full bg-terracotta ml-1" />}
-                                    </button>
+                                    <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                                      {Array.from({ length: count }).map((_, idx) => {
+                                        const instCustoms = instances[idx] ?? [];
+                                        const instHasCustom = instCustoms.some(c => c.option !== 'default');
+                                        return (
+                                          <button
+                                            key={idx}
+                                            onClick={() => setCustomizingSpreadKey({ day, bowlId: bowl._id, instanceIndex: idx })}
+                                            className="font-body text-[10px] text-sage font-semibold hover:underline flex items-center gap-0.5 cursor-pointer"
+                                          >
+                                            {count > 1 && <span className="text-stone font-normal mr-0.5">Bowl {idx + 1}:</span>}
+                                            {instHasCustom ? 'Edit' : 'Customise'} →
+                                            {instHasCustom && <span className="w-1.5 h-1.5 rounded-full bg-terracotta ml-0.5 shrink-0" />}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
@@ -1151,28 +1237,113 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           />
         )}
 
-        {/* Customization modal — scenario A (spread, per-day per-bowl) */}
+        {/* Customization modal — scenario A (spread, per-instance) */}
         {customizingSpreadKey && (() => {
-          const bowl = bowls.find(b => b._id === customizingSpreadKey.bowlId) ?? null;
+          const { day, bowlId, instanceIndex } = customizingSpreadKey;
+          const bowl = bowls.find(b => b._id === bowlId) ?? null;
           if (!bowl) return null;
+          const instances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
           return (
             <CustomizationModal
               bowl={bowl}
-              initialCustomizations={state.dayBowlCustomMap[customizingSpreadKey.day]?.[customizingSpreadKey.bowlId]}
+              initialCustomizations={instances[instanceIndex] ?? []}
               mode="subscription"
               onConfirm={(customizations) => {
-                const { day, bowlId } = customizingSpreadKey;
-                setState(s => ({
-                  ...s,
-                  dayBowlCustomMap: {
-                    ...s.dayBowlCustomMap,
-                    [day]: { ...(s.dayBowlCustomMap[day] ?? {}), [bowlId]: customizations },
-                  },
-                }));
+                setState(s => {
+                  const current = [...(s.dayBowlCustomMap[day]?.[bowlId] ?? [])];
+                  current[instanceIndex] = customizations;
+                  return {
+                    ...s,
+                    dayBowlCustomMap: {
+                      ...s.dayBowlCustomMap,
+                      [day]: { ...(s.dayBowlCustomMap[day] ?? {}), [bowlId]: current },
+                    },
+                  };
+                });
                 setCustomizingSpreadKey(null);
               }}
               onClose={() => setCustomizingSpreadKey(null)}
             />
+          );
+        })()}
+
+        {/* Repeat-or-customise choice sheet — scenario A */}
+        {repeatChoiceKey && (() => {
+          const bowl = bowls.find(b => b._id === repeatChoiceKey.bowlId);
+          const { day, bowlId } = repeatChoiceKey;
+          const existingInstances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
+          const lastCustomizations = existingInstances[existingInstances.length - 1] ?? [];
+          const existingCount = state.dayBowlCounts[day]?.[bowlId] ?? 0;
+          const lastSummary = describeCustomizations(lastCustomizations, bowl).replace(/^\s*\(|\)$/g, '');
+          return (
+            <div
+              className="fixed inset-0 z-[120] flex items-end md:items-center justify-center p-0 md:p-4 bg-ink/60 backdrop-blur-sm animate-in fade-in duration-200"
+              onClick={(e) => { if (e.target === e.currentTarget) setRepeatChoiceKey(null); }}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                className="bg-white rounded-t-2xl md:rounded-2xl w-full md:max-w-sm shadow-2xl animate-in slide-in-from-bottom-4 md:zoom-in-95 duration-200"
+              >
+                <div className="flex items-center justify-between px-6 py-5 border-b border-black/5">
+                  <div>
+                    <h3 className="font-display text-xl font-medium text-ink">Add another {bowl?.name}?</h3>
+                    <p className="font-body text-[12px] text-stone mt-0.5">Choose how you&apos;d like it</p>
+                  </div>
+                  <button
+                    onClick={() => setRepeatChoiceKey(null)}
+                    aria-label="Close"
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 text-stone hover:text-ink transition-colors"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+                    </svg>
+                  </button>
+                </div>
+                <div className="p-4 flex flex-col gap-3 pb-8 md:pb-4">
+                  <button
+                    onClick={() => {
+                      doIncrementBowl(day, bowlId, [...lastCustomizations]);
+                      setRepeatChoiceKey(null);
+                    }}
+                    className="flex items-center gap-4 p-4 border border-black/10 hover:border-sage/40 rounded-xl hover:bg-sage/5 transition-all text-left group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-sage/10 text-sage-dark flex items-center justify-center shrink-0">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                        <path d="M3 3v5h5"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-body text-[14px] font-bold text-ink group-hover:text-sage-dark transition-colors">Repeat same customisation</p>
+                      {lastSummary && (
+                        <p className="font-body text-[11px] text-stone mt-0.5 truncate">{lastSummary}</p>
+                      )}
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newInstanceIndex = existingCount;
+                      doIncrementBowl(day, bowlId, []);
+                      setRepeatChoiceKey(null);
+                      setCustomizingSpreadKey({ day, bowlId, instanceIndex: newInstanceIndex });
+                    }}
+                    className="flex items-center gap-4 p-4 border border-black/10 hover:border-terracotta/40 rounded-xl hover:bg-terracotta/5 transition-all text-left group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-terracotta/10 text-terracotta flex items-center justify-center shrink-0">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                        <path d="m15 5 4 4"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-body text-[14px] font-bold text-ink group-hover:text-terracotta transition-colors">Customise differently</p>
+                      <p className="font-body text-[11px] text-stone mt-0.5">Opens ingredient options for this bowl</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
           );
         })()}
       </>
@@ -1226,7 +1397,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
               You need an account to manage your subscription and delivery.
             </p>
             <Link
-              href="/signin?redirect=/subscribe"
+              href="/signin?next=/subscribe"
               className="bg-terracotta hover:bg-[#D55F43] text-white font-body text-sm font-bold tracking-wide px-8 py-3 rounded-md transition-colors shadow-sm inline-block"
             >
               Sign In

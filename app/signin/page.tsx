@@ -259,7 +259,7 @@ function SignInForm() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] pt-24 pb-16 px-6 bg-[#F9F8F6] flex flex-col items-center justify-center">
+    <div className="min-h-[calc(100vh-64px)] pt-24 pb-16 px-6 bg-cream flex flex-col items-center justify-center">
       {/* Brand Logo */}
       <Link href="/" className="mb-8">
         <div className="relative w-12 h-12">
@@ -578,7 +578,7 @@ function SignInForm() {
               <p className="font-body text-[14px] text-stone mb-4 text-center leading-relaxed px-2">
                 The email <span className="font-semibold text-ink">{identifier}</span> belongs to a previously deleted Nutravoe account.
               </p>
-              <div className="bg-[#F9F8F6] border border-black/5 rounded-lg p-4 mb-6">
+              <div className="bg-beige border border-black/5 rounded-lg p-4 mb-6">
                 <p className="font-body text-[13px] text-ink/80 leading-relaxed">
                   You can <span className="font-semibold">sign up fresh</span> using this email — your old data will not be restored. If you deleted your account by mistake, please contact us within 30 days to request a reactivation.
                 </p>
@@ -586,7 +586,7 @@ function SignInForm() {
               <div className="flex flex-col gap-3">
                 <button
                   onClick={() => { setStep("new-user"); setError(""); }}
-                  className="w-full bg-terracotta hover:bg-[#D55F43] text-white font-body text-sm font-medium py-3 rounded-md transition-colors shadow-sm"
+                  className="w-full bg-terracotta hover:bg-terracotta-dark text-white font-body text-sm font-medium py-3 rounded-md transition-colors shadow-sm"
                 >
                   Sign Up Fresh with This Email
                 </button>
@@ -629,7 +629,7 @@ function SignInForm() {
 
         </div>
 
-        <div className="bg-[#F9F8F6]/80 px-8 py-5 border-t border-ink/5 flex justify-center">
+        <div className="bg-beige/60 px-8 py-5 border-t border-ink/5 flex justify-center">
           <p className="font-body text-[11px] text-stone">
             Need help? Contact us on <a href="/help" className="underline hover:text-ink">WhatsApp</a>
           </p>
