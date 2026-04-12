@@ -3,17 +3,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
+const CHARS = ['n', 'u', 't', 'r', 'a', 'v', 'o', 'e'];
+
 export default function IntroAnimation() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
 
-  const screenRef    = useRef<HTMLDivElement>(null);
-  const bowlRef      = useRef<SVGSVGElement>(null);
-  const wordmarkRef  = useRef<HTMLDivElement>(null);
-  const badgeRef     = useRef<HTMLDivElement>(null);
-  const badgeSvgRef  = useRef<SVGSVGElement>(null);
-  const eyebrowRef   = useRef<HTMLParagraphElement>(null);
-  const taglineRef   = useRef<HTMLParagraphElement>(null);
+  const screenRef          = useRef<HTMLDivElement>(null);
+  const bowlRef            = useRef<SVGSVGElement>(null);
+  const badgeRef           = useRef<HTMLDivElement>(null);
+  const badgeSvgRef        = useRef<SVGSVGElement>(null);
+  const eyebrowRef         = useRef<HTMLParagraphElement>(null);
+  const taglineRef         = useRef<HTMLParagraphElement>(null);
+  // Snake segments (orbit phase)
+  const snakeRefs          = useRef<(HTMLSpanElement | null)[]>([]);
+  // Wordmark letters (typewriter phase)
+  const wordmarkLetterRefs = useRef<(HTMLSpanElement | null)[]>([]);
 
   useEffect(() => {
     document.documentElement.removeAttribute('data-intro');
@@ -32,15 +37,14 @@ export default function IntroAnimation() {
   function runSequence() {
     const screen   = screenRef.current;
     const bowl     = bowlRef.current;
-    const wordmark = wordmarkRef.current;
     const badge    = badgeRef.current;
     const badgeSvg = badgeSvgRef.current;
     const eyebrow  = eyebrowRef.current;
     const tagline  = taglineRef.current;
 
-    if (!screen || !bowl || !wordmark || !badge || !badgeSvg || !eyebrow || !tagline) return;
+    if (!screen || !bowl || !badge || !badgeSvg || !eyebrow || !tagline) return;
 
-    // Respect prefers-reduced-motion
+    // Reduced-motion: brief fade and done
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setTimeout(() => {
         screen.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
@@ -68,7 +72,7 @@ export default function IntroAnimation() {
       { duration: 700, delay: 200, easing: 'ease-out', fill: 'forwards' }
     );
 
-    // ── Phase 1 exit: Bowl pops away ──
+    // Bowl pops away
     setTimeout(() => {
       bowl.animate(
         [
@@ -79,74 +83,91 @@ export default function IntroAnimation() {
       );
     }, 1400);
 
-    // ── Phase 2: "nutravoe" orbits as a whole word ──
-    // The orbit centre sits 45px below the wordmark's natural resting position
-    // (roughly the middle of the eyebrow+tagline block that will appear below it).
-    // Radius 90px, 2 full clockwise revolutions starting & ending at the top.
-    // At the top of the orbit the word is 45px above centre → translate(0, -45px).
-    const R  = 90;   // orbit radius (px)
-    const CY = 45;   // how far below natural position the orbit centre is
-    const REVOLUTIONS = 2;
-    const ORBIT_START    = 1750;  // ms after mount
-    const ORBIT_DURATION = 2400;  // ms for the full orbit (2 revolutions)
-    const SETTLE_DURATION = 500;  // ms to drift back to natural position
+    // ── Phase 2a: Snake orbit ──
+    // Each letter follows the one before it with SNAKE_GAP ms delay.
+    // N is the head. All letters rotate to stay tangent to the circle
+    // (α radians swept = α degrees rotation) — the "toppling" effect.
+    //
+    // Coordinate system (letter centred at screen centre):
+    //   x =  R · sin(α)          (right at α=π/2)
+    //   y = -R · cos(α) + CY     (top at α=0, starts CY above centre)
+    //   rotation = α in degrees
+    //
+    const R          = 95;   // orbit radius px
+    const CY         = 28;   // orbit centre is CY px below screen centre
+    const SNAKE_GAP  = 90;   // ms between each letter starting
+    const ORBIT_START    = 1750;
+    const ORBIT_DURATION = 1700;
+    const N_FRAMES       = 60;  // keyframe resolution
 
-    // Build orbit keyframes — 48 steps for smooth circular motion
-    const N = 48;
-    const orbitKF = Array.from({ length: N + 1 }, (_, i) => {
-      const t     = i / N;
-      const angle = -Math.PI / 2 + t * REVOLUTIONS * 2 * Math.PI; // top → clockwise
+    // Build the shared circular-path keyframes (same shape for every letter)
+    const circleKF = Array.from({ length: N_FRAMES + 1 }, (_, i) => {
+      const t     = i / N_FRAMES;
+      const alpha = t * 2 * Math.PI;        // 0 → 2π (one full loop)
+      const x     = R * Math.sin(alpha);
+      const y     = -R * Math.cos(alpha) + CY;
+      const rot   = alpha * (180 / Math.PI); // topple angle matches swept angle
       return {
         opacity: 1,
-        transform: `translate(${R * Math.cos(angle)}px, ${CY + R * Math.sin(angle)}px)`,
+        // translate(-50%,-50%) centres the letter on its orbit position
+        transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) rotate(${rot}deg)`,
         offset: t,
       };
     });
 
-    // Flash wordmark visible at start of orbit (at top of circle)
-    wordmark.animate(
-      [{ opacity: 0 }, { opacity: 1 }],
-      { duration: 150, delay: ORBIT_START, fill: 'forwards' }
-    );
-
-    // Orbit — linear so the speed is constant around the circle
-    wordmark.animate(orbitKF, {
-      duration: ORBIT_DURATION,
-      delay: ORBIT_START,
-      easing: 'linear',
-      fill: 'forwards',
+    snakeRefs.current.forEach((el, i) => {
+      if (!el) return;
+      // Each letter orbits once, starting SNAKE_GAP ms after the previous one
+      el.animate(circleKF, {
+        duration: ORBIT_DURATION,
+        delay: ORBIT_START + i * SNAKE_GAP,
+        easing: 'linear',
+        fill: 'forwards',
+      });
     });
 
-    // After orbit ends, word is back at top of circle (0, CY - R) = (0, -45px).
-    // Settle it down into its natural centred position.
-    wordmark.animate(
-      [
-        { transform: `translate(0px, ${CY - R}px)` },
-        { transform: 'translate(0px, 0px)' },
-      ],
-      ease(SETTLE_DURATION, ORBIT_START + ORBIT_DURATION)
-    );
+    // When the last letter (e) finishes, fade the whole snake out
+    const LAST_DONE = ORBIT_START + (CHARS.length - 1) * SNAKE_GAP + ORBIT_DURATION;
+    snakeRefs.current.forEach((el) => {
+      if (!el) return;
+      el.animate(
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: 180, delay: LAST_DONE + 40, fill: 'forwards' }
+      );
+    });
 
-    // ── Phase 3: Eyebrow + tagline rise in after wordmark settles ──
-    const TEXT_START = ORBIT_START + ORBIT_DURATION + SETTLE_DURATION;
+    // ── Phase 2b: Typewriter reveal on the wordmark ──
+    const TYPEWRITER_START = LAST_DONE + 220;
+    const TYPEWRITER_GAP   = 85;  // ms between each letter appearing
+    wordmarkLetterRefs.current.forEach((el, i) => {
+      if (!el) return;
+      el.animate(
+        [{ opacity: 0 }, { opacity: 1 }],
+        { duration: 60, delay: TYPEWRITER_START + i * TYPEWRITER_GAP, fill: 'forwards' }
+      );
+    });
 
+    const TYPEWRITER_DONE = TYPEWRITER_START + (CHARS.length - 1) * TYPEWRITER_GAP + 60;
+
+    // ── Phase 3: Eyebrow + tagline rise in ──
     eyebrow.animate(
       [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0)' }],
-      ease(480, TEXT_START + 100)
+      ease(480, TYPEWRITER_DONE + 120)
     );
     tagline.animate(
       [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }],
-      ease(520, TEXT_START + 380)
+      ease(520, TYPEWRITER_DONE + 400)
     );
 
-    // ── Phase 4: Circular badge fades in ──
+    // ── Phase 4: Circular badge ──
+    const BADGE_START = TYPEWRITER_DONE + 700;
     setTimeout(() => {
       badge.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, fill: 'forwards' });
       badgeSvg.style.animation = 'intro-badge-spin 16s linear infinite';
-    }, TEXT_START + 700);
+    }, BADGE_START);
 
-    // ── Exit: 2 s after everything is visible, overlay slides up ──
-    const EXIT_AT = TEXT_START + 700 + 500 + 2000; // badge fully in + 2s hold
+    // ── Exit: 2 s hold after badge visible, then slide up ──
+    const EXIT_AT = BADGE_START + 500 + 2000;
     setTimeout(() => {
       screen.animate(
         [{ transform: 'translateY(0)' }, { transform: 'translateY(-102%)' }],
@@ -158,13 +179,23 @@ export default function IntroAnimation() {
 
   if (!mounted) return null;
 
+  // Shared style for both the snake letters and the wordmark letters
+  const letterStyle: React.CSSProperties = {
+    fontFamily: 'var(--font-display)',
+    fontWeight: 300,
+    fontSize: 'clamp(36px, 5vw, 68px)',
+    letterSpacing: '0.12em',
+    color: '#2C2C2C',
+  };
+
   return (
     <div
       ref={screenRef}
-      className="fixed inset-0 z-[9999] bg-cream flex items-center justify-center overflow-hidden"
+      className="fixed inset-0 z-[9999] bg-cream overflow-hidden"
       aria-hidden="true"
     >
-      {/* Phase 1: Sketch bowl */}
+
+      {/* ── Phase 1: Sketch bowl ── */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <svg
           ref={bowlRef}
@@ -190,21 +221,45 @@ export default function IntroAnimation() {
         </svg>
       </div>
 
-      {/* Phase 2 + 3: Brand text */}
+      {/* ── Phase 2a: Snake letters (orbit) ──
+          Each span is absolutely positioned at centre; the animation
+          translates it along the circular path and rotates it to match
+          the tangent — the "toppling" effect. */}
+      <div className="absolute inset-0 pointer-events-none">
+        {CHARS.map((char, i) => (
+          <span
+            key={`snake-${i}`}
+            ref={el => { snakeRefs.current[i] = el; }}
+            style={{
+              ...letterStyle,
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              opacity: 0,
+              willChange: 'transform',
+              // transform-origin stays at centre of letter
+              transformOrigin: 'center center',
+            }}
+          >
+            {char}
+          </span>
+        ))}
+      </div>
+
+      {/* ── Phase 2b + 3: Brand text (typewriter wordmark + eyebrow + tagline) ── */}
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
 
-        {/* Wordmark — orbits as one unit, then settles here */}
-        <div
-          ref={wordmarkRef}
-          className="font-display font-light text-ink"
-          style={{
-            fontSize: 'clamp(36px, 5vw, 68px)',
-            letterSpacing: '0.12em',
-            opacity: 0,
-            willChange: 'transform',
-          }}
-        >
-          nutravoe
+        {/* Wordmark: letters appear one-by-one (typewriter) */}
+        <div className="flex items-baseline">
+          {CHARS.map((char, i) => (
+            <span
+              key={`wm-${i}`}
+              ref={el => { wordmarkLetterRefs.current[i] = el; }}
+              style={{ ...letterStyle, opacity: 0, display: 'inline-block' }}
+            >
+              {char}
+            </span>
+          ))}
         </div>
 
         <p
@@ -225,7 +280,7 @@ export default function IntroAnimation() {
         </p>
       </div>
 
-      {/* Circular spinning badge — bottom-right */}
+      {/* ── Circular spinning badge — bottom-right ── */}
       <div
         ref={badgeRef}
         className="absolute bottom-[9%] right-[7%]"
@@ -251,6 +306,7 @@ export default function IntroAnimation() {
         </svg>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-sage" />
       </div>
+
     </div>
   );
 }
