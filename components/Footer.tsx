@@ -5,7 +5,7 @@ import { getWhatsAppHref } from "@/lib/contact";
 export default function Footer() {
   return (
     <footer className="bg-ink text-white">
-      <div className="max-w-7xl mx-auto px-6 lg:px-16 py-20 grid grid-cols-1 md:grid-cols-3 gap-12">
+      <div className="max-w-7xl mx-auto px-6 lg:px-16 py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
         {/* Brand */}
         <div>
           <Link href="/" className="flex items-center gap-3.5 group mb-5 inline-flex">

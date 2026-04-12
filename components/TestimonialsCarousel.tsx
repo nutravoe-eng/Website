@@ -138,18 +138,18 @@ const tripled = [...reviews, ...reviews, ...reviews];
 
 export default function TestimonialsCarousel() {
   return (
-    <section className="bg-ink py-20 overflow-hidden" aria-label="Customer testimonials">
+    <section className="bg-beige py-20 overflow-hidden" aria-label="Customer testimonials">
       {/* Section header */}
       <div className="max-w-7xl mx-auto px-6 lg:px-16 mb-14 text-center">
         <p className="section-eyebrow text-terracotta mb-4">
           What our customers say
         </p>
         <h2
-          className="font-display text-white"
+          className="font-display text-ink"
           style={{ fontSize: "clamp(36px, 3.5vw, 52px)", lineHeight: "1.15" }}
         >
           Real people.{" "}
-          <em className="text-sage-light">Real stories.</em>
+          <em className="text-terracotta">Real stories.</em>
         </h2>
       </div>
 
@@ -162,14 +162,14 @@ export default function TestimonialsCarousel() {
         <div
           className="pointer-events-none absolute left-0 top-0 bottom-0 w-24 z-10"
           style={{
-            background: "linear-gradient(to right, #1C1C1A, transparent)",
+            background: "linear-gradient(to right, #E8E3DA, transparent)",
           }}
         />
         {/* Right fade */}
         <div
           className="pointer-events-none absolute right-0 top-0 bottom-0 w-24 z-10"
           style={{
-            background: "linear-gradient(to left, #1C1C1A, transparent)",
+            background: "linear-gradient(to left, #E8E3DA, transparent)",
           }}
         />
 
