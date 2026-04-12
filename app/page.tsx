@@ -12,7 +12,10 @@ export default async function HomePage() {
   return (
     <>
       {/* ── Hero ────────────────────────────────────────── */}
-      <section className="relative h-[calc(100vh-64px)] min-h-[640px] flex items-center" aria-labelledby="trust-heading">
+      <section
+        className="relative flex min-h-[max(640px,calc(100vh-64px))] flex-col"
+        aria-labelledby="trust-heading"
+      >
         {/* Background video bleeds up into the 64px layout padding */}
         <div className="absolute inset-x-0 bottom-0 top-[-64px] z-[-1] overflow-hidden" aria-hidden="true">
           <video
@@ -25,20 +28,21 @@ export default async function HomePage() {
           >
             <source src="/hero-vid-slow.mp4" type="video/mp4" />
           </video>
-          {/* Directional overlay: dark left for text, breathing room right */}
+          {/* Warm brand tint: brown-gold left scrim, cream edge, open right */}
           <div className="absolute inset-0" style={{
-            background: "linear-gradient(to right, rgba(28,28,26,0.85) 0%, rgba(28,28,26,0.7) 35%, rgba(28,28,26,0.1) 65%, transparent 100%)"
+            background: "linear-gradient(to right, rgba(62,48,32,0.72) 0%, rgba(62,48,32,0.45) 40%, rgba(250,249,246,0.12) 72%, transparent 100%)"
           }} />
           {/* Bottom vignette so trust strip reads on any video frame */}
           <div className="absolute inset-0" style={{
-            background: "linear-gradient(to top, rgba(28,28,26,0.55) 0%, transparent 22%)"
+            background: "linear-gradient(to top, rgba(62,48,32,0.42) 0%, transparent 26%)"
           }} />
         </div>
 
-        {/* Content — perfectly centered vertically between nav and trust strip */}
-        <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-16 w-full -mt-4">
-          <div className="max-w-2xl">
-            <p className="font-body text-[11px] font-medium tracking-[0.25em] mb-4 text-sage-light" style={{ textShadow: "0 2px 10px rgba(0,0,0,0.3)" }}>
+        {/* Copy fills space above strip; strip is in-flow so it never overlaps CTAs */}
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col justify-end px-6 pb-6 pt-10 lg:px-16">
+          <div className="max-w-7xl mx-auto w-full -mt-4">
+            <div className="max-w-2xl">
+            <p className="font-body text-[11px] font-medium tracking-[0.25em] mb-4 text-sage-light" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}>
               FRESH · BANGALORE · DELIVERED 7 AM–9 PM
             </p>
             <h1 className="font-display text-white mb-5"
@@ -47,7 +51,7 @@ export default async function HomePage() {
               Any meal.<br />
               <em className="text-sage-light">At your door.</em>
             </h1>
-            <p className="font-body text-[15px] font-light text-white/85 leading-relaxed mb-8 max-w-md">
+            <p className="font-body text-[15px] font-light text-white/90 leading-relaxed mb-8 max-w-md">
               Fresh yogurt bowls crafted daily. High protein, gut-friendly,
               no added sugar — a complete meal you'll actually look forward to.
             </p>
@@ -62,12 +66,14 @@ export default async function HomePage() {
                 Our Story →
               </Link>
             </div>
+            </div>
           </div>
         </div>
 
-        {/* Trust strip — frosted glass, pinned to bottom of hero */}
-        <div className="absolute bottom-0 left-0 right-0 z-20 grid grid-cols-2 md:grid-cols-4 divide-x divide-white/[0.07] border-t border-white/[0.07]"
-          style={{ background: "rgba(28,28,26,0.55)", backdropFilter: "blur(16px)" }}
+        {/* Trust strip — in document flow (was absolute + z-20, which covered CTAs on mobile) */}
+        <div
+          className="relative z-20 shrink-0 grid grid-cols-2 md:grid-cols-4 divide-x divide-white/[0.12] border-t border-white/[0.12] text-white"
+          style={{ background: "rgba(45,36,26,0.72)", backdropFilter: "blur(16px)" }}
           aria-label="Why Nutravoe"
         >
           <h2 id="trust-heading" className="sr-only">Why Nutravoe</h2>
@@ -89,10 +95,20 @@ export default async function HomePage() {
               title: "Delivered 7 AM–9 PM", sub: "Order anytime, same day"
             },
           ].map(({ icon, title, sub }) => (
-            <div key={title} className="px-4 lg:px-8 py-2.5 text-center flex flex-col justify-center items-center">
-              <div className="text-sage mb-1.5 opacity-90 drop-shadow-md" aria-hidden="true">{icon}</div>
-              <p className="font-body text-[11.5px] font-medium text-white/85 tracking-wide leading-tight">{title}</p>
-              <p className="font-body text-[10px] text-white/60 mt-0.5 leading-tight">{sub}</p>
+            <div key={title} className="px-4 lg:px-8 py-2.5 text-center flex flex-col justify-center items-center text-inherit">
+              <div className="text-sage-light mb-1.5 drop-shadow-md [color:#f0e6d4]" aria-hidden="true">{icon}</div>
+              <p
+                className="font-body text-[11.5px] font-medium tracking-wide leading-tight text-white"
+                style={{ textShadow: "0 1px 3px rgba(0,0,0,0.45)" }}
+              >
+                {title}
+              </p>
+              <p
+                className="font-body text-[10px] mt-0.5 leading-tight text-[#f5f0e8]"
+                style={{ textShadow: "0 1px 2px rgba(0,0,0,0.35)" }}
+              >
+                {sub}
+              </p>
             </div>
           ))}
         </div>
@@ -189,7 +205,7 @@ export default async function HomePage() {
             href={getWhatsAppHref()}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block btn-primary text-xs tracking-widest"
+            className="inline-block btn-sage text-xs tracking-widest shadow-[0_4px_20px_rgba(196,165,116,0.35)] hover:shadow-[0_4px_25px_rgba(196,165,116,0.55)] transition-all duration-300"
           >
             Order Your First Bowl →
           </a>

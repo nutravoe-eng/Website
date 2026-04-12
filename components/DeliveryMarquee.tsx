@@ -16,11 +16,14 @@ interface DeliveryMarqueeProps {
 export default function DeliveryMarquee({ variant = "light" }: DeliveryMarqueeProps) {
   const isDark = variant === "dark";
 
+  // Warm brown glass — matches homepage hero trust strip (not flat charcoal)
+  const darkBar = "rgba(45,36,26,0.78)";
+
   return (
     <div
       className={`relative overflow-hidden border-y ${
         isDark
-          ? "border-white/[0.08] bg-[rgba(28,28,26,0.72)] backdrop-blur-md"
+          ? "border-white/[0.12] bg-[rgba(45,36,26,0.78)] backdrop-blur-md"
           : "border-black/[0.06] bg-[#F5F3EF]"
       }`}
       aria-label="Delivery information"
@@ -30,7 +33,7 @@ export default function DeliveryMarquee({ variant = "light" }: DeliveryMarqueePr
         className="pointer-events-none absolute inset-y-0 left-0 w-20 z-10"
         style={{
           background: isDark
-            ? "linear-gradient(to right, rgba(28,28,26,0.75), transparent)"
+            ? `linear-gradient(to right, ${darkBar}, transparent)`
             : "linear-gradient(to right, #F5F3EF, transparent)",
         }}
       />
@@ -38,7 +41,7 @@ export default function DeliveryMarquee({ variant = "light" }: DeliveryMarqueePr
         className="pointer-events-none absolute inset-y-0 right-0 w-20 z-10"
         style={{
           background: isDark
-            ? "linear-gradient(to left, rgba(28,28,26,0.75), transparent)"
+            ? `linear-gradient(to left, ${darkBar}, transparent)`
             : "linear-gradient(to left, #F5F3EF, transparent)",
         }}
       />
@@ -52,12 +55,20 @@ export default function DeliveryMarquee({ variant = "light" }: DeliveryMarqueePr
           <span
             key={i}
             className={`flex items-center gap-2 px-8 font-body text-[12px] tracking-wide shrink-0 ${
-              isDark ? "text-white/75" : "text-stone"
+              isDark
+                ? "text-sage-light [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]"
+                : "text-stone"
             }`}
           >
             <span className="text-[14px]" aria-hidden="true">{item.icon}</span>
             {item.text}
-            <span className={`mx-4 text-[10px] ${isDark ? "text-white/25" : "text-black/15"}`}>◆</span>
+            <span
+              className={`mx-4 text-[10px] ${
+                isDark ? "text-sage-dark/55" : "text-black/15"
+              }`}
+            >
+              ◆
+            </span>
           </span>
         ))}
       </div>
