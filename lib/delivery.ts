@@ -16,8 +16,8 @@ export const HUBS: Hub[] = [
   {
     id: "domlur",
     name: "Domlur Kitchen",
-    lat: 12.9616,
-    lng: 77.6382,
+    lat: 12.956234989984159,
+    lng: 77.63834643721881,
   },
 ];
 

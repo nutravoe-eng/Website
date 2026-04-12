@@ -56,3 +56,23 @@ export async function geocodePincode(
     return null;
   }
 }
+
+/**
+ * Coordinates for `/api/delivery-distance`: use the saved map pin when present,
+ * otherwise pincode centroid via {@link geocodePincode}.
+ */
+export async function resolveDeliveryCoords(
+  pincode: string,
+  lat?: number | null,
+  lng?: number | null,
+): Promise<{ lat: number; lng: number } | null> {
+  if (
+    typeof lat === "number" &&
+    Number.isFinite(lat) &&
+    typeof lng === "number" &&
+    Number.isFinite(lng)
+  ) {
+    return { lat, lng };
+  }
+  return geocodePincode(pincode);
+}

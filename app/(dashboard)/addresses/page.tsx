@@ -188,9 +188,16 @@ export default function AddressesPage() {
   }
 
   function syncNavbar(addrs: Address[]) {
-    const legacy = addrs.map(a => ({
-      id: a.id, tag: a.label, line1: a.line1,
-      line2: a.line2 ?? "", pincode: a.pincode, isDefault: a.is_default,
+    const legacy = addrs.map((a) => ({
+      id: a.id,
+      tag: a.label,
+      line1: a.line1,
+      line2: a.line2 ?? "",
+      pincode: a.pincode,
+      isDefault: a.is_default,
+      ...(typeof a.lat === "number" && typeof a.lng === "number" && Number.isFinite(a.lat) && Number.isFinite(a.lng)
+        ? { lat: a.lat, lng: a.lng }
+        : {}),
     }));
     localStorage.setItem("nutravoe_addresses", JSON.stringify(legacy));
     window.dispatchEvent(new Event("address_change"));

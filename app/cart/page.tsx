@@ -6,7 +6,7 @@ import { useCart } from "@/components/CartContext";
 import { buildCartOrderWhatsAppMessage, formatCurrency, getWhatsAppUrl } from "@/lib/utils";
 import { getActivePlanConfig } from "@/lib/subscription";
 import { getWallet } from "@/lib/wallet";
-import { geocodePincode } from "@/lib/geocodeCache";
+import { resolveDeliveryCoords } from "@/lib/geocodeCache";
 import type { DeliveryPriceBreakdown } from "@/lib/delivery";
 import { createClient } from "@/lib/supabase/client";
 import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
@@ -127,26 +127,34 @@ export default function CartPage() {
         }
       }
 
-      // Resolve delivery fee from Supabase addresses (fallback to localStorage cache)
-      let pincode: string | null = null;
+      // Resolve delivery fee: prefer saved map pin (lat/lng), else pincode geocode
+      type CachedAddr = { pincode: string; isDefault?: boolean; lat?: number; lng?: number };
+      let addrPick: { pincode: string; lat: number | null; lng: number | null } | null = null;
       if (authUser) {
         const { data: addrs } = await supabase
           .from("addresses")
-          .select("pincode, is_default")
+          .select("pincode, lat, lng, is_default")
           .eq("user_id", authUser.id)
-          .order("is_default", { ascending: false })
-          .limit(1);
-        pincode = addrs?.[0]?.pincode ?? null;
+          .order("is_default", { ascending: false });
+        const row = addrs?.find((a) => a.is_default) ?? addrs?.[0];
+        if (row?.pincode) addrPick = { pincode: row.pincode, lat: row.lat, lng: row.lng };
       }
-      if (!pincode) {
+      if (!addrPick) {
         const cached = localStorage.getItem("nutravoe_addresses");
         if (cached) {
-          const arr: { pincode: string; isDefault: boolean }[] = JSON.parse(cached);
-          pincode = (arr.find(a => a.isDefault) ?? arr[0])?.pincode ?? null;
+          const arr = JSON.parse(cached) as CachedAddr[];
+          const a = arr.find((x) => x.isDefault) ?? arr[0];
+          if (a?.pincode) {
+            addrPick = {
+              pincode: a.pincode,
+              lat: typeof a.lat === "number" ? a.lat : null,
+              lng: typeof a.lng === "number" ? a.lng : null,
+            };
+          }
         }
       }
-      if (pincode) {
-        const coords = await geocodePincode(pincode);
+      if (addrPick) {
+        const coords = await resolveDeliveryCoords(addrPick.pincode, addrPick.lat, addrPick.lng);
         if (coords) {
           const res = await fetch(
             `/api/delivery-distance?lat=${encodeURIComponent(String(coords.lat))}&lng=${encodeURIComponent(String(coords.lng))}`,

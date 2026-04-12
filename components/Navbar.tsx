@@ -8,7 +8,7 @@ import { useCart } from "./CartContext";
 import { createClient } from "@/lib/supabase/client";
 import { getWallet, hasActiveFlexibleSubscription } from "@/lib/wallet";
 import { formatCurrency } from "@/lib/utils";
-import { geocodePincode } from "@/lib/geocodeCache";
+import { resolveDeliveryCoords } from "@/lib/geocodeCache";
 import { FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
 import { getWhatsAppHref } from "@/lib/contact";
 
@@ -17,6 +17,18 @@ const NAV_LINKS = [
   { href: "/about", label: "About" },
   { href: "/subscribe", label: "Subscribe & Save" },
 ];
+
+/** Matches `nutravoe_addresses` localStorage + Supabase-backed list */
+type CachedNavAddress = {
+  id?: string;
+  tag?: string;
+  line1?: string;
+  line2?: string;
+  pincode: string;
+  isDefault?: boolean;
+  lat?: number;
+  lng?: number;
+};
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -43,7 +55,7 @@ export default function Navbar() {
   // Auth State
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [savedAddresses, setSavedAddresses] = useState<CachedNavAddress[]>([]);
   const [walletBalanceRs, setWalletBalanceRs] = useState<number | null>(null);
 
   useEffect(() => {
@@ -68,22 +80,37 @@ export default function Navbar() {
         // Saved addresses (from localStorage cache written by addresses page)
         const addys = localStorage.getItem("nutravoe_addresses");
         if (addys) {
-          const parsedAddys = JSON.parse(addys);
+          const parsedAddys = JSON.parse(addys) as CachedNavAddress[];
           setSavedAddresses(parsedAddys);
           if (parsedAddys.length > 0) {
-            const defaultAddr = parsedAddys.find((a: { isDefault?: boolean }) => a.isDefault) ?? parsedAddys[0];
+            const defaultAddr = parsedAddys.find((a) => a.isDefault) ?? parsedAddys[0];
             setSavedPincode(defaultAddr.pincode);
           }
         } else if (authUser.id) {
-          // Fallback: fetch default address from Supabase
           const { data: addresses } = await supabase
-            .from('addresses')
-            .select('pincode, is_default')
-            .eq('user_id', authUser.id)
-            .order('is_default', { ascending: false })
-            .limit(5);
+            .from("addresses")
+            .select("id, label, line1, line2, pincode, is_default, lat, lng")
+            .eq("user_id", authUser.id)
+            .order("is_default", { ascending: false });
           if (addresses && addresses.length > 0) {
-            const def = addresses.find((a: { is_default?: boolean; pincode: string }) => a.is_default) ?? addresses[0];
+            const legacy: CachedNavAddress[] = addresses.map((a) => ({
+              id: a.id,
+              tag: a.label,
+              line1: a.line1,
+              line2: a.line2 ?? "",
+              pincode: a.pincode,
+              isDefault: a.is_default,
+              ...(typeof a.lat === "number" && typeof a.lng === "number" && Number.isFinite(a.lat) && Number.isFinite(a.lng)
+                ? { lat: a.lat, lng: a.lng }
+                : {}),
+            }));
+            setSavedAddresses(legacy);
+            try {
+              localStorage.setItem("nutravoe_addresses", JSON.stringify(legacy));
+            } catch {
+              /* ignore quota */
+            }
+            const def = legacy.find((x) => x.isDefault) ?? legacy[0];
             setSavedPincode(def.pincode);
           }
         }
@@ -107,10 +134,10 @@ export default function Navbar() {
     window.addEventListener("address_change", () => {
       const addys = localStorage.getItem("nutravoe_addresses");
       if (addys) {
-        const parsedAddys = JSON.parse(addys);
+        const parsedAddys = JSON.parse(addys) as CachedNavAddress[];
         setSavedAddresses(parsedAddys);
         if (parsedAddys.length > 0) {
-          const defaultAddr = parsedAddys.find((a: { isDefault?: boolean }) => a.isDefault) ?? parsedAddys[0];
+          const defaultAddr = parsedAddys.find((a) => a.isDefault) ?? parsedAddys[0];
           setSavedPincode(defaultAddr.pincode);
         }
       }
@@ -555,10 +582,11 @@ export default function Navbar() {
                           setLocationState("invalid");
                           return;
                         }
-                        // Valid Bangalore pincode — geocode and check delivery zone
+                        // Valid Bangalore pincode — saved map pin for this pincode when available, else geocode
                         setCheckingZone(true);
                         setDeliveryZone(null);
-                        const coords = await geocodePincode(inputPincode);
+                        const match = savedAddresses.find((a) => a.pincode === inputPincode);
+                        const coords = await resolveDeliveryCoords(inputPincode, match?.lat, match?.lng);
                         if (coords) {
                           const res = await fetch(
                             `/api/delivery-distance?lat=${encodeURIComponent(String(coords.lat))}&lng=${encodeURIComponent(String(coords.lng))}`,

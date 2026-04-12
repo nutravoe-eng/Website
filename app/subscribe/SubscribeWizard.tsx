@@ -12,7 +12,7 @@ import type { PlanConfig } from "./PlanCard";
 import BowlPicker from "./BowlPicker";
 import CustomizationModal from "@/components/CustomizationModal";
 import { createClient } from "@/lib/supabase/client";
-import { geocodePincode } from "@/lib/geocodeCache";
+import { resolveDeliveryCoords } from "@/lib/geocodeCache";
 import { FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -183,7 +183,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
       // Load default delivery address from Supabase
       const { data: addresses } = await supabase
         .from('addresses')
-        .select('line1, line2, pincode, is_default')
+        .select('line1, line2, pincode, is_default, lat, lng')
         .eq('user_id', authUser.id)
         .order('is_default', { ascending: false })
         .limit(5);
@@ -193,8 +193,8 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         if (def) {
           setDeliveryAddress(`${def.line1}, ${def.line2}, Karnataka ${def.pincode}`);
           setDeliveryPincode(def.pincode);
-          // Determine delivery zone for distance-based pricing
-          const coords = await geocodePincode(def.pincode);
+          // Determine delivery zone for distance-based pricing (saved pin → hub when lat/lng exist)
+          const coords = await resolveDeliveryCoords(def.pincode, def.lat, def.lng);
           if (coords) {
             const res = await fetch(
               `/api/delivery-distance?lat=${encodeURIComponent(String(coords.lat))}&lng=${encodeURIComponent(String(coords.lng))}`,
