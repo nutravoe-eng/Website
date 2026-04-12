@@ -33,6 +33,9 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
   const [payModal, setPayModal]     = useState<AdminOrder | null>(null);
   const [noteModal, setNoteModal]   = useState<AdminOrder | null>(null);
   const [rescheduleModal, setRescheduleModal] = useState<AdminOrder | null>(null);
+  const [cancelRefundModal, setCancelRefundModal] = useState<AdminOrder | null>(null);
+  const [manageRefundModal, setManageRefundModal] = useState<AdminOrder | null>(null);
+  const [refundStatus, setRefundStatus] = useState('pending_refund');
   const [upiRef, setUpiRef]         = useState('');
   const [noteText, setNoteText]     = useState('');
   const [rescheduleDate, setRescheduleDate] = useState('');
@@ -119,6 +122,11 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
   }
 
   async function handleCancelOrder(order: AdminOrder) {
+    if (order.payment_status === 'paid') {
+      setRefundStatus('pending_refund');
+      setCancelRefundModal(order);
+      return;
+    }
     if (!confirm(`Cancel order for ${order.users.full_name}? This cannot be undone.`)) return;
     try {
       await patchOrder(order.id, { status: 'cancelled' });
@@ -126,6 +134,36 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
       showToast('Order cancelled');
     } catch {
       showToast('Failed to cancel. Try again.');
+    }
+  }
+
+  async function handleConfirmCancelWithRefund() {
+    if (!cancelRefundModal) return;
+    setSaving(true);
+    try {
+      await patchOrder(cancelRefundModal.id, { status: 'cancelled', payment_status: refundStatus });
+      onOrderUpdated({ id: cancelRefundModal.id, status: 'cancelled', payment_status: refundStatus });
+      showToast('Order cancelled');
+      setCancelRefundModal(null);
+    } catch {
+      showToast('Failed to cancel. Try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveRefundStatus() {
+    if (!manageRefundModal) return;
+    setSaving(true);
+    try {
+      await patchOrder(manageRefundModal.id, { payment_status: refundStatus });
+      onOrderUpdated({ id: manageRefundModal.id, payment_status: refundStatus });
+      showToast('Refund status updated');
+      setManageRefundModal(null);
+    } catch {
+      showToast('Failed to update. Try again.');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -325,6 +363,18 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                           <p className="font-body text-[10px] text-stone mt-1">{order.payment_reference}</p>
                         )}
                       </div>
+                    ) : order.payment_status === 'pending_refund' ? (
+                      <span className="inline-flex items-center bg-amber-50 text-amber-700 font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
+                        Refund Pending
+                      </span>
+                    ) : order.payment_status === 'refund_initiated' ? (
+                      <span className="inline-flex items-center bg-blue-50 text-blue-700 font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
+                        Refund Initiated
+                      </span>
+                    ) : order.payment_status === 'refund_complete' ? (
+                      <span className="inline-flex items-center gap-1 bg-sage/10 text-sage-dark font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
+                        ✓ Refunded
+                      </span>
                     ) : (
                       <span className="inline-flex items-center bg-terracotta/10 text-terracotta font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
                         Pending
@@ -336,12 +386,20 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1.5">
-                      {order.payment_status !== 'paid' && (
+                      {order.payment_status !== 'paid' && order.status !== 'cancelled' && (
                         <ActionBtn
                           onClick={() => { setPayModal(order); setUpiRef(''); }}
                           color="terracotta"
                         >
                           Mark Paid
+                        </ActionBtn>
+                      )}
+                      {order.status === 'cancelled' && order.payment_status !== 'pending' && (
+                        <ActionBtn
+                          onClick={() => { setManageRefundModal(order); setRefundStatus(order.payment_status); }}
+                          color="terracotta"
+                        >
+                          Manage Refund
                         </ActionBtn>
                       )}
                       {order.status !== 'delivered' && order.status !== 'cancelled' && order.status !== 'out_for_delivery' && (
@@ -454,6 +512,94 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                 className="flex-1 bg-ink hover:bg-ink/80 disabled:bg-ink/30 text-white rounded-lg py-3 font-body text-sm font-bold transition-colors"
               >
                 {saving ? 'Saving…' : 'Save Note'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Cancel with Refund Status Modal */}
+      {cancelRefundModal && (
+        <Modal onClose={() => setCancelRefundModal(null)} title="Cancel Order">
+          <div className="space-y-4">
+            <div className="bg-[#F9F8F6] rounded-lg p-4">
+              <p className="font-body text-[12px] text-stone">Customer</p>
+              <p className="font-body text-sm font-semibold text-ink">{cancelRefundModal.users.full_name}</p>
+              <p className="font-body text-[12px] text-stone mt-2">Amount</p>
+              <p className="font-display text-2xl text-ink">₹{Number(cancelRefundModal.total).toLocaleString('en-IN')}</p>
+            </div>
+            <div>
+              <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
+                Refund Status
+              </label>
+              <select
+                value={refundStatus}
+                onChange={e => setRefundStatus(e.target.value)}
+                className="w-full border border-black/10 rounded-lg px-4 py-3 font-body text-sm text-ink bg-[#F9F8F6] focus:outline-none focus:ring-2 focus:ring-sage/40"
+              >
+                <option value="pending_refund">Pending Refund</option>
+                <option value="refund_initiated">Refund Initiated</option>
+                <option value="refund_complete">Refund Complete</option>
+                <option value="pending">Revert to Pending Payment</option>
+              </select>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setCancelRefundModal(null)}
+                className="flex-1 border border-black/10 rounded-lg py-3 font-body text-sm font-bold text-stone hover:bg-black/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmCancelWithRefund}
+                disabled={saving}
+                className="flex-1 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white rounded-lg py-3 font-body text-sm font-bold transition-colors"
+              >
+                {saving ? 'Cancelling…' : 'Confirm Cancellation'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Manage Refund Modal */}
+      {manageRefundModal && (
+        <Modal onClose={() => setManageRefundModal(null)} title="Manage Refund">
+          <div className="space-y-4">
+            <div className="bg-[#F9F8F6] rounded-lg p-4">
+              <p className="font-body text-[12px] text-stone">Customer</p>
+              <p className="font-body text-sm font-semibold text-ink">{manageRefundModal.users.full_name}</p>
+              <p className="font-body text-[12px] text-stone mt-2">Amount</p>
+              <p className="font-display text-2xl text-ink">₹{Number(manageRefundModal.total).toLocaleString('en-IN')}</p>
+            </div>
+            <div>
+              <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
+                Refund Status
+              </label>
+              <select
+                value={refundStatus}
+                onChange={e => setRefundStatus(e.target.value)}
+                className="w-full border border-black/10 rounded-lg px-4 py-3 font-body text-sm text-ink bg-[#F9F8F6] focus:outline-none focus:ring-2 focus:ring-sage/40"
+              >
+                <option value="pending_refund">Pending Refund</option>
+                <option value="refund_initiated">Refund Initiated</option>
+                <option value="refund_complete">Refund Complete</option>
+                <option value="pending">Revert to Pending Payment</option>
+              </select>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setManageRefundModal(null)}
+                className="flex-1 border border-black/10 rounded-lg py-3 font-body text-sm font-bold text-stone hover:bg-black/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveRefundStatus}
+                disabled={saving}
+                className="flex-1 bg-ink hover:bg-ink/80 disabled:bg-ink/30 text-white rounded-lg py-3 font-body text-sm font-bold transition-colors"
+              >
+                {saving ? 'Saving…' : 'Save'}
               </button>
             </div>
           </div>

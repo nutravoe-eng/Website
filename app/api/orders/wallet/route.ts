@@ -59,15 +59,20 @@ export async function POST(req: NextRequest) {
   }
 
   // Require an active, paid subscription
-  const { data: subscription } = await adminSupabase
+  const { data: subscription, error: subscriptionError } = await adminSupabase
     .from("subscriptions")
-    .select("id, billing_cycle, period_end_date, subscription_plans ( slug, bowls_per_cycle )")
+    .select("id, billing_cycle, period_end_date, subscription_plans ( slug, min_bowls )")
     .eq("user_id", user.id)
     .eq("status", "active")
     .eq("payment_status", "paid")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  if (subscriptionError) {
+    console.error("[wallet-order] subscription fetch failed", subscriptionError.message);
+    return NextResponse.json({ error: "Failed to verify subscription" }, { status: 500, headers: limited.headers });
+  }
 
   if (!subscription) {
     return NextResponse.json(
@@ -95,7 +100,7 @@ export async function POST(req: NextRequest) {
   // Calculate current cycle usage to determine if we use sub price or retail price
   let isOverQuota = false;
   const periodEndStr = (subscription.period_end_date as string) || "";
-  const planLimit = (subscription.subscription_plans as any)?.bowls_per_cycle ?? 0;
+  const planLimit = Number((subscription.subscription_plans as { min_bowls?: number } | null)?.min_bowls ?? 0);
 
   if (periodEndStr && planLimit > 0) {
     const isWeekly = subscription.billing_cycle !== 'monthly';
@@ -129,22 +134,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unable to price this order" }, { status: 400, headers: limited.headers });
   }
 
-  // Check wallet balance before attempting debit
-  const { data: walletAccount } = await adminSupabase
-    .from("wallet_accounts")
-    .select("balance_rs")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const walletBalance = Number(walletAccount?.balance_rs ?? 0);
-  if (walletBalance < quote.total) {
-    return NextResponse.json(
-      {
-        error: `Insufficient wallet balance. Available: ₹${walletBalance.toFixed(0)}, required: ₹${quote.total.toFixed(0)}`,
-      },
-      { status: 400, headers: limited.headers }
-    );
-  }
+  // Balance check is done inside consume_wallet_balance (refreshes from credit lots first).
 
   // Create order (confirmed + paid immediately)
   const deliveryDate = getDeliveryDateFromSlot(selectedSlot);
