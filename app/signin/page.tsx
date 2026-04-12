@@ -20,6 +20,7 @@ function SignInForm() {
   const [isNewUser, setIsNewUser] = useState(false);
 
   const [identifier, setIdentifier] = useState("");
+  const [identifierType, setIdentifierType] = useState<"email" | "phone">("email");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -61,29 +62,66 @@ function SignInForm() {
       .catch(() => {});
   }, [pincode]);
 
-  /* ── Step 1: check if email exists ── */
+  /* ── Step 1: detect identifier type and check if account exists ── */
   const handleIdentifierSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     const val = identifier.trim();
-    if (!val) { setError("Please enter your email address."); return; }
-    if (!val.includes("@")) { setError("Please enter a valid email address."); return; }
+    if (!val) { setError("Please enter your email address or mobile number."); return; }
 
-    setEmail(val);
+    // Detect type: email takes priority, then 10-digit phone
+    const isEmail = val.includes("@");
+    const digits = val.replace(/\D/g, "");
+    const isPhone = !isEmail && digits.length === 10;
+
+    if (!isEmail && !isPhone) {
+      setError("Please enter a valid email address or 10-digit mobile number.");
+      return;
+    }
+
     setLoading(true);
-    try {
-      const res = await fetch("/api/auth/check-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: val }),
-      });
-      const { exists } = await res.json();
-      setStep(exists ? "existing-user" : "new-user");
-    } catch {
-      // fallback: go to sign-in and let them switch if needed
-      setStep("existing-user");
-    } finally {
-      setLoading(false);
+
+    if (isEmail) {
+      setIdentifierType("email");
+      setEmail(val);
+      try {
+        const res = await fetch("/api/auth/check-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: val }),
+        });
+        const { exists } = await res.json();
+        setStep(exists ? "existing-user" : "new-user");
+      } catch {
+        setStep("existing-user");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Phone path
+      setIdentifierType("phone");
+      setPhone(digits);
+      try {
+        const res = await fetch("/api/auth/check-phone", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: digits }),
+        });
+        const data = await res.json();
+        if (data.exists && data.email) {
+          setEmail(data.email);
+          setStep("existing-user");
+        } else {
+          // New user — phone pre-filled, email left blank for them to fill
+          setEmail("");
+          setStep("new-user");
+        }
+      } catch {
+        // Fallback: let them try signing in
+        setStep("existing-user");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -179,9 +217,9 @@ function SignInForm() {
       email,
       password,
     });
-    setLoading(false);
 
     if (signInError) {
+      setLoading(false);
       const lowerMessage = signInError.message.toLowerCase();
       if (lowerMessage.includes("ban") || lowerMessage.includes("deactivated")) {
         setError("This account has been deactivated. Please contact support if you need to restore access.");
@@ -202,6 +240,7 @@ function SignInForm() {
       });
     }
 
+    // Keep loading=true so button stays disabled during redirect
     setIsNewUser(false);
     setStep("success");
   };
@@ -238,19 +277,21 @@ function SignInForm() {
                 Sign in or create account
               </h1>
               <p className="font-body text-[14px] text-stone mb-8">
-                Enter your email address to get started.
+                Enter your email address or mobile number to get started.
               </p>
 
               <form onSubmit={handleIdentifierSubmit} className="flex flex-col gap-4">
                 <div>
                   <label htmlFor="identifier" className="block font-body text-[13px] font-medium text-ink mb-1.5">
-                    Email address
+                    Email or mobile number
                   </label>
                   <input
                     id="identifier"
-                    type="email"
+                    type="text"
+                    inputMode="email"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder="Email address or 10-digit mobile number"
                     className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage transition-all"
                     autoFocus
                     required
@@ -279,7 +320,7 @@ function SignInForm() {
                 Sign in
               </h1>
               <div className="flex items-center gap-2 mb-8">
-                <span className="font-body text-[14px] text-ink">{email}</span>
+                <span className="font-body text-[14px] text-ink">{identifier}</span>
                 <button onClick={() => { setStep("identifier"); setError(""); }} className="font-body text-[13px] text-sage hover:text-sage-dark font-medium underline">
                   Change
                 </button>
