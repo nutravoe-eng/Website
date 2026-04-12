@@ -7,18 +7,16 @@ export default function IntroAnimation() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
 
-  const screenRef   = useRef<HTMLDivElement>(null);
-  const bowlRef     = useRef<SVGSVGElement>(null);
-  const badgeRef    = useRef<HTMLDivElement>(null);
-  const badgeSvgRef = useRef<SVGSVGElement>(null);
-  const eyebrowRef  = useRef<HTMLParagraphElement>(null);
-  const taglineRef  = useRef<HTMLParagraphElement>(null);
-  const letterRefs  = useRef<(HTMLSpanElement | null)[]>([]);
+  const screenRef    = useRef<HTMLDivElement>(null);
+  const bowlRef      = useRef<SVGSVGElement>(null);
+  const wordmarkRef  = useRef<HTMLDivElement>(null);
+  const badgeRef     = useRef<HTMLDivElement>(null);
+  const badgeSvgRef  = useRef<SVGSVGElement>(null);
+  const eyebrowRef   = useRef<HTMLParagraphElement>(null);
+  const taglineRef   = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
-    // Always clear the blocking attribute — CSS overlay has done its job
     document.documentElement.removeAttribute('data-intro');
-
     if (pathname !== '/') return;
     if (sessionStorage.getItem('nv-intro-shown')) return;
     sessionStorage.setItem('nv-intro-shown', '1');
@@ -34,13 +32,13 @@ export default function IntroAnimation() {
   function runSequence() {
     const screen   = screenRef.current;
     const bowl     = bowlRef.current;
+    const wordmark = wordmarkRef.current;
     const badge    = badgeRef.current;
     const badgeSvg = badgeSvgRef.current;
     const eyebrow  = eyebrowRef.current;
     const tagline  = taglineRef.current;
-    const letters  = letterRefs.current;
 
-    if (!screen || !bowl || !badge || !badgeSvg || !eyebrow || !tagline) return;
+    if (!screen || !bowl || !wordmark || !badge || !badgeSvg || !eyebrow || !tagline) return;
 
     // Respect prefers-reduced-motion
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -51,18 +49,6 @@ export default function IntroAnimation() {
       return;
     }
 
-    // Circle origins for 8 letters (radius 130px, starting top, clockwise)
-    const origins: [number, number][] = [
-      [0,    -130],
-      [92,   -92 ],
-      [130,   0  ],
-      [92,    92 ],
-      [0,    130 ],
-      [-92,   92 ],
-      [-130,  0  ],
-      [-92,  -92 ],
-    ];
-
     const ease = (duration: number, delay: number) => ({
       duration,
       delay,
@@ -70,7 +56,7 @@ export default function IntroAnimation() {
       fill: 'forwards' as const,
     });
 
-    // ── Phase 1: Bowl bounces in from above ──
+    // ── Phase 1: Bowl bounces in ──
     bowl.animate(
       [
         { opacity: 0, transform: 'translateY(-110%) scale(0.5)' },
@@ -89,53 +75,85 @@ export default function IntroAnimation() {
           { opacity: 1, transform: 'scale(1)' },
           { opacity: 0, transform: 'scale(0.05) rotate(15deg)' },
         ],
-        { duration: 320, easing: 'cubic-bezier(0.55, 0, 1, 0.45)', fill: 'forwards' }
+        { duration: 300, easing: 'cubic-bezier(0.55, 0, 1, 0.45)', fill: 'forwards' }
       );
-    }, 1650);
+    }, 1400);
 
-    // ── Phase 2: Letters spiral in from circle ──
-    letters.forEach((el, i) => {
-      if (!el) return;
-      const [tx, ty] = origins[i];
-      el.animate(
-        [
-          {
-            opacity: 0,
-            transform: `translate(${tx}px, ${ty}px) scale(0.3) rotate(${(i / 8) * 360}deg)`,
-          },
-          {
-            opacity: 1,
-            transform: 'translate(0, 0) scale(1) rotate(0deg)',
-          },
-        ],
-        ease(520, 2150 + i * 85)
-      );
+    // ── Phase 2: "nutravoe" orbits as a whole word ──
+    // The orbit centre sits 45px below the wordmark's natural resting position
+    // (roughly the middle of the eyebrow+tagline block that will appear below it).
+    // Radius 90px, 2 full clockwise revolutions starting & ending at the top.
+    // At the top of the orbit the word is 45px above centre → translate(0, -45px).
+    const R  = 90;   // orbit radius (px)
+    const CY = 45;   // how far below natural position the orbit centre is
+    const REVOLUTIONS = 2;
+    const ORBIT_START    = 1750;  // ms after mount
+    const ORBIT_DURATION = 2400;  // ms for the full orbit (2 revolutions)
+    const SETTLE_DURATION = 500;  // ms to drift back to natural position
+
+    // Build orbit keyframes — 48 steps for smooth circular motion
+    const N = 48;
+    const orbitKF = Array.from({ length: N + 1 }, (_, i) => {
+      const t     = i / N;
+      const angle = -Math.PI / 2 + t * REVOLUTIONS * 2 * Math.PI; // top → clockwise
+      return {
+        opacity: 1,
+        transform: `translate(${R * Math.cos(angle)}px, ${CY + R * Math.sin(angle)}px)`,
+        offset: t,
+      };
     });
 
-    // ── Phase 3: Eyebrow + tagline rise up ──
+    // Flash wordmark visible at start of orbit (at top of circle)
+    wordmark.animate(
+      [{ opacity: 0 }, { opacity: 1 }],
+      { duration: 150, delay: ORBIT_START, fill: 'forwards' }
+    );
+
+    // Orbit — linear so the speed is constant around the circle
+    wordmark.animate(orbitKF, {
+      duration: ORBIT_DURATION,
+      delay: ORBIT_START,
+      easing: 'linear',
+      fill: 'forwards',
+    });
+
+    // After orbit ends, word is back at top of circle (0, CY - R) = (0, -45px).
+    // Settle it down into its natural centred position.
+    wordmark.animate(
+      [
+        { transform: `translate(0px, ${CY - R}px)` },
+        { transform: 'translate(0px, 0px)' },
+      ],
+      ease(SETTLE_DURATION, ORBIT_START + ORBIT_DURATION)
+    );
+
+    // ── Phase 3: Eyebrow + tagline rise in after wordmark settles ──
+    const TEXT_START = ORBIT_START + ORBIT_DURATION + SETTLE_DURATION;
+
     eyebrow.animate(
       [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0)' }],
-      ease(480, 3350)
+      ease(480, TEXT_START + 100)
     );
     tagline.animate(
       [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }],
-      ease(520, 3680)
+      ease(520, TEXT_START + 380)
     );
 
-    // ── Phase 4: Circular badge fades in + spins ──
+    // ── Phase 4: Circular badge fades in ──
     setTimeout(() => {
       badge.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, fill: 'forwards' });
       badgeSvg.style.animation = 'intro-badge-spin 16s linear infinite';
-    }, 3950);
+    }, TEXT_START + 700);
 
-    // ── Exit: Overlay slides upward to reveal homepage ──
+    // ── Exit: 2 s after everything is visible, overlay slides up ──
+    const EXIT_AT = TEXT_START + 700 + 500 + 2000; // badge fully in + 2s hold
     setTimeout(() => {
       screen.animate(
         [{ transform: 'translateY(0)' }, { transform: 'translateY(-102%)' }],
         { duration: 850, easing: 'cubic-bezier(0.76, 0, 0.24, 1)', fill: 'forwards' }
       );
       setTimeout(() => setMounted(false), 870);
-    }, 5100);
+    }, EXIT_AT);
   }
 
   if (!mounted) return null;
@@ -146,7 +164,7 @@ export default function IntroAnimation() {
       className="fixed inset-0 z-[9999] bg-cream flex items-center justify-center overflow-hidden"
       aria-hidden="true"
     >
-      {/* Phase 1: Sketch bowl — centre of screen */}
+      {/* Phase 1: Sketch bowl */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <svg
           ref={bowlRef}
@@ -172,25 +190,21 @@ export default function IntroAnimation() {
         </svg>
       </div>
 
-      {/* Phase 2: Brand text — centred */}
+      {/* Phase 2 + 3: Brand text */}
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
-        {/* Wordmark: each letter arrives from its own point on the circle */}
-        <div className="flex items-baseline">
-          {['n', 'u', 't', 'r', 'a', 'v', 'o', 'e'].map((char, i) => (
-            <span
-              key={i}
-              ref={el => { letterRefs.current[i] = el; }}
-              className="font-display font-light text-ink"
-              style={{
-                fontSize: 'clamp(36px, 5vw, 68px)',
-                letterSpacing: '0.12em',
-                opacity: 0,
-                display: 'inline-block',
-              }}
-            >
-              {char}
-            </span>
-          ))}
+
+        {/* Wordmark — orbits as one unit, then settles here */}
+        <div
+          ref={wordmarkRef}
+          className="font-display font-light text-ink"
+          style={{
+            fontSize: 'clamp(36px, 5vw, 68px)',
+            letterSpacing: '0.12em',
+            opacity: 0,
+            willChange: 'transform',
+          }}
+        >
+          nutravoe
         </div>
 
         <p
@@ -229,18 +243,12 @@ export default function IntroAnimation() {
               d="M 55,55 m -38,0 a 38,38 0 1,1 76,0 a 38,38 0 1,1 -76,0"
             />
           </defs>
-          <text
-            fontFamily="var(--font-body)"
-            fontSize="10"
-            fill="#B0A090"
-            letterSpacing="1.6"
-          >
+          <text fontFamily="var(--font-body)" fontSize="10" fill="#B0A090" letterSpacing="1.6">
             <textPath href="#intro-circle-path">
               FRESH · PROBIOTIC · DELIVERED ·{' '}
             </textPath>
           </text>
         </svg>
-        {/* Centre dot */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-sage" />
       </div>
     </div>
