@@ -441,7 +441,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         customerEmail: user.email,
         planName: currentPlan.name,
         weeklyPrice: totalWeeklyPrice,
-        customisationSurcharge: customisationSurcharge,
         weeklyDeliveryFeeRs: weeklyDeliveryFeeRs > 0 ? weeklyDeliveryFeeRs : undefined,
         deliveryAddress,
         deliveryStyle:
@@ -548,34 +547,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
   // ─── Customization Pricing ───────────────────────────────────────────────────
 
-  function countCustomisedBowls(): number {
-    const scenario = getScenario();
-    if (scenario === "D") return 0; // flexible is charged later
-
-    if (scenario === "A") {
-      // Count how many individual bowl instances have any customisation
-      return Object.entries(state.dayBowlCustomMap).reduce((acc, [, bowlMap]) => {
-        return acc + Object.values(bowlMap).reduce((dayAcc, instances) => {
-          return dayAcc + instances.filter(inst =>
-            inst.some(c => c.option === "extra" || c.option === "remove")
-          ).length;
-        }, 0);
-      }, 0);
-    }
-
-    // Scenario C: Per-day counting
-    return Object.values(state.dayCustomMap).filter(customs =>
-      customs.some(c => c.option === "extra" || c.option === "remove")
-    ).length;
-  }
-
-  const customisedCount = countCustomisedBowls();
-  const customisationSurcharge = currentPlan
-    ? customisedCount * (currentPlan.customisationChargePerBowl ?? 0)
-    : 0;
-
   // Sum actual per-ingredient extra costs (e.g. ₹X per extra topping) across all days/bowls.
-  // This is separate from the flat customisationChargePerBowl handling fee.
   const totalIngredientExtras = (() => {
     const scenario = getScenario();
     if (scenario === 'D') return 0; // flexible — charged at wallet debit time
@@ -605,7 +577,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   })();
 
   const totalWeeklyPrice = currentPlan
-    ? currentPlan.weeklyPrice + customisationSurcharge + totalIngredientExtras + weeklyDeliveryFeeRs
+    ? currentPlan.weeklyPrice + totalIngredientExtras + weeklyDeliveryFeeRs
     : 0;
 
   // Bowl being customised (for modal)
@@ -1457,18 +1429,12 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
               </div>
 
               <div className="border-t border-black/5 mt-4 pt-4">
-                {(customisationSurcharge > 0 || totalIngredientExtras > 0 || weeklyDeliveryFeeRs > 0) && currentPlan && (
+                {(totalIngredientExtras > 0 || weeklyDeliveryFeeRs > 0) && currentPlan && (
                   <div className="mb-3 space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="font-body text-[11px] text-stone">Base plan</span>
                       <span className="font-body text-[11px] text-stone">{formatCurrency(currentPlan.weeklyPrice)}</span>
                     </div>
-                    {customisationSurcharge > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className="font-body text-[11px] text-stone">Customisation fee ({customisedCount} bowl{customisedCount > 1 ? 's' : ''})</span>
-                        <span className="font-body text-[11px] text-stone">+ {formatCurrency(customisationSurcharge)}</span>
-                      </div>
-                    )}
                     {totalIngredientExtras > 0 && (
                       <div className="flex items-center justify-between">
                         <span className="font-body text-[11px] text-stone">Ingredient extras</span>

@@ -180,7 +180,6 @@ export async function buildSubscriptionQuote(
   bowlsPerCycle: number;
   bowlsAmountRs: number;
   totalAmountRs: number;
-  customisationChargePerBowl: number;
   totalIngredientExtrasRs: number;
   weeklyDeliveryFeeRs: number;
 }> {
@@ -198,10 +197,8 @@ export async function buildSubscriptionQuote(
 
   const bowlMap = new Map(bowls.map((b) => [b.slug, b]));
   const perBowl = nearZone ? plan.priceNearPerBowl : plan.priceFarPerBowl;
-  const customisationChargePerBowl = plan.customisationChargePerBowl ?? 0;
 
   let totalIngredientExtrasRs = 0;
-  let customisedBowlCount = 0;
 
   for (const config of dayConfigs) {
     const bowl = bowlMap.get(config.bowlId);
@@ -214,22 +211,16 @@ export async function buildSubscriptionQuote(
       // Per-instance format: IngredientCustomization[][]
       const instances = customsRaw as IngredientCustomization[][];
       for (const inst of instances) {
-        if (inst.some(c => c.option === 'extra' || c.option === 'remove')) {
-          customisedBowlCount++;
-        }
         totalIngredientExtrasRs += getCustomizationUpcharge(bowl, inst);
       }
     } else {
       // Legacy flat format: IngredientCustomization[]
       const flat = config.customizations as IngredientCustomization[] | undefined;
-      if ((flat?.length ?? 0) > 0) {
-        customisedBowlCount++;
-        totalIngredientExtrasRs += getCustomizationUpcharge(bowl, flat);
-      }
+      totalIngredientExtrasRs += getCustomizationUpcharge(bowl, flat);
     }
   }
 
-  const bowlsAmountRs = (perBowl * plan.bowlsPerCycle) + (customisedBowlCount * customisationChargePerBowl) + totalIngredientExtrasRs;
+  const bowlsAmountRs = (perBowl * plan.bowlsPerCycle) + totalIngredientExtrasRs;
 
   // Count unique delivery days to calculate weekly delivery fee
   const uniqueDeliveryDays = new Set(dayConfigs.map((c) => c.day).filter(Boolean)).size;
@@ -243,7 +234,6 @@ export async function buildSubscriptionQuote(
     bowlsPerCycle: plan.bowlsPerCycle,
     bowlsAmountRs,
     totalAmountRs: bowlsAmountRs + weeklyDeliveryFeeRs,
-    customisationChargePerBowl,
     totalIngredientExtrasRs,
     weeklyDeliveryFeeRs,
   };
