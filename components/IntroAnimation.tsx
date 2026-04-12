@@ -16,6 +16,9 @@ export default function IntroAnimation() {
   const letterRefs  = useRef<(HTMLSpanElement | null)[]>([]);
 
   useEffect(() => {
+    // Always clear the blocking attribute — CSS overlay has done its job
+    document.documentElement.removeAttribute('data-intro');
+
     if (pathname !== '/') return;
     if (sessionStorage.getItem('nv-intro-shown')) return;
     sessionStorage.setItem('nv-intro-shown', '1');

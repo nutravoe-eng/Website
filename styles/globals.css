@@ -80,6 +80,19 @@
 }
 
 
+/* ── Intro: block page paint until React overlay is ready ──
+   The inline <script> in <head> sets data-intro="1" synchronously
+   before any rendering if the session hasn't seen the intro yet.
+   This ::before pseudo-element covers the page instantly — no flash. */
+html[data-intro='1']::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: #FAF9F6;
+  z-index: 9998;
+  pointer-events: none;
+}
+
 /* ── Intro animation — sketch bowl SVG styles ── */
 .sk-b, .sk-r, .sk-s, .sk-t, .sk-d, .sk-sh {
   fill: none;

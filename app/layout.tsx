@@ -41,6 +41,15 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" href="/icon-32px.png" type="image/png" sizes="32x32" />
         <link rel="apple-touch-icon" href="/icon-128px.png" />
+        {/* Synchronous blocking script — runs before paint, covers page with cream
+            so the homepage never flashes before the intro animation takes over. */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          try {
+            if (!sessionStorage.getItem('nv-intro-shown')) {
+              document.documentElement.setAttribute('data-intro', '1');
+            }
+          } catch(e) {}
+        `}} />
       </head>
       <body className="min-h-screen flex flex-col">
         <CartProvider>
