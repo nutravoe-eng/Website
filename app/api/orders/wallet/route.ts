@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   // Require an active, paid subscription
   const { data: subscription, error: subscriptionError } = await adminSupabase
     .from("subscriptions")
-    .select("id, billing_cycle, period_end_date, subscription_plans ( slug, min_bowls )")
+    .select("id, billing_cycle, start_date, period_end_date, subscription_plans ( slug, min_bowls )")
     .eq("user_id", user.id)
     .eq("status", "active")
     .eq("payment_status", "paid")
@@ -99,14 +99,24 @@ export async function POST(req: NextRequest) {
 
   // Calculate current cycle usage to determine if we use sub price or retail price
   let isOverQuota = false;
-  const periodEndStr = (subscription.period_end_date as string) || "";
   const planLimit = Number((subscription.subscription_plans as { min_bowls?: number } | null)?.min_bowls ?? 0);
 
-  if (periodEndStr && planLimit > 0) {
+  if (planLimit > 0) {
+    // Determine period bounds: prefer period_end_date if set, otherwise derive from start_date
     const isWeekly = subscription.billing_cycle !== 'monthly';
-    const periodEndDate = new Date(periodEndStr);
-    const periodStartDate = new Date(periodEndDate.getTime() - (isWeekly ? 7 : 30) * 24 * 60 * 60 * 1000);
-    const periodStartStr = periodStartDate.toISOString().split('T')[0];
+    const cycleDays = isWeekly ? 7 : 30;
+    let periodEndStr = (subscription.period_end_date as string) || "";
+    let periodStartStr: string;
+
+    if (periodEndStr) {
+      const periodEndDate = new Date(periodEndStr);
+      const periodStartDate = new Date(periodEndDate.getTime() - cycleDays * 24 * 60 * 60 * 1000);
+      periodStartStr = periodStartDate.toISOString().split('T')[0];
+    } else {
+      // Fallback: count all orders ever placed on this subscription (conservative — always enforce quota)
+      periodStartStr = (subscription.start_date as string) || "2000-01-01";
+      periodEndStr = new Date(Date.now() + cycleDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    }
 
     const { data: orderedData } = await adminSupabase
       .from("orders")

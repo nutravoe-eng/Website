@@ -19,6 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <NavLink href="/admin">Today</NavLink>
               <NavLink href="/admin/orders">Orders</NavLink>
               <NavLink href="/admin/subscriptions">Subscriptions</NavLink>
+              <NavLink href="/admin/wallet-topups">Wallet top-ups</NavLink>
             </nav>
           </div>
           <AdminLogout />
@@ -27,6 +28,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <NavLink href="/admin" mobile>Today</NavLink>
           <NavLink href="/admin/orders" mobile>Orders</NavLink>
           <NavLink href="/admin/subscriptions" mobile>Subscriptions</NavLink>
+          <NavLink href="/admin/wallet-topups" mobile>Wallet top-ups</NavLink>
         </nav>
       </header>
 

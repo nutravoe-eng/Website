@@ -152,6 +152,7 @@ export function buildTopupWhatsAppMessage(input: {
   planName: string;
   amount: number;
   expiryDate: string;
+  publicRef: string;
 }): string {
   const ref = input.subscriptionId.slice(0, 8).toUpperCase();
   return [
@@ -160,6 +161,7 @@ export function buildTopupWhatsAppMessage(input: {
     `Hi Nutravoe,`,
     `I'd like to top up my subscription wallet for my *${input.planName}* plan.`,
     ``,
+    `🔹 *Request Ref:* ${input.publicRef}`,
     `🔹 *Subscription Ref:* #NV-SUB-${ref}`,
     `🔹 *Top-up Amount:* ₹${input.amount}`,
     `🔹 *Validity:* This amount will expire on ${input.expiryDate}`,

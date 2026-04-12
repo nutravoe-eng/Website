@@ -90,7 +90,7 @@ export interface WalletLoad {
   remainingAmountPaise: number;
   createdAt: string;
   expiresAt: string | null;
-  sourceType: 'subscription_payment' | 'refund' | 'admin_adjustment';
+  sourceType: 'subscription_payment' | 'refund' | 'admin_adjustment' | 'top_up';
 }
 
 export interface Wallet {

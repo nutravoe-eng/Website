@@ -35,9 +35,9 @@ export async function POST(
   // Explicitly check wallet hasn't expired before calling the RPC.
   // The RPC would catch this too, but gives a cryptic DB error. We return a clear message here.
   const { data: walletLoads } = await adminSupabase
-    .from('wallet_loads')
+    .from('wallet_credit_lots')
     .select('expires_at, remaining_amount_rs')
-    .eq('subscription_id', subscriptionId)
+    .eq('source_reference_id', subscriptionId)
     .gt('remaining_amount_rs', 0)
     .order('expires_at', { ascending: true })
     .limit(1)

@@ -101,10 +101,26 @@ export default function SubscriptionsClient({ bowls }: Props) {
     }
 
     const subIds = subRows.map(s => s.id);
-    const { data: dayConfigRows } = await supabase
-      .from('subscription_day_configs')
-      .select('*')
-      .in('subscription_id', subIds);
+    const [{ data: dayConfigRows }, { data: periodOrderRows }] = await Promise.all([
+      supabase
+        .from('subscription_day_configs')
+        .select('*')
+        .in('subscription_id', subIds),
+      supabase
+        .from('orders')
+        .select('subscription_id, order_items ( quantity )')
+        .in('subscription_id', subIds)
+        .in('status', ['confirmed', 'delivered']),
+    ]);
+
+    // Count total bowls ordered per subscription (across all confirmed/delivered orders)
+    const bowlsOrderedBySub: Record<string, number> = {};
+    for (const order of (periodOrderRows ?? [])) {
+      const subId = order.subscription_id as string;
+      const qty = (Array.isArray(order.order_items) ? order.order_items : [])
+        .reduce((sum: number, item: { quantity?: number }) => sum + (item?.quantity ?? 0), 0);
+      bowlsOrderedBySub[subId] = (bowlsOrderedBySub[subId] ?? 0) + qty;
+    }
 
     const mapped: Subscription[] = subRows.map(sub => {
       const configs = (dayConfigRows ?? []).filter(r => r.subscription_id === sub.id);
@@ -134,7 +150,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
         deliveryAddress: '',
         createdAt: sub.created_at,
         periodEndDate: sub.period_end_date,
-        deliveriesCompleted: sub.deliveries_completed ?? 0,
+        deliveriesCompleted: bowlsOrderedBySub[sub.id] ?? 0,
       } as Subscription;
     });
 

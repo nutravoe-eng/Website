@@ -2,39 +2,76 @@
 
 import { useRef, useState } from 'react';
 import type { Subscription } from '@/types';
-import { formatCurrency, buildTopupWhatsAppMessage } from '@/lib/utils';
+import { buildTopupWhatsAppMessage } from '@/lib/utils';
 import { useDialogAccessibility } from '@/lib/use-dialog-accessibility';
+import { getWhatsAppHref } from '@/lib/contact';
+import { STUB_PLANS } from '@/app/subscribe/PlanCard';
 
 interface Props {
   sub: Subscription;
   onClose: () => void;
+  onCreated?: () => void;
 }
 
-export default function TopupModal({ sub, onClose }: Props) {
+export default function TopupModal({ sub, onClose, onCreated }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [amount, setAmount] = useState<string>('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   useDialogAccessibility(dialogRef, onClose);
 
   const numericAmount = parseFloat(amount) || 0;
   const isValid = numericAmount > 0;
 
-  const expiryDate = sub.periodEndDate 
+  const expiryDate = sub.periodEndDate
     ? new Date(sub.periodEndDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
     : 'the end of your cycle';
 
-  function handleSendRequest() {
-    if (!isValid) return;
-    
-    const message = buildTopupWhatsAppMessage({
-      subscriptionId: sub.id,
-      planName: sub.planId, // Simplified from labels for now
-      amount: numericAmount,
-      expiryDate: expiryDate
-    });
+  const planLabel = STUB_PLANS.find((p) => p.id === sub.planId)?.name ?? sub.planId;
 
-    const encoded = encodeURIComponent(message);
-    window.open(`https://wa.me/918360639912?text=${encoded}`, '_blank');
-    onClose();
+  async function handleSendRequest() {
+    if (!isValid) return;
+    setSubmitting(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/wallet/topup-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscription_id: sub.id,
+          amount_rs: numericAmount,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(typeof data?.error === 'string' ? data.error : 'Could not submit request. Try again.');
+        return;
+      }
+
+      const publicRef = typeof data?.public_ref === 'string' ? data.public_ref : '';
+      if (!publicRef) {
+        setError('Unexpected response from server.');
+        return;
+      }
+
+      const message = buildTopupWhatsAppMessage({
+        subscriptionId: sub.id,
+        planName: planLabel,
+        amount: numericAmount,
+        expiryDate,
+        publicRef,
+      });
+
+      window.open(getWhatsAppHref(message), '_blank', 'noopener,noreferrer');
+      onCreated?.();
+      onClose();
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -58,6 +95,11 @@ export default function TopupModal({ sub, onClose }: Props) {
         </div>
 
         <div className="p-6 space-y-6">
+          {error && (
+            <div className="rounded-xl border border-terracotta/30 bg-terracotta/5 px-4 py-3">
+              <p className="font-body text-[13px] text-terracotta">{error}</p>
+            </div>
+          )}
           <div>
             <label htmlFor="topup-amount" className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
               Enter Amount (₹)
@@ -70,12 +112,14 @@ export default function TopupModal({ sub, onClose }: Props) {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0"
+                min={100}
+                max={50000}
                 className="w-full pl-8 pr-4 py-3 bg-[#F9F8F6] border border-black/10 rounded-xl font-body text-lg font-bold text-ink focus:outline-none focus:ring-2 focus:ring-sage/40"
                 autoFocus
               />
             </div>
             <p className="font-body text-[11px] text-stone mt-2">
-              Add balance to cover bowl customizations or extra orders.
+              ₹100 – ₹50,000. Covers bowl customizations or extra orders after Nutravoe confirms payment.
             </p>
           </div>
 
@@ -100,19 +144,22 @@ export default function TopupModal({ sub, onClose }: Props) {
         <div className="px-6 py-4 border-t border-black/5 flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 border border-black/10 hover:bg-[#F9F8F6] text-ink font-body text-[13px] font-medium py-3 rounded-md transition-colors"
+            disabled={submitting}
+            className="flex-1 border border-black/10 hover:bg-[#F9F8F6] text-ink font-body text-[13px] font-medium py-3 rounded-md transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSendRequest}
-            disabled={!isValid}
+            disabled={!isValid || submitting}
             className="flex-1 bg-sage hover:bg-sage-dark disabled:bg-black/10 disabled:text-stone text-white font-body text-[13px] font-bold py-3 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
           >
-            Send Request
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 2L11 13"/><path d="m22 2-7 20-4-9-9-4Z"/>
-            </svg>
+            {submitting ? 'Submitting…' : 'Send Request'}
+            {!submitting && (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 2L11 13"/><path d="m22 2-7 20-4-9-9-4Z"/>
+              </svg>
+            )}
           </button>
         </div>
       </div>

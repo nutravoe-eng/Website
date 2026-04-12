@@ -37,6 +37,8 @@ function getLoadLabel(load: WalletLoad) {
       return 'Subscription load';
     case 'refund':
       return 'Refund credit';
+    case 'top_up':
+      return 'Top-up';
     default:
       return 'Wallet credit';
   }
@@ -52,13 +54,28 @@ export default function WalletPage() {
   const [flexibleSub, setFlexibleSub] = useState<Subscription | null>(null);
   const [flexibleCheckDone, setFlexibleCheckDone] = useState(false);
   const [showTopup, setShowTopup] = useState(false);
+  const [topupRequests, setTopupRequests] = useState<
+    {
+      id: string;
+      public_ref: string;
+      amount_rs: number;
+      status: string;
+      admin_notes: string | null;
+      created_at: string;
+      resolved_at: string | null;
+    }[]
+  >([]);
 
   const refresh = useCallback(async () => {
-    const data = await getWalletWithTransactions();
+    const [data, topupRes] = await Promise.all([
+      getWalletWithTransactions(),
+      fetch('/api/wallet/topup-requests').then((r) => (r.ok ? r.json() : { requests: [] })),
+    ]);
     setBalancePaise(data.balancePaise);
     setTransactions(data.transactions);
     setActiveLoads(data.activeLoads ?? []);
     setNextExpiryAt(data.nextExpiryAt ?? null);
+    setTopupRequests(Array.isArray(topupRes?.requests) ? topupRes.requests : []);
     setLoading(false);
   }, []);
 
@@ -112,7 +129,7 @@ export default function WalletPage() {
   return (
     <div>
       {showTopup && flexibleSub && (
-        <TopupModal sub={flexibleSub} onClose={() => setShowTopup(false)} />
+        <TopupModal sub={flexibleSub} onClose={() => setShowTopup(false)} onCreated={refresh} />
       )}
 
       <div className="mb-8 flex items-start justify-between gap-4">
@@ -170,6 +187,62 @@ export default function WalletPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="mb-8">
+        <p className="mb-4 font-body text-[11px] font-bold uppercase tracking-wider text-stone">Top-up requests</p>
+        {topupRequests.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-black/10 py-8 text-center">
+            <p className="font-body text-[13px] italic text-stone">No top-up requests yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {topupRequests.map((req) => (
+              <div
+                key={req.id}
+                className="flex flex-col gap-2 rounded-xl border border-black/6 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-body text-[13px] font-bold text-ink">{req.public_ref}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 font-body text-[10px] font-bold uppercase tracking-wide ${
+                        req.status === 'pending'
+                          ? 'bg-amber-100 text-amber-900'
+                          : req.status === 'approved'
+                            ? 'bg-sage/15 text-sage-dark'
+                            : req.status === 'rejected'
+                              ? 'bg-terracotta/10 text-terracotta'
+                              : 'bg-black/5 text-stone'
+                      }`}
+                    >
+                      {req.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 font-body text-[12px] text-stone">
+                    {formatCurrency(req.amount_rs)} · Requested {formatDate(req.created_at)}
+                    {req.resolved_at ? ` · Resolved ${formatDate(req.resolved_at)}` : ''}
+                  </p>
+                  {req.status === 'rejected' && req.admin_notes && (
+                    <p className="mt-1 font-body text-[12px] text-terracotta">{req.admin_notes}</p>
+                  )}
+                </div>
+                {req.status === 'pending' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const res = await fetch(`/api/wallet/topup-requests/${req.id}/cancel`, { method: 'PATCH' });
+                      if (res.ok) await refresh();
+                    }}
+                    className="shrink-0 self-start font-body text-[12px] font-medium text-stone underline decoration-black/20 hover:text-terracotta sm:self-center"
+                  >
+                    Cancel request
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mb-8">
