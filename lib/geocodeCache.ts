@@ -1,6 +1,6 @@
 /**
  * Client-side geocode cache backed by localStorage.
- * Each pincode result is stored for 7 days, so the Nominatim API is only
+ * Each pincode result is stored for 7 days, so `/api/geocode` is only
  * called once per unique pincode per device.
  */
 

@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getWallet, hasActiveFlexibleSubscription } from "@/lib/wallet";
 import { formatCurrency } from "@/lib/utils";
 import { geocodePincode } from "@/lib/geocodeCache";
-import { getNearestHub, DELIVERY_FEE_RS, FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
+import { FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
 import { getWhatsAppHref } from "@/lib/contact";
 
 const NAV_LINKS = [
@@ -560,12 +560,21 @@ export default function Navbar() {
                         setDeliveryZone(null);
                         const coords = await geocodePincode(inputPincode);
                         if (coords) {
-                          const { hub, distanceKm } = getNearestHub(coords.lat, coords.lng);
-                          setDeliveryZone({
-                            fee: distanceKm <= FREE_ZONE_RADIUS_KM ? 0 : DELIVERY_FEE_RS,
-                            distanceKm: Math.round(distanceKm * 10) / 10,
-                            hubName: hub.name,
-                          });
+                          const res = await fetch(
+                            `/api/delivery-distance?lat=${encodeURIComponent(String(coords.lat))}&lng=${encodeURIComponent(String(coords.lng))}`,
+                          );
+                          if (res.ok) {
+                            const data = (await res.json()) as {
+                              hub: { name: string };
+                              distanceKm: number;
+                              deliveryFee: number;
+                            };
+                            setDeliveryZone({
+                              fee: data.deliveryFee,
+                              distanceKm: Math.round(data.distanceKm * 10) / 10,
+                              hubName: data.hub.name,
+                            });
+                          }
                         }
                         setSavedPincode(inputPincode);
                         setCheckingZone(false);
@@ -587,7 +596,7 @@ export default function Navbar() {
                       </div>
                       <div className="flex-1">
                         <p className={`font-body text-[13px] font-bold ${deliveryZone.fee === 0 ? 'text-sage-dark' : 'text-terracotta'}`}>
-                          {deliveryZone.fee === 0 ? 'Free delivery' : `+₹${DELIVERY_FEE_RS} delivery fee`}
+                          {deliveryZone.fee === 0 ? 'Free delivery' : `+₹${deliveryZone.fee} delivery fee`}
                         </p>
                         <p className="font-body text-[11px] text-stone mt-0.5">
                           {deliveryZone.distanceKm} km from {deliveryZone.hubName}

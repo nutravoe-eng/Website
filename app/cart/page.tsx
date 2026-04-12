@@ -7,7 +7,7 @@ import { buildCartOrderWhatsAppMessage, formatCurrency, getWhatsAppUrl } from "@
 import { getActivePlanConfig } from "@/lib/subscription";
 import { getWallet } from "@/lib/wallet";
 import { geocodePincode } from "@/lib/geocodeCache";
-import { getNearestHub, getDeliveryBreakdown, type DeliveryPriceBreakdown } from "@/lib/delivery";
+import type { DeliveryPriceBreakdown } from "@/lib/delivery";
 import { createClient } from "@/lib/supabase/client";
 import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
 import { getWhatsAppNumber } from "@/lib/contact";
@@ -148,12 +148,23 @@ export default function CartPage() {
       if (pincode) {
         const coords = await geocodePincode(pincode);
         if (coords) {
-          const { hub } = getNearestHub(coords.lat, coords.lng);
-          const breakdown = getDeliveryBreakdown(coords.lat, coords.lng);
-          setDeliveryBreakdown(breakdown);
-          setDeliveryFee(breakdown.isFree ? 0 : breakdown.customerPaysRs);
-          setNearestHubName(hub.name);
-          setDeliveryDistanceKm(Math.round(breakdown.distanceKm * 10) / 10);
+          const res = await fetch(
+            `/api/delivery-distance?lat=${encodeURIComponent(String(coords.lat))}&lng=${encodeURIComponent(String(coords.lng))}`,
+          );
+          if (res.ok) {
+            const data = (await res.json()) as {
+              hub: { name: string };
+              distanceKm: number;
+              breakdown:
+                | { isFree: true; distanceKm: number }
+                | ({ isFree: false } & DeliveryPriceBreakdown);
+              deliveryFee: number;
+            };
+            setDeliveryBreakdown(data.breakdown);
+            setDeliveryFee(data.deliveryFee);
+            setNearestHubName(data.hub.name);
+            setDeliveryDistanceKm(Math.round(data.distanceKm * 10) / 10);
+          }
         }
       }
       setDeliveryFeeLoading(false);

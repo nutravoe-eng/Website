@@ -14,14 +14,14 @@ export interface Hub {
  */
 export const HUBS: Hub[] = [
   {
-    id: 'domlur',
-    name: 'Domlur Kitchen',
+    id: "domlur",
+    name: "Domlur Kitchen",
     lat: 12.9616,
     lng: 77.6382,
   },
 ];
 
-/** Haversine formula — returns straight-line distance in km */
+/** Haversine formula — returns straight-line distance in km (fallback when road routing unavailable) */
 export function haversineDistance(
   lat1: number,
   lng1: number,
@@ -38,7 +38,10 @@ export function haversineDistance(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/** Returns the closest hub and its distance from the given coordinates */
+/**
+ * Nearest hub by straight-line distance + that straight-line km (for quick UI / fallback only).
+ * Pricing uses {@link resolveDeliveryDistanceKm} (road distance) when available.
+ */
 export function getNearestHub(
   lat: number,
   lng: number,
@@ -60,20 +63,17 @@ export function getNearestHub(
 export interface DeliveryPriceBreakdown {
   distanceKm: number;
   ceilKm: number;
-  totalCostRs: number;        // ceil(km) × 10
+  totalCostRs: number; // ceil(km) × 10
   nutravoeCoverageRs: number; // ceil(km) × 5 — Nutravoe covers half
-  customerPaysRs: number;     // ceil(km) × 5
+  customerPaysRs: number; // ceil(km) × 5
 }
 
-/**
- * Returns a full pricing breakdown for the nearest hub.
- * isFree: true when within the free zone (≤ 10km).
- */
-export function getDeliveryBreakdown(
-  lat: number,
-  lng: number,
-): { isFree: true; distanceKm: number } | ({ isFree: false } & DeliveryPriceBreakdown) {
-  const { distanceKm } = getNearestHub(lat, lng);
+/** Full pricing from a distance in km (road or straight-line). */
+export function deliveryPricingFromDistanceKm(
+  distanceKm: number,
+):
+  | { isFree: true; distanceKm: number }
+  | ({ isFree: false } & DeliveryPriceBreakdown) {
   if (distanceKm <= FREE_ZONE_RADIUS_KM) {
     return { isFree: true, distanceKm };
   }
@@ -91,23 +91,16 @@ export function getDeliveryBreakdown(
 }
 
 /**
- * Weekly delivery fee for a subscription.
- * uniqueDeliveryDays = number of distinct days per week that receive a delivery.
- * Returns 0 if within the free zone.
+ * Weekly delivery fee for a subscription from a distance in km.
+ * uniqueDeliveryDays = distinct delivery days per week.
  */
-export function getSubscriptionWeeklyDeliveryFee(
-  lat: number,
-  lng: number,
-  uniqueDeliveryDays: number,
-): number {
-  const { distanceKm } = getNearestHub(lat, lng);
+export function subscriptionWeeklyFeeFromDistanceKm(distanceKm: number, uniqueDeliveryDays: number): number {
   if (distanceKm <= FREE_ZONE_RADIUS_KM) return 0;
   return Math.ceil(distanceKm) * 5 * uniqueDeliveryDays;
 }
 
-/** Returns the customer-facing delivery fee for a single order. 0 if free zone. */
-export function getDeliveryFee(lat: number, lng: number): number {
-  const { distanceKm } = getNearestHub(lat, lng);
+/** Single-order delivery fee from km (0 in free zone). */
+export function deliveryFeeFromDistanceKm(distanceKm: number): number {
   if (distanceKm <= FREE_ZONE_RADIUS_KM) return 0;
   return Math.ceil(distanceKm) * 5;
 }

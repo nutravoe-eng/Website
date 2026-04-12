@@ -1,4 +1,13 @@
-import { DELIVERY_FEE_RS, FREE_ZONE_RADIUS_KM, getDeliveryBreakdown, getDeliveryFee, getNearestHub, getSubscriptionWeeklyDeliveryFee, type DeliveryPriceBreakdown } from "@/lib/delivery";
+import {
+  DELIVERY_FEE_RS,
+  FREE_ZONE_RADIUS_KM,
+  deliveryFeeFromDistanceKm,
+  deliveryPricingFromDistanceKm,
+  subscriptionWeeklyFeeFromDistanceKm,
+  type DeliveryPriceBreakdown,
+} from "@/lib/delivery";
+import { geocodeIndianPincode } from "@/lib/ola-maps";
+import { resolveDeliveryDistanceKm } from "@/lib/road-distance";
 import { getAllBowls, getSubscriptionPlans } from "@/lib/sanity";
 import type { Bowl, IngredientCustomization, SubscriptionPlan } from "@/types";
 
@@ -23,33 +32,6 @@ export interface CheckoutLineItem {
   customizations: { removed?: string[]; added?: string[] } | null;
 }
 
-async function geocodeIndianPincode(pincode: string): Promise<{ lat: number; lng: number } | null> {
-  const query = `${pincode}, Bengaluru, Karnataka, India`;
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=in`;
-
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Nutravoe/1.0 (support@nutravoe.in)",
-        "Accept-Language": "en",
-      },
-      next: { revalidate: 86400 },
-    });
-
-    if (!res.ok) return null;
-
-    const data = (await res.json()) as Array<{ lat: string; lon: string }>;
-    if (!data.length) return null;
-
-    return {
-      lat: Number.parseFloat(data[0].lat),
-      lng: Number.parseFloat(data[0].lon),
-    };
-  } catch {
-    return null;
-  }
-}
-
 async function resolveAddressCoordinates(address: AddressForPricing): Promise<{ lat: number; lng: number } | null> {
   if (typeof address.lat === "number" && typeof address.lng === "number") {
     return { lat: address.lat, lng: address.lng };
@@ -66,14 +48,16 @@ export async function isNearZoneAddress(address: AddressForPricing): Promise<boo
   const coords = await resolveAddressCoordinates(address);
   // Fail safe: assume far zone when coords are unavailable to avoid unintended free delivery
   if (!coords) return false;
-  return getNearestHub(coords.lat, coords.lng).distanceKm <= FREE_ZONE_RADIUS_KM;
+  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng);
+  return distanceKm <= FREE_ZONE_RADIUS_KM;
 }
 
 export async function getAddressDeliveryFee(address: AddressForPricing): Promise<number> {
   const coords = await resolveAddressCoordinates(address);
   // Fail safe: charge the standard delivery fee when coords are unavailable
   if (!coords) return DELIVERY_FEE_RS;
-  return getDeliveryFee(coords.lat, coords.lng);
+  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng);
+  return deliveryFeeFromDistanceKm(distanceKm);
 }
 
 export async function getAddressDeliveryBreakdown(
@@ -81,7 +65,8 @@ export async function getAddressDeliveryBreakdown(
 ): Promise<({ isFree: true; distanceKm: number } | ({ isFree: false } & DeliveryPriceBreakdown)) | null> {
   const coords = await resolveAddressCoordinates(address);
   if (!coords) return null;
-  return getDeliveryBreakdown(coords.lat, coords.lng);
+  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng);
+  return deliveryPricingFromDistanceKm(distanceKm);
 }
 
 function summarizeCustomizations(
@@ -183,10 +168,9 @@ export async function buildSubscriptionQuote(
   totalIngredientExtrasRs: number;
   weeklyDeliveryFeeRs: number;
 }> {
-  const [plans, bowls, nearZone, coords] = await Promise.all([
+  const [plans, bowls, coords] = await Promise.all([
     getSubscriptionPlans(),
     getAllBowls(),
-    isNearZoneAddress(address),
     resolveAddressCoordinates(address),
   ]);
 
@@ -194,6 +178,13 @@ export async function buildSubscriptionQuote(
   if (!plan) {
     throw new Error(`Unknown subscription plan: ${planSlug}`);
   }
+
+  let distanceKmForPricing: number | null = null;
+  if (coords) {
+    const resolved = await resolveDeliveryDistanceKm(coords.lat, coords.lng);
+    distanceKmForPricing = resolved.distanceKm;
+  }
+  const nearZone = distanceKmForPricing !== null && distanceKmForPricing <= FREE_ZONE_RADIUS_KM;
 
   const bowlMap = new Map(bowls.map((b) => [b.slug, b]));
   const perBowl = nearZone ? plan.priceNearPerBowl : plan.priceFarPerBowl;
@@ -224,9 +215,10 @@ export async function buildSubscriptionQuote(
 
   // Count unique delivery days to calculate weekly delivery fee
   const uniqueDeliveryDays = new Set(dayConfigs.map((c) => c.day).filter(Boolean)).size;
-  const weeklyDeliveryFeeRs = coords
-    ? getSubscriptionWeeklyDeliveryFee(coords.lat, coords.lng, uniqueDeliveryDays)
-    : uniqueDeliveryDays * DELIVERY_FEE_RS; // failsafe: ₹60/trip ≈ ceil(12)×5
+  const weeklyDeliveryFeeRs =
+    distanceKmForPricing !== null
+      ? subscriptionWeeklyFeeFromDistanceKm(distanceKmForPricing, uniqueDeliveryDays)
+      : uniqueDeliveryDays * DELIVERY_FEE_RS; // failsafe when coords unavailable
 
   return {
     billingCycle: plan.billingCycle,

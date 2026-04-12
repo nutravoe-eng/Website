@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { adminSupabase } from "@/lib/supabase/admin";
 import { buildSubscriptionQuote, getCustomizationUpcharge } from "@/lib/checkout-security";
-import { FREE_ZONE_RADIUS_KM, getNearestHub } from "@/lib/delivery";
+import { DELIVERY_FEE_RS, deliveryFeeFromDistanceKm } from "@/lib/delivery";
+import { requestOriginReferrer } from "@/lib/ola-maps";
+import { resolveDeliveryDistanceKm } from "@/lib/road-distance";
 import { getAllBowls } from "@/lib/sanity";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
@@ -156,8 +158,12 @@ export async function POST(req: NextRequest) {
   const addrCoords = (typeof address.lat === "number" && typeof address.lng === "number")
     ? { lat: address.lat, lng: address.lng }
     : null;
-  const addrDistanceKm = addrCoords ? getNearestHub(addrCoords.lat, addrCoords.lng).distanceKm : 12;
-  const perTripDeliveryFee = addrDistanceKm <= FREE_ZONE_RADIUS_KM ? 0 : Math.ceil(addrDistanceKm) * 5;
+  const perTripDeliveryFee = addrCoords
+    ? deliveryFeeFromDistanceKm(
+        (await resolveDeliveryDistanceKm(addrCoords.lat, addrCoords.lng, { httpReferrer: requestOriginReferrer(req) }))
+          .distanceKm,
+      )
+    : DELIVERY_FEE_RS;
 
   const nowIso = new Date().toISOString();
   const { data: subscription, error: subscriptionError } = await adminSupabase

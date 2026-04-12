@@ -13,7 +13,7 @@ import BowlPicker from "./BowlPicker";
 import CustomizationModal from "@/components/CustomizationModal";
 import { createClient } from "@/lib/supabase/client";
 import { geocodePincode } from "@/lib/geocodeCache";
-import { getNearestHub, FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
+import { FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 type Day = typeof DAYS[number];
@@ -196,9 +196,14 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           // Determine delivery zone for distance-based pricing
           const coords = await geocodePincode(def.pincode);
           if (coords) {
-            const { distanceKm } = getNearestHub(coords.lat, coords.lng);
-            setIsNearZone(distanceKm <= FREE_ZONE_RADIUS_KM);
-            setDeliveryDistanceKm(Math.round(distanceKm * 10) / 10);
+            const res = await fetch(
+              `/api/delivery-distance?lat=${encodeURIComponent(String(coords.lat))}&lng=${encodeURIComponent(String(coords.lng))}`,
+            );
+            if (res.ok) {
+              const data = (await res.json()) as { distanceKm: number; deliveryFee: number };
+              setIsNearZone(data.deliveryFee === 0);
+              setDeliveryDistanceKm(Math.round(data.distanceKm * 10) / 10);
+            }
           }
         }
       }
