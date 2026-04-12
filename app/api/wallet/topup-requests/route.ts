@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { isPaidFlexibleWalletEligible, preferActiveSubscription } from "@/lib/flexible-subscription";
 
 const MIN_RS = 100;
 const MAX_RS = 50_000;
@@ -60,17 +61,24 @@ export async function POST(req: NextRequest) {
 
   let subId = subscriptionId;
   if (!subId) {
-    const { data: sub } = await supabase
+    const { data: rows } = await supabase
       .from("subscriptions")
-      .select("id")
+      .select("id, style, status, payment_status, period_end_date, created_at")
       .eq("user_id", user.id)
       .eq("style", "flexible")
-      .eq("status", "active")
-      .eq("payment_status", "paid")
-      .maybeSingle();
+      .eq("payment_status", "paid");
+    const eligible = (rows ?? []).filter((r) =>
+      isPaidFlexibleWalletEligible({
+        style: r.style,
+        status: r.status,
+        payment_status: r.payment_status,
+        period_end_date: r.period_end_date,
+      }),
+    );
+    const sub = preferActiveSubscription(eligible);
     if (!sub) {
       return NextResponse.json(
-        { error: "No active flexible subscription found" },
+        { error: "No eligible flexible subscription found for top-up" },
         { status: 400, headers: limited.headers },
       );
     }
@@ -78,14 +86,19 @@ export async function POST(req: NextRequest) {
   } else {
     const { data: sub } = await supabase
       .from("subscriptions")
-      .select("id")
+      .select("id, style, status, payment_status, period_end_date")
       .eq("id", subId)
       .eq("user_id", user.id)
-      .eq("style", "flexible")
-      .eq("status", "active")
-      .eq("payment_status", "paid")
       .maybeSingle();
-    if (!sub) {
+    if (
+      !sub ||
+      !isPaidFlexibleWalletEligible({
+        style: sub.style,
+        status: sub.status,
+        payment_status: sub.payment_status,
+        period_end_date: sub.period_end_date,
+      })
+    ) {
       return NextResponse.json({ error: "Invalid subscription for top-up" }, { status: 400, headers: limited.headers });
     }
   }

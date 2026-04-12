@@ -43,6 +43,10 @@ WHERE subscription_id IN (
   WHERE user_id IN (SELECT id FROM public.users WHERE is_admin IS NOT TRUE)
 );
 
+-- 8a. Wallet top-up requests (references subscriptions — must go before them)
+DELETE FROM public.wallet_topup_requests
+WHERE user_id IN (SELECT id FROM public.users WHERE is_admin IS NOT TRUE);
+
 -- 8. Subscriptions (user instances — subscription_plans catalogue is NOT touched)
 DELETE FROM public.subscriptions
 WHERE user_id IN (SELECT id FROM public.users WHERE is_admin IS NOT TRUE);
@@ -80,4 +84,6 @@ SELECT 'subscription_plans (catalogue)', COUNT(*) FROM public.subscription_plans
 UNION ALL
 SELECT 'wallet_accounts',               COUNT(*) FROM public.wallet_accounts
 UNION ALL
-SELECT 'addresses',                      COUNT(*) FROM public.addresses;
+SELECT 'addresses',                      COUNT(*) FROM public.addresses
+UNION ALL
+SELECT 'wallet_topup_requests',          COUNT(*) FROM public.wallet_topup_requests;

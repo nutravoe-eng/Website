@@ -64,6 +64,56 @@ export async function PATCH(
     return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
   }
 
+  /** Paid subscription being cancelled: reverse subscription_payment + linked top-up wallet lots, cancel top-up requests */
+  const isCancellingPaidSubscription =
+    status === 'cancelled' && oldSub.payment_status === 'paid';
+
+  if (isCancellingPaidSubscription) {
+    const { data: revRows, error: revError } = await adminSupabase.rpc('reverse_subscription_payment_credit', {
+      p_subscription_id: id,
+      p_note: typeof admin_notes === 'string' ? admin_notes : null,
+    });
+
+    if (revError) {
+      return NextResponse.json({ error: revError.message }, { status: 400 });
+    }
+
+    const rev = (Array.isArray(revRows) ? revRows[0] : revRows) as {
+      reversed_rs?: number | string;
+      new_wallet_balance_rs?: number | string;
+    } | null;
+
+    const reversedRs = rev?.reversed_rs != null ? Number(rev.reversed_rs) : 0;
+    const newWalletBalanceRs = rev?.new_wallet_balance_rs != null ? Number(rev.new_wallet_balance_rs) : 0;
+
+    if (admin_notes !== undefined || payment_reference !== undefined) {
+      const extra: Record<string, unknown> = {};
+      if (admin_notes !== undefined) extra.admin_notes = admin_notes;
+      if (payment_reference !== undefined) extra.payment_reference = payment_reference;
+      if (Object.keys(extra).length > 0) {
+        await adminSupabase.from('subscriptions').update(extra).eq('id', id);
+      }
+    }
+
+    const { data: subscription, error: fetchErr } = await adminSupabase
+      .from('subscriptions')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchErr || !subscription) {
+      return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      subscription,
+      wallet_reversal: {
+        reversed_rs: reversedRs,
+        new_wallet_balance_rs: newWalletBalanceRs,
+      },
+    });
+  }
+
   // 1. Apply non-payment updates immediately (notes, status changes that aren't approval)
   const safeUpdates: Record<string, unknown> = {};
   if (payment_reference !== undefined) safeUpdates.payment_reference = payment_reference;

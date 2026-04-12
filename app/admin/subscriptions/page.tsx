@@ -214,12 +214,24 @@ export default function AdminSubscriptionsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'cancelled' }),
       });
-      if (!res.ok) throw new Error('Failed');
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(typeof data?.error === 'string' ? data.error : 'Failed');
+      }
       setSubs(prev => prev.filter(s => s.id !== rejectModal.id));
-      showToast('Subscription rejected and cancelled');
+      const wr = data?.wallet_reversal as { reversed_rs?: number } | undefined;
+      if (wr && typeof wr.reversed_rs === 'number') {
+        if (wr.reversed_rs <= 0) {
+          showToast('Subscription cancelled. No subscription wallet credit left to reverse (already spent).');
+        } else {
+          showToast(`Subscription cancelled. ₹${wr.reversed_rs.toLocaleString('en-IN')} reversed from wallet.`);
+        }
+      } else {
+        showToast('Subscription rejected and cancelled');
+      }
       setRejectModal(null);
-    } catch {
-      showToast('Failed to reject. Try again.');
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Failed to reject. Try again.');
     } finally {
       setSaving(false);
     }

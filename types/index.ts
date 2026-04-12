@@ -137,7 +137,7 @@ export interface Subscription {
   weeklyPrice: number;
   deliveryAddress: string;
   createdAt: string;
-  status: 'active' | 'paused' | 'cancelled' | 'pending';
+  status: 'active' | 'paused' | 'cancelled' | 'pending' | 'completed' | 'expired';
   paymentStatus?: string;
   nextDelivery: string;
   walletBalancePaise?: number;

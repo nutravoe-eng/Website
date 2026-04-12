@@ -9,6 +9,7 @@ import ManageModal from "./ManageModal";
 import CancelModal from "./CancelModal";
 import { createClient } from "@/lib/supabase/client";
 import TopupModal from "./TopupModal";
+import { isPaidFlexibleWalletEligible } from "@/lib/flexible-subscription";
 
 const PLAN_LABELS = Object.fromEntries(PLANS.map(p => [p.id, p.name]));
 
@@ -248,7 +249,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
         </Link>
       </div>
 
-      {activeSubs.some(s => s.status === 'active' && s.periodEndDate && (Math.ceil((new Date(s.periodEndDate).getTime() - Date.now()) / 86400000) <= 2)) && (
+      {activeSubs.some(s => s.status === 'active' && s.deliveryStyle === 'flexible' && s.periodEndDate && (Math.ceil((new Date(s.periodEndDate).getTime() - Date.now()) / 86400000) <= 2)) && (
         <div className="mb-8 p-6 bg-sage/10 border border-sage/20 rounded-2xl animate-in fade-in slide-in-from-top-4 duration-500">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -287,12 +288,27 @@ export default function SubscriptionsClient({ bowls }: Props) {
         <div className="space-y-4">
           {activeSubs.map(sub => {
             const paused = sub.status === "paused";
+            const completedFlex =
+              sub.status === "completed" &&
+              sub.deliveryStyle === "flexible" &&
+              isPaidFlexibleWalletEligible({
+                style: sub.deliveryStyle,
+                status: sub.status,
+                payment_status: sub.paymentStatus ?? "pending",
+                period_end_date: sub.periodEndDate ?? null,
+              });
+            const statusLabel =
+              sub.status === "pending"
+                ? "Pending Activation"
+                : sub.status === "completed" && sub.deliveryStyle === "flexible"
+                  ? "Cycle completed"
+                  : sub.status;
             return (
               <div
                 key={sub.id}
-                className={`bg-white rounded-xl overflow-hidden shadow-sm relative transition-all duration-300 ${paused ? "border border-stone/30 opacity-80" : (sub.status === 'pending' ? "border border-terracotta/30" : "border border-sage/30")}`}
+                className={`bg-white rounded-xl overflow-hidden shadow-sm relative transition-all duration-300 ${paused ? "border border-stone/30 opacity-80" : (sub.status === 'pending' ? "border border-terracotta/30" : sub.status === 'completed' ? "border border-stone/25" : "border border-sage/30")}`}
               >
-                <div className={`absolute top-0 left-0 w-1.5 h-full ${paused ? "bg-stone/50" : (sub.status === 'pending' ? "bg-terracotta" : "bg-sage")}`} />
+                <div className={`absolute top-0 left-0 w-1.5 h-full ${paused ? "bg-stone/50" : (sub.status === 'pending' ? "bg-terracotta" : sub.status === 'completed' ? "bg-stone/40" : "bg-sage")}`} />
 
                 <div className="p-6 md:p-8 flex flex-col md:flex-row md:items-start justify-between gap-6">
                   <div className="flex gap-5 items-start">
@@ -306,8 +322,8 @@ export default function SubscriptionsClient({ bowls }: Props) {
                         <h3 className="font-display text-xl font-medium text-ink">
                           {PLAN_LABELS[sub.planId] ?? sub.planId}
                         </h3>
-                        <span className={`px-2.5 py-0.5 rounded-full font-body text-[10px] font-bold uppercase tracking-widest ${paused ? "bg-stone/10 text-stone" : (sub.status === 'pending' ? "bg-terracotta/10 text-terracotta" : "bg-sage/10 text-sage")}`}>
-                          {sub.status === 'pending' ? 'Pending Activation' : sub.status}
+                        <span className={`px-2.5 py-0.5 rounded-full font-body text-[10px] font-bold uppercase tracking-widest ${paused ? "bg-stone/10 text-stone" : (sub.status === 'pending' ? "bg-terracotta/10 text-terracotta" : sub.status === 'completed' ? "bg-stone/15 text-stone" : "bg-sage/10 text-sage")}`}>
+                          {statusLabel}
                         </span>
                       </div>
                       <p className="font-body text-[13px] text-stone mb-1">
@@ -316,7 +332,19 @@ export default function SubscriptionsClient({ bowls }: Props) {
                       <p className="font-body text-[12px] text-stone mb-2 max-w-sm leading-relaxed">
                         {deliverySummary(sub)}
                       </p>
-                      {paused ? (
+                      {completedFlex && sub.periodEndDate ? (
+                        <p className="font-body text-[13px] text-ink leading-relaxed max-w-md">
+                          This cycle&apos;s bowl quota is complete. You can still spend any remaining wallet balance until{" "}
+                          <span className="font-semibold">
+                            {new Date(sub.periodEndDate).toLocaleDateString("en-IN", {
+                              weekday: "short",
+                              day: "numeric",
+                              month: "short",
+                            })}
+                          </span>
+                          . Start a new plan anytime — your slot is free.
+                        </p>
+                      ) : paused ? (
                         <p className="font-body text-[13px] font-semibold text-terracotta">Deliveries paused</p>
                       ) : (
                         <p className="font-body text-[13px] text-ink">
@@ -325,7 +353,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
                         </p>
                       )}
 
-                      {sub.status === 'active' && sub.deliveriesCompleted !== undefined && (
+                      {(sub.status === 'active' || sub.status === 'completed') && sub.deliveriesCompleted !== undefined && (
                         <div className="mt-4 pt-4 border-t border-black/5 max-w-[200px]">
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="font-body text-[11px] font-bold text-stone uppercase tracking-wider">Usage Progress</span>
@@ -375,7 +403,14 @@ export default function SubscriptionsClient({ bowls }: Props) {
                         >
                           Manage
                         </button>
-                        {sub.deliveryStyle === 'flexible' && (
+                        {sub.deliveryStyle === 'flexible' &&
+                          sub.paymentStatus === 'paid' &&
+                          isPaidFlexibleWalletEligible({
+                            style: sub.deliveryStyle,
+                            status: sub.status,
+                            payment_status: sub.paymentStatus,
+                            period_end_date: sub.periodEndDate ?? null,
+                          }) && (
                           <button
                             onClick={() => setTopupId(sub.id)}
                             className="w-full bg-ink hover:bg-black text-white font-body text-[13px] font-bold py-2.5 rounded-md transition-colors shadow-sm"
@@ -390,14 +425,14 @@ export default function SubscriptionsClient({ bowls }: Props) {
                           >
                             Resume Deliveries
                           </button>
-                        ) : (
+                        ) : sub.status !== "completed" ? (
                           <button
                             onClick={() => updateStatus(sub.id, "paused")}
                             className="w-full border border-black/10 hover:bg-[#F9F8F6] text-ink font-body text-[13px] font-medium py-2.5 rounded-md transition-colors"
                           >
                             Pause
                           </button>
-                        )}
+                        ) : null}
                       </>
                     )}
                     {sub.paymentStatus === 'paid' && (

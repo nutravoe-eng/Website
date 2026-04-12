@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { adminSupabase } from "@/lib/supabase/admin";
+import { isPaidFlexibleWalletEligible, preferActiveSubscription } from "@/lib/flexible-subscription";
 
 function expiresAtFromPeriodEnd(periodEndDate: string | null): string | null {
   if (!periodEndDate) return null;
@@ -32,13 +33,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: sub, error: subErr } = await adminSupabase
     .from("subscriptions")
-    .select("id, user_id, period_end_date, wallet_balance_rs")
+    .select("id, user_id, period_end_date, wallet_balance_rs, style, status, payment_status, created_at")
     .eq("id", row.subscription_id)
     .maybeSingle();
 
   if (subErr || !sub || sub.user_id !== row.user_id) {
     return NextResponse.json({ error: "Invalid subscription data" }, { status: 500 });
   }
+
+  const { data: flexPool } = await adminSupabase
+    .from("subscriptions")
+    .select("id, period_end_date, status, style, payment_status, created_at")
+    .eq("user_id", row.user_id)
+    .eq("style", "flexible")
+    .eq("payment_status", "paid");
+
+  const eligible =
+    flexPool?.filter((s) =>
+      isPaidFlexibleWalletEligible({
+        style: s.style as string,
+        status: s.status as string,
+        payment_status: s.payment_status as string,
+        period_end_date: s.period_end_date as string | null,
+      }),
+    ) ?? [];
+
+  const governing = preferActiveSubscription(eligible);
+  const periodEndForCredit = governing?.period_end_date ?? sub.period_end_date;
 
   const amount = Number(row.amount_rs);
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -53,7 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     p_reason: "top_up",
     p_reference_id: row.id,
     p_note: note,
-    p_expires_at: expiresAtFromPeriodEnd(sub.period_end_date),
+    p_expires_at: expiresAtFromPeriodEnd(periodEndForCredit as string | null),
     p_source_type: "top_up",
   });
 

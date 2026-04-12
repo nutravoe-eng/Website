@@ -64,6 +64,14 @@ export async function POST(
   }
 
   const row = Array.isArray(data) ? data[0] : data;
+
+  const { error: completeErr } = await adminSupabase.rpc('maybe_complete_flexible_subscription', {
+    p_subscription_id: subscriptionId,
+  });
+  if (completeErr) {
+    console.error('[admin deliver] maybe_complete_flexible_subscription', completeErr.message);
+  }
+
   return NextResponse.json({
     order_id: row?.order_id ?? null,
     debited_amount_rs: row?.debited_amount_rs ?? null,

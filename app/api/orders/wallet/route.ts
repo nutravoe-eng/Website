@@ -3,6 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { adminSupabase } from "@/lib/supabase/admin";
 import { buildAuthoritativeOrder, type CheckoutItemInput } from "@/lib/checkout-security";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import {
+  isPaidFlexibleWalletEligible,
+  planSlugForCheckoutPricing,
+  preferActiveSubscription,
+} from "@/lib/flexible-subscription";
 
 function getDeliveryDateFromSlot(slot: string): string {
   const normalized = slot.trim();
@@ -58,21 +63,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid order items" }, { status: 400, headers: limited.headers });
   }
 
-  // Require an active, paid subscription
-  const { data: subscription, error: subscriptionError } = await adminSupabase
+  const todayIst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+  const { data: subRows, error: subscriptionError } = await adminSupabase
     .from("subscriptions")
-    .select("id, billing_cycle, start_date, period_end_date, subscription_plans ( slug, min_bowls )")
+    .select(
+      "id, billing_cycle, start_date, period_end_date, status, created_at, style, payment_status, subscription_plans ( slug, min_bowls )",
+    )
     .eq("user_id", user.id)
-    .eq("status", "active")
+    .eq("style", "flexible")
     .eq("payment_status", "paid")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .or(`status.eq.active,and(status.eq.completed,period_end_date.gte.${todayIst})`)
+    .order("created_at", { ascending: false });
 
   if (subscriptionError) {
     console.error("[wallet-order] subscription fetch failed", subscriptionError.message);
     return NextResponse.json({ error: "Failed to verify subscription" }, { status: 500, headers: limited.headers });
   }
+
+  const eligible = (subRows ?? []).filter((r) =>
+    isPaidFlexibleWalletEligible({
+      style: r.style as string,
+      status: r.status as string,
+      payment_status: r.payment_status as string,
+      period_end_date: r.period_end_date as string | null,
+    }),
+  );
+
+  const subscription = preferActiveSubscription(eligible);
 
   if (!subscription) {
     return NextResponse.json(
@@ -97,49 +115,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Calculate current cycle usage to determine if we use sub price or retail price
-  let isOverQuota = false;
-  const planLimit = Number((subscription.subscription_plans as { min_bowls?: number } | null)?.min_bowls ?? 0);
-
-  if (planLimit > 0) {
-    // Determine period bounds: prefer period_end_date if set, otherwise derive from start_date
-    const isWeekly = subscription.billing_cycle !== 'monthly';
-    const cycleDays = isWeekly ? 7 : 30;
-    let periodEndStr = (subscription.period_end_date as string) || "";
-    let periodStartStr: string;
-
-    if (periodEndStr) {
-      const periodEndDate = new Date(periodEndStr);
-      const periodStartDate = new Date(periodEndDate.getTime() - cycleDays * 24 * 60 * 60 * 1000);
-      periodStartStr = periodStartDate.toISOString().split('T')[0];
-    } else {
-      // Fallback: count all orders ever placed on this subscription (conservative — always enforce quota)
-      periodStartStr = (subscription.start_date as string) || "2000-01-01";
-      periodEndStr = new Date(Date.now() + cycleDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    }
-
-    const { data: orderedData } = await adminSupabase
-      .from("orders")
-      .select("id, order_items ( quantity )")
-      .eq("subscription_id", subscription.id)
-      .in("status", ["confirmed", "delivered"])
-      .gte("delivery_date", periodStartStr)
-      .lte("delivery_date", periodEndStr);
-
-    const alreadyOrderedCount = (orderedData ?? []).reduce((acc, order: any) => {
-      const items = Array.isArray(order.order_items) ? order.order_items : [];
-      return acc + items.reduce((sum: number, item: any) => sum + (item?.quantity ?? 0), 0);
-    }, 0);
-
-    isOverQuota = alreadyOrderedCount >= planLimit;
-  }
-
-  // Build authoritative pricing
+  // Build authoritative pricing (same flexible quota / completed rules as WhatsApp/COD)
   let quote;
   try {
-    const plan = subscription.subscription_plans as { slug?: string } | null;
-    // If over quota, pass null for plan slug to use standard retail pricing
-    quote = await buildAuthoritativeOrder(items, address, isOverQuota ? null : (plan?.slug ?? null));
+    const planSlug = await planSlugForCheckoutPricing(adminSupabase, subscription);
+    quote = await buildAuthoritativeOrder(items, address, planSlug);
   } catch {
     return NextResponse.json({ error: "Unable to price this order" }, { status: 400, headers: limited.headers });
   }
@@ -204,6 +184,13 @@ export async function POST(req: NextRequest) {
       { error: walletError.message.includes("insufficient") ? "Insufficient wallet balance" : "Failed to debit wallet. Please try again." },
       { status: 400, headers: limited.headers }
     );
+  }
+
+  const { error: completeErr } = await adminSupabase.rpc("maybe_complete_flexible_subscription", {
+    p_subscription_id: subscription.id,
+  });
+  if (completeErr) {
+    console.error("[wallet-order] maybe_complete_flexible_subscription", completeErr.message);
   }
 
   return NextResponse.json(

@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { WalletLoad, WalletTransaction, Subscription } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import TopupModal from '@/app/(dashboard)/subscriptions/TopupModal';
+import { isPaidFlexibleWalletEligible, preferActiveSubscription } from '@/lib/flexible-subscription';
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-IN', {
@@ -84,19 +85,27 @@ export default function WalletPage() {
     const supabase = createClient();
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { setFlexibleCheckDone(true); return; }
-      const { data } = await supabase
+      const { data: flexRows } = await supabase
         .from('subscriptions')
-        .select('id, plan_id, style, status, period_end_date, wallet_balance_rs')
+        .select('id, plan_id, style, status, period_end_date, wallet_balance_rs, payment_status, created_at')
         .eq('user_id', user.id)
         .eq('style', 'flexible')
-        .eq('status', 'active')
-        .maybeSingle();
+        .eq('payment_status', 'paid');
+      const eligible = (flexRows ?? []).filter((r) =>
+        isPaidFlexibleWalletEligible({
+          style: r.style,
+          status: r.status,
+          payment_status: r.payment_status,
+          period_end_date: r.period_end_date,
+        }),
+      );
+      const data = preferActiveSubscription(eligible);
       if (data) {
         setFlexibleSub({
           id: data.id,
           planId: data.plan_id as Subscription['planId'],
           deliveryStyle: 'flexible',
-          status: 'active',
+          status: data.status as Subscription['status'],
           dayConfigs: [],
           weeklyPrice: 0,
           deliveryAddress: '',
@@ -176,8 +185,8 @@ export default function WalletPage() {
         <div className="space-y-2">
           {[
             'Your wallet starts at zero and is loaded only after Nutravoe approves the subscription payment.',
-            'Weekly subscription funds expire 7 days from approval. Monthly subscription funds expire 1 month from approval.',
-            'Each scheduled delivery deducts from the earliest-expiring available balance first.',
+            'For flexible plans, credits expire at the end of your current billing cycle (period end), not on a separate clock per top-up.',
+            'Each order deducts from the earliest-expiring available balance first.',
           ].map((line, index) => (
             <div key={line} className="flex items-start gap-2.5">
               <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sage/15 font-body text-[10px] font-bold text-sage-dark">

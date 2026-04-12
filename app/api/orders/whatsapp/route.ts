@@ -3,6 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { adminSupabase } from "@/lib/supabase/admin";
 import { buildAuthoritativeOrder, type CheckoutItemInput } from "@/lib/checkout-security";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import {
+  isPaidFlexibleWalletEligible,
+  planSlugForCheckoutPricing,
+  preferActiveSubscription,
+} from "@/lib/flexible-subscription";
 
 function getDeliveryDateFromSlot(slot: string): string {
   const normalized = slot.trim();
@@ -71,20 +76,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A delivery address is required before ordering" }, { status: 400, headers: limited.headers });
   }
 
-  const { data: activeSubscription } = await adminSupabase
+  const { data: subRows } = await adminSupabase
     .from("subscriptions")
-    .select("subscription_plans ( slug )")
+    .select(
+      "id, status, style, billing_cycle, start_date, period_end_date, payment_status, created_at, subscription_plans ( slug, min_bowls )",
+    )
     .eq("user_id", user.id)
-    .eq("status", "active")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .eq("payment_status", "paid")
+    .order("created_at", { ascending: false });
+
+  const pricedCandidates = (subRows ?? []).filter(
+    (s) =>
+      s.status === "active" ||
+      (s.style === "flexible" &&
+        isPaidFlexibleWalletEligible({
+          style: s.style,
+          status: s.status,
+          payment_status: s.payment_status,
+          period_end_date: s.period_end_date,
+        })),
+  );
+  const pricedSub = preferActiveSubscription(pricedCandidates);
 
   let quote;
   try {
-    // subscription_plans is a many-to-one join — Supabase returns it as a single object, not an array.
-    const relatedPlan = activeSubscription?.subscription_plans as { slug?: string } | null | undefined;
-    const activePlanSlug = relatedPlan?.slug ?? null;
+    const activePlanSlug = await planSlugForCheckoutPricing(adminSupabase, pricedSub ?? undefined);
     quote = await buildAuthoritativeOrder(items, address, activePlanSlug);
   } catch {
     return NextResponse.json({ error: "Unable to price this order" }, { status: 400, headers: limited.headers });

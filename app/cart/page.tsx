@@ -11,6 +11,7 @@ import { getNearestHub, getDeliveryBreakdown, type DeliveryPriceBreakdown } from
 import { createClient } from "@/lib/supabase/client";
 import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
 import { getWhatsAppNumber } from "@/lib/contact";
+import { isPaidFlexibleWalletEligible } from "@/lib/flexible-subscription";
 import DeliveryMarquee from "@/components/DeliveryMarquee";
 
 // Delivery slot generation rules:
@@ -103,17 +104,23 @@ export default function CartPage() {
       const [planConfig] = await Promise.all([getActivePlanConfig()]);
       if (planConfig) setSubscriberPricePerBowl(planConfig.perBowl);
 
-      // Check wallet eligibility (active + paid subscription with balance)
+      // Wallet checkout: paid flexible, active or completed but still within billing period
       if (authUser) {
-        const { data: paidSub } = await supabase
+        const { data: flexRows } = await supabase
           .from("subscriptions")
-          .select("id")
+          .select("id, style, status, payment_status, period_end_date")
           .eq("user_id", authUser.id)
-          .eq("status", "active")
-          .eq("payment_status", "paid")
-          .limit(1)
-          .maybeSingle();
-        if (paidSub) {
+          .eq("style", "flexible")
+          .eq("payment_status", "paid");
+        const eligible = (flexRows ?? []).some((r) =>
+          isPaidFlexibleWalletEligible({
+            style: r.style,
+            status: r.status,
+            payment_status: r.payment_status,
+            period_end_date: r.period_end_date,
+          }),
+        );
+        if (eligible) {
           setHasActivePaidSub(true);
           const wallet = await getWallet();
           setWalletBalanceRs(wallet.balancePaise / 100);
