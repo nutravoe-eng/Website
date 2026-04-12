@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Jost:wght@300;400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,7 +6,7 @@
 
 :root {
   --font-display: 'Cormorant Garamond';
-  --font-body: 'DM Sans';
+  --font-body: 'Jost';
 }
 
 @layer base {
@@ -79,6 +79,25 @@
   to { transform: translateX(-50%); }
 }
 
+
+/* ── Intro animation — sketch bowl SVG styles ── */
+.sk-b, .sk-r, .sk-s, .sk-t, .sk-d, .sk-sh {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sk-b  { stroke: #7B6A56; stroke-width: 2;   }
+.sk-r  { stroke: #7B6A56; stroke-width: 2.2; }
+.sk-s  { stroke: #9A8878; stroke-width: 1.2; }
+.sk-t  { stroke: #7B6A56; stroke-width: 1.2; }
+.sk-d  { stroke: #C4714A; stroke-width: 1.4; }
+.sk-sh { stroke: #9A8878; stroke-width: 0.8; opacity: 0.35; }
+.sk-dt { fill: #C4A574;   stroke: none;      }
+
+@keyframes intro-badge-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 
 /* Respect prefers-reduced-motion — pause the marquee */
 @media (prefers-reduced-motion: reduce) {

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "@/styles/globals.css";
 import "leaflet/dist/leaflet.css";
 import { CartProvider } from "@/components/CartContext";
+import IntroAnimation from "@/components/IntroAnimation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import WhatsAppButton from "@/components/WhatsAppButton";
@@ -43,6 +44,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen flex flex-col">
         <CartProvider>
+          <IntroAnimation />
           <a
             href="#main"
             className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[200] focus:bg-sage focus:text-white focus:px-4 focus:py-2 focus:rounded-sm focus:text-sm focus:font-medium"
