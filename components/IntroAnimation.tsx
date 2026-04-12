@@ -118,51 +118,71 @@ export default function IntroAnimation() {
     // moment it finishes — no pile-up, no overlap at the end position.
     snakeRefs.current.forEach((el, i) => {
       if (!el) return;
-      const letterDelay = ORBIT_START + i * SNAKE_GAP;
+      // e (index 7) is the head — starts first; n (index 0) is the tail — starts last
+      const letterDelay = ORBIT_START + (CHARS.length - 1 - i) * SNAKE_GAP;
 
-      // Orbit
+      // Orbit one full loop
       el.animate(circleKF, {
         duration: ORBIT_DURATION,
         delay: letterDelay,
         easing: 'linear',
         fill: 'forwards',
       });
-
-      // Fade out as soon as this letter's loop is done
-      el.animate(
-        [{ opacity: 1 }, { opacity: 0 }],
-        { duration: 150, delay: letterDelay + ORBIT_DURATION, fill: 'forwards' }
-      );
     });
 
-    // Typewriter starts after the last letter has faded out
-    const LAST_DONE = ORBIT_START + (CHARS.length - 1) * SNAKE_GAP + ORBIT_DURATION + 150;
+    // e (i=7) finishes first at ORBIT_START + ORBIT_DURATION.
+    // Each subsequent letter finishes SNAKE_GAP ms later.
+    // We measure wordmark positions once (when e finishes) and schedule each
+    // letter's glide with the appropriate relative delay so it starts the
+    // instant its own orbit ends — no stacking.
+    const ALIGN_START    = ORBIT_START + ORBIT_DURATION; // when e finishes
+    const ALIGN_DURATION = 400;
 
-    // ── Phase 2b: Typewriter reveal on the wordmark ──
-    const TYPEWRITER_START = LAST_DONE + 220;
-    const TYPEWRITER_GAP   = 85;  // ms between each letter appearing
-    wordmarkLetterRefs.current.forEach((el, i) => {
-      if (!el) return;
-      el.animate(
-        [{ opacity: 0 }, { opacity: 1 }],
-        { duration: 60, delay: TYPEWRITER_START + i * TYPEWRITER_GAP, fill: 'forwards' }
-      );
-    });
+    // ── Phase 2b: Each snake letter glides to its wordmark position ──
+    setTimeout(() => {
+      snakeRefs.current.forEach((el, i) => {
+        const wordmarkEl = wordmarkLetterRefs.current[i];
+        if (!el || !wordmarkEl) return;
 
-    const TYPEWRITER_DONE = TYPEWRITER_START + (CHARS.length - 1) * TYPEWRITER_GAP + 60;
+        const targetRect = wordmarkEl.getBoundingClientRect();
+        const targetX = (targetRect.left + targetRect.width / 2) - window.innerWidth / 2;
+        const targetY = (targetRect.top + targetRect.height / 2) - window.innerHeight / 2;
 
-    // ── Phase 3: Eyebrow + tagline rise in ──
+        // Each letter's orbit ends at ALIGN_START + (CHARS.length-1-i)*SNAKE_GAP.
+        // Relative to the setTimeout firing (ALIGN_START), that is (CHARS.length-1-i)*SNAKE_GAP.
+        const relativeAlignDelay = (CHARS.length - 1 - i) * SNAKE_GAP;
+
+        el.animate(
+          [
+            // Orbit ends at the top of the circle: x=0, y=(-R+CY)
+            { transform: `translate(calc(-50% + 0px), calc(-50% + ${-R + CY}px))` },
+            { transform: `translate(calc(-50% + ${targetX}px), calc(-50% + ${targetY}px))` },
+          ],
+          {
+            duration: ALIGN_DURATION,
+            delay: relativeAlignDelay,
+            easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+            fill: 'forwards',
+          }
+        );
+      });
+    }, ALIGN_START);
+
+    // n (i=0) is last to align: ALIGN_START + 7*SNAKE_GAP + ALIGN_DURATION
+    const ALL_ALIGNED = ALIGN_START + (CHARS.length - 1) * SNAKE_GAP + ALIGN_DURATION;
+
+    // ── Phase 3: Eyebrow + tagline rise in after word is assembled ──
     eyebrow.animate(
       [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0)' }],
-      ease(480, TYPEWRITER_DONE + 120)
+      ease(480, ALL_ALIGNED + 120)
     );
     tagline.animate(
       [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }],
-      ease(520, TYPEWRITER_DONE + 400)
+      ease(520, ALL_ALIGNED + 400)
     );
 
     // ── Phase 4: Circular badge ──
-    const BADGE_START = TYPEWRITER_DONE + 700;
+    const BADGE_START = ALL_ALIGNED + 700;
     setTimeout(() => {
       badge.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, fill: 'forwards' });
       badgeSvg.style.animation = 'intro-badge-spin 16s linear infinite';
