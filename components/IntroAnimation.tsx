@@ -277,8 +277,8 @@ export default function IntroAnimation() {
           className="font-display italic text-ink"
           style={{ fontSize: 'clamp(16px, 2.2vw, 28px)', opacity: 0 }}
         >
-          Good mornings,{' '}
-          <span className="text-sage">delivered.</span>
+          Eat well,{' '}
+          <span className="text-sage">every day.</span>
         </p>
       </div>
 
