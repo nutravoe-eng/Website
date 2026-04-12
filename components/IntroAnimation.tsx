@@ -100,41 +100,43 @@ export default function IntroAnimation() {
     const ORBIT_DURATION = 1700;
     const N_FRAMES       = 60;  // keyframe resolution
 
-    // Build the shared circular-path keyframes (same shape for every letter)
+    // Build the shared circular-path keyframes — NO rotation so letters stay
+    // upright and readable as they travel around the circle.
     const circleKF = Array.from({ length: N_FRAMES + 1 }, (_, i) => {
       const t     = i / N_FRAMES;
-      const alpha = t * 2 * Math.PI;        // 0 → 2π (one full loop)
+      const alpha = t * 2 * Math.PI;   // 0 → 2π (one full loop)
       const x     = R * Math.sin(alpha);
       const y     = -R * Math.cos(alpha) + CY;
-      const rot   = alpha * (180 / Math.PI); // topple angle matches swept angle
       return {
         opacity: 1,
-        // translate(-50%,-50%) centres the letter on its orbit position
-        transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) rotate(${rot}deg)`,
+        transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
         offset: t,
       };
     });
 
+    // Each letter orbits once (staggered), then fades out individually the
+    // moment it finishes — no pile-up, no overlap at the end position.
     snakeRefs.current.forEach((el, i) => {
       if (!el) return;
-      // Each letter orbits once, starting SNAKE_GAP ms after the previous one
+      const letterDelay = ORBIT_START + i * SNAKE_GAP;
+
+      // Orbit
       el.animate(circleKF, {
         duration: ORBIT_DURATION,
-        delay: ORBIT_START + i * SNAKE_GAP,
+        delay: letterDelay,
         easing: 'linear',
         fill: 'forwards',
       });
-    });
 
-    // When the last letter (e) finishes, fade the whole snake out
-    const LAST_DONE = ORBIT_START + (CHARS.length - 1) * SNAKE_GAP + ORBIT_DURATION;
-    snakeRefs.current.forEach((el) => {
-      if (!el) return;
+      // Fade out as soon as this letter's loop is done
       el.animate(
         [{ opacity: 1 }, { opacity: 0 }],
-        { duration: 180, delay: LAST_DONE + 40, fill: 'forwards' }
+        { duration: 150, delay: letterDelay + ORBIT_DURATION, fill: 'forwards' }
       );
     });
+
+    // Typewriter starts after the last letter has faded out
+    const LAST_DONE = ORBIT_START + (CHARS.length - 1) * SNAKE_GAP + ORBIT_DURATION + 150;
 
     // ── Phase 2b: Typewriter reveal on the wordmark ──
     const TYPEWRITER_START = LAST_DONE + 220;
