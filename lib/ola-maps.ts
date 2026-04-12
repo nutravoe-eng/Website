@@ -8,8 +8,9 @@
  *
  * Domain allowlist: Ola checks `Referer` / `Origin`. API routes pass
  * {@link requestOriginReferrer} so the port matches the running dev server (3000, 3001, …).
- * For code without a request (e.g. checkout pricing), set `OLA_MAPS_HTTP_REFERER` or rely on
- * `PORT` in development and `VERCEL_URL` / production defaults.
+ * For code without a request (e.g. checkout pricing), set `OLA_MAPS_HTTP_REFERER` or
+ * `NEXT_PUBLIC_SITE_URL` (canonical origin, usually allowlisted in Krutrim) or rely on
+ * `PORT` in development and `VERCEL_URL` as a last resort.
  */
 
 const OLA_BASE = "https://api.olamaps.io";
@@ -46,6 +47,22 @@ export function requestOriginReferrer(req: { headers: Headers }): string | undef
 }
 
 /**
+ * Canonical site URL for Ola when the per-request Referer (e.g. a one-off `*.vercel.app` host)
+ * is not on the Krutrim allowlist. Set `NEXT_PUBLIC_SITE_URL` to your production origin.
+ */
+function alternateReferrerForOla(preferredReferrer?: string | null): string | undefined {
+  const site = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!site) return undefined;
+  const siteNorm = normalizeReferrerUrl(site);
+  if (!siteNorm) return undefined;
+  if (preferredReferrer) {
+    const p = normalizeReferrerUrl(preferredReferrer);
+    if (p && p === siteNorm) return undefined;
+  }
+  return siteNorm;
+}
+
+/**
  * Base URL (with trailing slash) that must match an entry in the Ola API key domain allowlist.
  *
  * @param preferred — Usually from {@link requestOriginReferrer}; wins over env defaults.
@@ -62,16 +79,16 @@ export function getOlaHttpReferrer(preferred?: string | null): string {
     if (n) return n;
   }
 
-  const vercel = process.env.VERCEL_URL?.trim();
-  if (vercel) {
-    const host = vercel.replace(/^https?:\/\//, "").split("/")[0];
-    return `https://${host}/`;
-  }
-
   const site = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (site) {
     const n = normalizeReferrerUrl(site);
     if (n) return n;
+  }
+
+  const vercel = process.env.VERCEL_URL?.trim();
+  if (vercel) {
+    const host = vercel.replace(/^https?:\/\//, "").split("/")[0];
+    return `https://${host}/`;
   }
 
   if (process.env.NODE_ENV === "development") {
@@ -130,7 +147,7 @@ function labelFromGeocodeResult(r: unknown): string | undefined {
   return undefined;
 }
 
-async function olaGetJson(
+async function olaGetJsonOnce(
   path: string,
   params: Record<string, string>,
   preferredReferrer?: string | null,
@@ -154,6 +171,18 @@ async function olaGetJson(
   } catch {
     return null;
   }
+}
+
+async function olaGetJson(
+  path: string,
+  params: Record<string, string>,
+  preferredReferrer?: string | null,
+): Promise<unknown | null> {
+  const first = await olaGetJsonOnce(path, params, preferredReferrer);
+  if (first !== null) return first;
+  const alt = alternateReferrerForOla(preferredReferrer);
+  if (alt) return await olaGetJsonOnce(path, params, alt);
+  return null;
 }
 
 /**
@@ -212,47 +241,55 @@ export async function olaDrivingDistanceKm(
   u.searchParams.set("destination", `${destLat},${destLng}`);
   u.searchParams.set("overview", "false");
 
-  try {
-    // Do not cache: pricing must reflect live routing; stale cache also hid parsing/API issues.
-    const res = await fetch(u.toString(), {
-      method: "POST",
-      headers: { Accept: "application/json", ...olaReferrerHeaders(preferredReferrer) },
-      cache: "no-store",
-    });
-    const raw = (await res.json()) as Record<string, unknown>;
-    const code = typeof raw.status_code === "number" ? raw.status_code : res.status;
-    if (!res.ok || code >= 400) {
-      if (process.env.NODE_ENV === "development") {
-        const msg =
-          typeof raw.message === "string"
-            ? raw.message
-            : typeof raw.reason === "string"
-              ? raw.reason
-              : undefined;
-        console.error("[ola-maps] directions HTTP error", {
-          http: res.status,
-          message: msg,
-          bodyKeys: Object.keys(raw),
-        });
+  async function attemptDirections(referrer: string | null | undefined): Promise<number | null> {
+    try {
+      const res = await fetch(u.toString(), {
+        method: "POST",
+        headers: { Accept: "application/json", ...olaReferrerHeaders(referrer) },
+        cache: "no-store",
+      });
+      const raw = (await res.json()) as Record<string, unknown>;
+      const code = typeof raw.status_code === "number" ? raw.status_code : res.status;
+      if (!res.ok || code >= 400) {
+        if (process.env.NODE_ENV === "development") {
+          const msg =
+            typeof raw.message === "string"
+              ? raw.message
+              : typeof raw.reason === "string"
+                ? raw.reason
+                : undefined;
+          console.error("[ola-maps] directions HTTP error", {
+            http: res.status,
+            message: msg,
+            bodyKeys: Object.keys(raw),
+          });
+        }
+        return null;
       }
-      return null;
-    }
 
-    const meters = distanceMetersFromDirectionsPayload(raw);
-    if (meters === null || !Number.isFinite(meters) || meters < 0) {
-      if (process.env.NODE_ENV === "development") {
-        const r0 = Array.isArray(raw.routes) ? raw.routes[0] : undefined;
-        console.error("[ola-maps] directions: could not parse road distance (meters)", {
-          topKeys: Object.keys(raw),
-          route0Keys: r0 && typeof r0 === "object" ? Object.keys(r0 as object) : null,
-        });
+      const meters = distanceMetersFromDirectionsPayload(raw);
+      if (meters === null || !Number.isFinite(meters) || meters < 0) {
+        if (process.env.NODE_ENV === "development") {
+          const r0 = Array.isArray(raw.routes) ? raw.routes[0] : undefined;
+          console.error("[ola-maps] directions: could not parse road distance (meters)", {
+            topKeys: Object.keys(raw),
+            route0Keys: r0 && typeof r0 === "object" ? Object.keys(r0 as object) : null,
+          });
+        }
+        return null;
       }
+      return meters / 1000;
+    } catch {
       return null;
     }
-    return meters / 1000;
-  } catch {
-    return null;
   }
+
+  // Do not cache: pricing must reflect live routing; stale cache also hid parsing/API issues.
+  const first = await attemptDirections(preferredReferrer);
+  if (first !== null) return first;
+  const alt = alternateReferrerForOla(preferredReferrer);
+  if (alt) return await attemptDirections(alt);
+  return null;
 }
 
 /** Normalize distance-like fields (meters) from Ola / OSRM-style route objects. */
@@ -348,20 +385,28 @@ export async function olaAutocompletePredictions(
   if (typeof options?.radius === "number") u.searchParams.set("radius", String(options.radius));
   if (options?.location && typeof options?.radius === "number") u.searchParams.set("strictbounds", "true");
 
-  try {
-    const res = await fetch(u.toString(), {
-      headers: { Accept: "application/json", ...olaReferrerHeaders(preferredReferrer) },
-      next: { revalidate: 60 },
-    });
-    const data = (await res.json()) as Record<string, unknown>;
-    const code = typeof data.status_code === "number" ? data.status_code : res.status;
-    if (!res.ok || code >= 400) return [];
+  async function attemptAutocomplete(referrer: string | null | undefined): Promise<unknown[]> {
+    try {
+      const res = await fetch(u.toString(), {
+        headers: { Accept: "application/json", ...olaReferrerHeaders(referrer) },
+        next: { revalidate: 60 },
+      });
+      const data = (await res.json()) as Record<string, unknown>;
+      const code = typeof data.status_code === "number" ? data.status_code : res.status;
+      if (!res.ok || code >= 400) return [];
 
-    const preds = data.predictions;
-    return Array.isArray(preds) ? preds : [];
-  } catch {
-    return [];
+      const preds = data.predictions;
+      return Array.isArray(preds) ? preds : [];
+    } catch {
+      return [];
+    }
   }
+
+  const first = await attemptAutocomplete(preferredReferrer);
+  if (first.length > 0) return first;
+  const alt = alternateReferrerForOla(preferredReferrer);
+  if (alt) return await attemptAutocomplete(alt);
+  return [];
 }
 
 // --- Nominatim fallback (no Ola key, or Ola returns no results) ---
