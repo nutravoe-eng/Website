@@ -195,10 +195,15 @@ export default function OrdersPage() {
       ) : (
         <div className="space-y-4">
           {orders.map(order => {
+            const displayStatus =
+              order.payment_status === 'paid' && order.status === 'pending'
+                ? 'confirmed'
+                : order.status;
             const paymentInfo = PAYMENT_LABEL[order.payment_status] ?? PAYMENT_LABEL.pending;
-            const statusInfo = STATUS_LABEL[order.status] ?? { label: order.status, color: 'text-stone bg-stone/10' };
-            const isPending = order.payment_status !== 'paid';
-            const isDelivered = order.status === 'delivered' && order.payment_status === 'paid';
+            const statusInfo = STATUS_LABEL[displayStatus] ?? { label: displayStatus, color: 'text-stone bg-stone/10' };
+            const isCancelled = displayStatus === 'cancelled';
+            const isPending = !isCancelled && order.payment_status !== 'paid';
+            const isDelivered = displayStatus === 'delivered' && order.payment_status === 'paid';
 
             return (
               <div key={order.id} className="bg-white border text-ink border-black/10 rounded-xl p-6 shadow-sm hover:border-sage/40 transition-colors group">
@@ -212,8 +217,8 @@ export default function OrdersPage() {
                           {paymentInfo.label}
                         </span>
                       )}
-                      {/* Delivery status badge — shown when paid */}
-                      {!isPending && (
+                      {/* Delivery status badge — always shown for cancelled, otherwise shown when paid */}
+                      {(isCancelled || !isPending) && (
                         <span className={`px-2 py-0.5 font-body text-[10px] uppercase tracking-wider font-bold rounded-sm ${statusInfo.color}`}>
                           {statusInfo.label}
                         </span>
@@ -302,12 +307,12 @@ export default function OrdersPage() {
                 </div>
 
                 {/* Progress stepper — only for non-subscription, non-cancelled paid orders */}
-                {!order.isSubscriptionOrder && !isPending && order.status !== 'cancelled' && (
-                  <OrderProgressStepper status={order.status} />
+                {!order.isSubscriptionOrder && !isPending && displayStatus !== 'cancelled' && (
+                  <OrderProgressStepper status={displayStatus} />
                 )}
                 {/* Subscription delivery stepper */}
-                {order.isSubscriptionOrder && !isPending && order.status !== 'cancelled' && (
-                  <OrderProgressStepper status={order.status} />
+                {order.isSubscriptionOrder && !isPending && displayStatus !== 'cancelled' && (
+                  <OrderProgressStepper status={displayStatus} />
                 )}
               </div>
             );

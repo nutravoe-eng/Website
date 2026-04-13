@@ -386,16 +386,12 @@ export default function AdminSubscriptionsPage() {
                   );
                 })()}
                 <div>
+                  <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone mb-1">Delivery</p>
+                  <SubscriptionStatusBadge status={sub.status} />
+                </div>
+                <div>
                   <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone mb-1">Payment</p>
-                  {sub.payment_status === 'paid' ? (
-                    <span className="inline-flex items-center gap-1 bg-sage/10 text-sage-dark font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
-                      ✓ Paid
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center bg-terracotta/10 text-terracotta font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
-                      Pending
-                    </span>
-                  )}
+                  <SubscriptionPaymentBadge status={sub.payment_status} />
                   {sub.payment_reference && (
                     <p className="font-body text-[10px] text-stone mt-0.5">{sub.payment_reference}</p>
                   )}
@@ -616,6 +612,41 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
       <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone mb-0.5">{label}</p>
       <p className={`font-body text-sm font-semibold transition-colors ${highlight ? 'text-blue-600' : 'text-ink'}`}>{value}</p>
     </div>
+  );
+}
+
+function SubscriptionPaymentBadge({ status }: { status: string }) {
+  const config: Record<string, { label: string; className: string }> = {
+    pending: { label: 'Pending', className: 'bg-amber-50 text-amber-700' },
+    paid: { label: 'Paid', className: 'bg-sage/10 text-sage-dark' },
+    failed: { label: 'Failed', className: 'bg-red-50 text-red-600' },
+    refunded: { label: 'Refunded', className: 'bg-sage/10 text-sage-dark' },
+    pending_refund: { label: 'Refund Pending', className: 'bg-amber-50 text-amber-700' },
+    refund_initiated: { label: 'Refund Initiated', className: 'bg-amber-50 text-amber-700' },
+    refund_complete: { label: 'Refund Complete', className: 'bg-sage/10 text-sage-dark' },
+  };
+  const c = config[status] ?? { label: status, className: 'bg-stone/10 text-stone' };
+  return (
+    <span className={`inline-flex items-center font-body text-[11px] font-bold px-2 py-0.5 rounded-full ${c.className}`}>
+      {c.label}
+    </span>
+  );
+}
+
+function SubscriptionStatusBadge({ status }: { status: string }) {
+  const config: Record<string, { label: string; className: string }> = {
+    pending: { label: 'Pending', className: 'bg-amber-50 text-amber-700' },
+    active: { label: 'Active', className: 'bg-sage/10 text-sage-dark' },
+    paused: { label: 'Paused', className: 'bg-amber-50 text-amber-700' },
+    cancelled: { label: 'Cancelled', className: 'bg-red-50 text-red-600' },
+    expired: { label: 'Expired', className: 'bg-red-50 text-red-600' },
+    completed: { label: 'Completed', className: 'bg-sage/10 text-sage-dark' },
+  };
+  const c = config[status] ?? { label: status, className: 'bg-stone/10 text-stone' };
+  return (
+    <span className={`inline-flex items-center font-body text-[11px] font-bold px-2 py-0.5 rounded-full ${c.className}`}>
+      {c.label}
+    </span>
   );
 }
 

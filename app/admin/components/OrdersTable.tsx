@@ -354,32 +354,7 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {order.payment_status === 'paid' ? (
-                      <div>
-                        <span className="inline-flex items-center gap-1 bg-sage/10 text-sage-dark font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
-                          ✓ Paid
-                        </span>
-                        {order.payment_reference && (
-                          <p className="font-body text-[10px] text-stone mt-1">{order.payment_reference}</p>
-                        )}
-                      </div>
-                    ) : order.payment_status === 'pending_refund' ? (
-                      <span className="inline-flex items-center bg-amber-50 text-amber-700 font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
-                        Refund Pending
-                      </span>
-                    ) : order.payment_status === 'refund_initiated' ? (
-                      <span className="inline-flex items-center bg-blue-50 text-blue-700 font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
-                        Refund Initiated
-                      </span>
-                    ) : order.payment_status === 'refund_complete' ? (
-                      <span className="inline-flex items-center gap-1 bg-sage/10 text-sage-dark font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
-                        ✓ Refunded
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center bg-terracotta/10 text-terracotta font-body text-[11px] font-bold px-2 py-0.5 rounded-full">
-                        Pending
-                      </span>
-                    )}
+                    <PaymentStatusBadge status={order.payment_status} reference={order.payment_reference} />
                   </td>
                   <td className="px-4 py-3">
                     <DeliveryStatusBadge status={order.status} />
@@ -657,6 +632,30 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
   );
 }
 
+function PaymentStatusBadge({ status, reference }: { status: string; reference: string | null }) {
+  const config: Record<string, { label: string; className: string }> = {
+    pending: { label: 'Pending', className: 'bg-amber-50 text-amber-700' },
+    paid: { label: 'Paid', className: 'bg-sage/10 text-sage-dark' },
+    failed: { label: 'Failed', className: 'bg-red-50 text-red-600' },
+    refunded: { label: 'Refunded', className: 'bg-sage/10 text-sage-dark' },
+    pending_refund: { label: 'Refund Pending', className: 'bg-amber-50 text-amber-700' },
+    refund_initiated: { label: 'Refund Initiated', className: 'bg-amber-50 text-amber-700' },
+    refund_complete: { label: 'Refund Complete', className: 'bg-sage/10 text-sage-dark' },
+  };
+  const c = config[status] ?? { label: status, className: 'bg-stone/10 text-stone' };
+
+  return (
+    <div>
+      <span className={`inline-flex items-center font-body text-[11px] font-bold px-2 py-0.5 rounded-full ${c.className}`}>
+        {c.label}
+      </span>
+      {reference && (
+        <p className="font-body text-[10px] text-stone mt-1">{reference}</p>
+      )}
+    </div>
+  );
+}
+
 function Th({ children }: { children: React.ReactNode }) {
   return (
     <th className="px-4 py-3 font-body text-[11px] font-bold uppercase tracking-wider text-stone whitespace-nowrap">
@@ -688,9 +687,9 @@ function ActionBtn({ children, onClick, color }: {
 
 function DeliveryStatusBadge({ status }: { status: string }) {
   const config: Record<string, { label: string; className: string }> = {
-    pending:          { label: 'Pending',         className: 'bg-amber-50 text-amber-700' },
-    confirmed:        { label: 'To Be Dispatched', className: 'bg-blue-50 text-blue-700' },
-    out_for_delivery: { label: 'Out for Delivery', className: 'bg-terracotta/10 text-terracotta' },
+    pending:          { label: 'Pending', className: 'bg-amber-50 text-amber-700' },
+    confirmed:        { label: 'To Be Dispatched', className: 'bg-amber-50 text-amber-700' },
+    out_for_delivery: { label: 'Out for Delivery', className: 'bg-amber-50 text-amber-700' },
     delivered:        { label: '✓ Delivered',      className: 'bg-sage/10 text-sage-dark' },
     cancelled:        { label: 'Cancelled',        className: 'bg-red-50 text-red-600' },
   };
