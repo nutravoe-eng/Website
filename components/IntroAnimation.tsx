@@ -289,7 +289,7 @@ export default function IntroAnimation() {
           className="font-body text-[10px] tracking-[0.24em] uppercase text-stone"
           style={{ opacity: 0 }}
         >
-          Bangalore&rsquo;s morning ritual
+          Bengaluru&rsquo;s daily ritual
         </p>
 
         <p
