@@ -97,8 +97,15 @@ export default async function InvoicePage({
   // Subscriber discount = raw items sum minus stored subtotal
   const rawItemsTotal = o.order_items.reduce((s, i) => s + i.total_price, 0);
   const discount = Math.max(0, rawItemsTotal - Number(o.subtotal));
-  const inferredDeliveryFee = Math.max(0, Number(o.total) - Number(o.subtotal));
-  const shownDeliveryFee = Number(o.delivery_fee) > 0 ? Number(o.delivery_fee) : inferredDeliveryFee;
+  const subtotal = Number(o.subtotal ?? 0);
+  const total = Number(o.total ?? 0);
+  const explicitDeliveryFee = Number(o.delivery_fee ?? 0);
+  const inferredFromSubtotal = Math.max(0, total - subtotal);
+  const inferredFromItems = Math.max(0, total - rawItemsTotal);
+  // Historical rows can have inconsistent subtotal semantics; pick the strongest non-negative inference.
+  const shownDeliveryFee = explicitDeliveryFee > 0
+    ? explicitDeliveryFee
+    : Math.max(inferredFromSubtotal, inferredFromItems);
 
   return (
     <>
