@@ -550,6 +550,11 @@ export default function CartPage() {
                         </div>
                       </div>
                     )}
+                    {!deliveryFeeLoading && (
+                      <p className="font-body text-[10px] text-stone/70">
+                        Delivery is free within 10 km. If delivery is charged, your address is beyond 10 km from {nearestHubName}.
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center justify-between pt-1">
                     <span className="font-body text-sm font-bold uppercase tracking-wider text-ink/70">

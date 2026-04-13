@@ -1,12 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { adminSupabase } from "@/lib/supabase/admin";
+import { scheduleDeliveryDates } from "@/lib/subscription";
 
 type DayConfigInput = {
   day: string;
   bowlId: string;
   quantity: number;
 };
+
+function parseSlotStartHour(slot: string | null | undefined): number | null {
+  if (!slot) return null;
+  const first = slot.split("-")[0]?.trim();
+  if (!first) return null;
+  const match = first.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!match) return null;
+  let hour = parseInt(match[1], 10);
+  const meridiem = match[3].toUpperCase();
+  if (meridiem === "PM" && hour !== 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+  return hour;
+}
+
+function daySlugFromDate(dateISO: string): string {
+  const d = new Date(`${dateISO}T12:00:00`);
+  const map = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  return map[d.getDay()] ?? "mon";
+}
+
+function isOrderEditableByCustomer(order: { delivery_date: string; delivery_time_slot: string | null }): boolean {
+  const nowIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const slotHour = parseSlotStartHour(order.delivery_time_slot);
+  const deliveryDateTime = new Date(`${order.delivery_date}T00:00:00`);
+  deliveryDateTime.setHours(slotHour ?? 7, 0, 0, 0);
+  return deliveryDateTime.getTime() - nowIST.getTime() >= 24 * 60 * 60 * 1000;
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -93,6 +121,87 @@ export async function PATCH(
 
       if (insertError) {
         return NextResponse.json({ error: "Failed to replace subscription configuration" }, { status: 500 });
+      }
+    }
+
+    // Sync upcoming generated orders so customer edits reflect on admin side too.
+    // Only orders >=24h away are editable by customers.
+    const { data: subRow } = await adminSupabase
+      .from("subscriptions")
+      .select("id, style, delivery_time_slot")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (subRow?.style === "spread") {
+      const { data: upcomingOrders } = await adminSupabase
+        .from("orders")
+        .select("id, delivery_date, delivery_time_slot, status")
+        .eq("subscription_id", id)
+        .in("status", ["pending", "confirmed"]);
+
+      const editableOrders = (upcomingOrders ?? [])
+        .filter((o) => isOrderEditableByCustomer(o))
+        .sort((a, b) => a.delivery_date.localeCompare(b.delivery_date));
+
+      if (editableOrders.length > 0) {
+        const daySlotMap = new Map<string, string | null>();
+        for (const cfg of dayConfigs) {
+          const key = cfg.day.substring(0, 3).toLowerCase();
+          if (!daySlotMap.has(key)) {
+            daySlotMap.set(key, updates.delivery_time_slot ?? subRow.delivery_time_slot ?? null);
+          }
+        }
+
+        const desiredDateMap = scheduleDeliveryDates(
+          Array.from(daySlotMap.entries()).map(([day, timeSlot]) => ({ day, timeSlot }))
+        );
+
+        const desired = Array.from(daySlotMap.entries())
+          .map(([day, slot]) => ({ day, date: desiredDateMap[day], slot }))
+          .filter((d) => !!d.date)
+          .sort((a, b) => a.date.localeCompare(b.date));
+
+        const usedDesired = new Set<number>();
+        const updatesToApply: Array<{ id: string; delivery_date: string; delivery_time_slot: string | null }> = [];
+        const unmatched: typeof editableOrders = [];
+
+        for (const order of editableOrders) {
+          const orderDay = daySlugFromDate(order.delivery_date);
+          const idx = desired.findIndex((d, i) => !usedDesired.has(i) && d.day === orderDay);
+          if (idx >= 0) {
+            usedDesired.add(idx);
+            updatesToApply.push({
+              id: order.id,
+              delivery_date: desired[idx].date,
+              delivery_time_slot: desired[idx].slot,
+            });
+          } else {
+            unmatched.push(order);
+          }
+        }
+
+        for (const order of unmatched) {
+          const idx = desired.findIndex((_, i) => !usedDesired.has(i));
+          if (idx < 0) break;
+          usedDesired.add(idx);
+          updatesToApply.push({
+            id: order.id,
+            delivery_date: desired[idx].date,
+            delivery_time_slot: desired[idx].slot,
+          });
+        }
+
+        for (const ord of updatesToApply) {
+          await adminSupabase
+            .from("orders")
+            .update({
+              delivery_date: ord.delivery_date,
+              delivery_time_slot: ord.delivery_time_slot,
+            })
+            .eq("id", ord.id)
+            .eq("subscription_id", id);
+        }
       }
     }
   }

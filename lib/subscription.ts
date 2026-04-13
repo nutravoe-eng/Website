@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import type { Subscription, DayBowlConfig } from '@/types';
-import { STUB_PLANS as PLANS, type PlanConfig } from '@/app/subscribe/PlanCard';
+import { STUB_PLANS as FALLBACK_PLANS, type PlanConfig } from '@/app/subscribe/PlanCard';
+import { getSubscriptionPlans } from '@/lib/sanity';
 
 // Map Supabase day_of_week enum to the app's DayBowlConfig day type
 function mapDay(d: string): DayBowlConfig['day'] {
@@ -68,7 +69,29 @@ export async function getActiveSubscription(): Promise<Subscription | null> {
 export async function getActivePlanConfig(): Promise<PlanConfig | null> {
   const sub = await getActiveSubscription();
   if (!sub) return null;
-  return PLANS.find(p => p.id === sub.planId) ?? null;
+
+  try {
+    const sanityPlans = await getSubscriptionPlans();
+    const matched = sanityPlans.find((p) => p.slug === sub.planId);
+    if (matched) {
+      const perBowl = matched.price_per_bowl || matched.priceNearPerBowl || matched.priceFarPerBowl || 0;
+      return {
+        id: matched.slug as PlanConfig["id"],
+        name: matched.name,
+        bowlsPerWeek: matched.bowlsPerCycle,
+        weeklyPrice: perBowl * matched.bowlsPerCycle,
+        perBowl,
+        billingCycle: matched.billingCycle,
+        savingsBadge: matched.savingsBadge ?? '',
+        customisationChargePerBowl: matched.customisationChargePerBowl ?? 0,
+        deliveryStyles: matched.deliveryStyles,
+      };
+    }
+  } catch {
+    // Fall through to static fallback when Sanity is temporarily unavailable.
+  }
+
+  return FALLBACK_PLANS.find(p => p.id === sub.planId) ?? null;
 }
 
 

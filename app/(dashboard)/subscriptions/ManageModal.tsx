@@ -7,15 +7,12 @@ import { STUB_PLANS as PLANS } from '../../subscribe/PlanCard';
 import BowlPicker from '../../subscribe/BowlPicker';
 import CustomizationModal from '@/components/CustomizationModal';
 import { useDialogAccessibility } from '@/lib/use-dialog-accessibility';
+import { DELIVERY_TIME_SLOTS } from '@/lib/delivery-slots';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 type Day = typeof DAYS[number];
 
-const TIME_SLOTS = [
-  '7:00 AM – 8:00 AM',
-  '8:00 AM – 9:00 AM',
-  '9:00 AM – 10:00 AM',
-] as const;
+const TIME_SLOTS = DELIVERY_TIME_SLOTS;
 
 interface EditState {
   deliveryStyle: 'spread' | 'flexible';
@@ -183,6 +180,14 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
           {/* ── Spread config ──────────────────────────────────── */}
           {edit.deliveryStyle === 'spread' && (
             <>
+              <div className="bg-terracotta/5 border border-terracotta/20 rounded-xl p-4">
+                <p className="font-body text-[12px] font-bold text-terracotta mb-1">
+                  Schedule update rule
+                </p>
+                <p className="font-body text-[12px] text-stone leading-relaxed">
+                  Changes made here are applied only to deliveries that are at least 24 hours away. Slots within the next 24 hours stay locked.
+                </p>
+              </div>
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">Delivery Days</p>

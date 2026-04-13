@@ -14,26 +14,12 @@ import CustomizationModal from "@/components/CustomizationModal";
 import { createClient } from "@/lib/supabase/client";
 import { resolveDeliveryCoords } from "@/lib/geocodeCache";
 import { FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
+import { DELIVERY_TIME_SLOTS } from "@/lib/delivery-slots";
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 type Day = typeof DAYS[number];
 
-const TIME_SLOTS = [
-  '7:00 AM - 8:00 AM',
-  '8:00 AM - 9:00 AM',
-  '9:00 AM - 10:00 AM',
-  '10:00 AM - 11:00 AM',
-  '11:00 AM - 12:00 PM',
-  '12:00 PM - 1:00 PM',
-  '1:00 PM - 2:00 PM',
-  '2:00 PM - 3:00 PM',
-  '3:00 PM - 4:00 PM',
-  '4:00 PM - 5:00 PM',
-  '5:00 PM - 6:00 PM',
-  '6:00 PM - 7:00 PM',
-  '7:00 PM - 8:00 PM',
-  '8:00 PM - 9:00 PM',
-] as const;
+const TIME_SLOTS = DELIVERY_TIME_SLOTS;
 
 export type TimeSlotMode = 'same' | 'different' | null;
 
@@ -803,6 +789,9 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             <p className="font-body text-[14px] text-stone">
               {currentPlan.name} — {formatCurrency(currentPlan.weeklyPrice)}/week
             </p>
+            <p className="font-body text-[12px] text-stone/80 mt-1">
+              Starts from {formatCurrency(currentPlan.perBowl)} per bowl. Delivery is free within 10 km; beyond 10 km, delivery charges are added based on distance.
+            </p>
           </div>
           <StepIndicator />
 
@@ -1477,6 +1466,11 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                       </>
                     )}
                   </div>
+                )}
+                {scenario !== 'D' && (
+                  <p className="font-body text-[10px] text-stone/70 mb-2">
+                    Delivery is free within 10 km. If your address is beyond 10 km, the additional delivery fee is shown above.
+                  </p>
                 )}
                 <div className="flex items-center justify-between">
                   <span className="font-body text-sm font-bold uppercase tracking-wider text-ink/70">

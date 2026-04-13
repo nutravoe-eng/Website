@@ -53,7 +53,8 @@ export default function PlanCard({
         <span className="font-display text-3xl font-medium text-ink">₹{plan.weeklyPrice.toLocaleString('en-IN')}</span>
         <span className="font-body text-[13px] text-stone">/week</span>
       </div>
-      <p className="font-body text-[12px] text-stone">₹{plan.perBowl} per bowl</p>
+      <p className="font-body text-[12px] text-stone">Starts from ₹{plan.perBowl} per bowl</p>
+      <p className="font-body text-[11px] text-stone/80 mt-1">Delivery is free within 10 km; extra delivery charges apply beyond 10 km.</p>
 
       {selected && (
         <div className="flex items-center gap-2 mt-4">
