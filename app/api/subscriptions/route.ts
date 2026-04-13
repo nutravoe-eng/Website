@@ -151,7 +151,9 @@ export async function POST(req: NextRequest) {
 
   let quote;
   try {
-    quote = await buildSubscriptionQuote(planId, address, dayConfigs);
+    quote = await buildSubscriptionQuote(planId, address, dayConfigs, {
+      httpReferrer: requestOriginReferrer(req),
+    });
   } catch (e) {
     console.error("Quote error:", e);
     return NextResponse.json({ error: "Unable to price this subscription" }, { status: 400, headers: limited.headers });

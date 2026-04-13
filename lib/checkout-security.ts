@@ -17,6 +17,10 @@ export interface AddressForPricing {
   lng?: number | null;
 }
 
+interface PricingContextOptions {
+  httpReferrer?: string | null;
+}
+
 export interface CheckoutItemInput {
   bowlSlug: string;
   quantity: number;
@@ -44,28 +48,29 @@ async function resolveAddressCoordinates(address: AddressForPricing): Promise<{ 
   return null;
 }
 
-export async function isNearZoneAddress(address: AddressForPricing): Promise<boolean> {
+export async function isNearZoneAddress(address: AddressForPricing, options?: PricingContextOptions): Promise<boolean> {
   const coords = await resolveAddressCoordinates(address);
   // Fail safe: assume far zone when coords are unavailable to avoid unintended free delivery
   if (!coords) return false;
-  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng);
+  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng, { httpReferrer: options?.httpReferrer });
   return distanceKm <= FREE_ZONE_RADIUS_KM;
 }
 
-export async function getAddressDeliveryFee(address: AddressForPricing): Promise<number> {
+export async function getAddressDeliveryFee(address: AddressForPricing, options?: PricingContextOptions): Promise<number> {
   const coords = await resolveAddressCoordinates(address);
   // Fail safe: charge the standard delivery fee when coords are unavailable
   if (!coords) return DELIVERY_FEE_RS;
-  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng);
+  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng, { httpReferrer: options?.httpReferrer });
   return deliveryFeeFromDistanceKm(distanceKm);
 }
 
 export async function getAddressDeliveryBreakdown(
   address: AddressForPricing,
+  options?: PricingContextOptions,
 ): Promise<({ isFree: true; distanceKm: number } | ({ isFree: false } & DeliveryPriceBreakdown)) | null> {
   const coords = await resolveAddressCoordinates(address);
   if (!coords) return null;
-  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng);
+  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng, { httpReferrer: options?.httpReferrer });
   return deliveryPricingFromDistanceKm(distanceKm);
 }
 
@@ -104,8 +109,12 @@ function getPlanBySlug(plans: SubscriptionPlan[], slug: string): SubscriptionPla
   return plans.find((plan) => plan.slug === slug) ?? null;
 }
 
-export async function getSubscriptionUnitPrice(planSlug: string, address: AddressForPricing): Promise<number | null> {
-  const [plans, nearZone] = await Promise.all([getSubscriptionPlans(), isNearZoneAddress(address)]);
+export async function getSubscriptionUnitPrice(
+  planSlug: string,
+  address: AddressForPricing,
+  options?: PricingContextOptions,
+): Promise<number | null> {
+  const [plans, nearZone] = await Promise.all([getSubscriptionPlans(), isNearZoneAddress(address, options)]);
   const plan = getPlanBySlug(plans, planSlug);
   if (!plan) return null;
   
@@ -117,11 +126,12 @@ export async function buildAuthoritativeOrder(
   items: CheckoutItemInput[],
   address: AddressForPricing,
   subscriptionPlanSlug?: string | null,
+  options?: PricingContextOptions,
 ): Promise<{ subtotal: number; deliveryFee: number; total: number; lineItems: CheckoutLineItem[] }> {
   const [bowls, deliveryFee, subscriptionUnitPrice] = await Promise.all([
     getAllBowls(),
-    getAddressDeliveryFee(address),
-    subscriptionPlanSlug ? getSubscriptionUnitPrice(subscriptionPlanSlug, address) : Promise.resolve(null),
+    getAddressDeliveryFee(address, options),
+    subscriptionPlanSlug ? getSubscriptionUnitPrice(subscriptionPlanSlug, address, options) : Promise.resolve(null),
   ]);
 
   const bowlMap = new Map(bowls.map((bowl) => [bowl.slug, bowl]));
@@ -159,6 +169,7 @@ export async function buildSubscriptionQuote(
   planSlug: string,
   address: AddressForPricing,
   dayConfigs: { bowlId: string; day?: string; customizations?: IngredientCustomization[] | IngredientCustomization[][] }[],
+  options?: PricingContextOptions,
 ): Promise<{
   billingCycle: "weekly" | "monthly";
   perBowl: number;
@@ -181,7 +192,7 @@ export async function buildSubscriptionQuote(
 
   let distanceKmForPricing: number | null = null;
   if (coords) {
-    const resolved = await resolveDeliveryDistanceKm(coords.lat, coords.lng);
+    const resolved = await resolveDeliveryDistanceKm(coords.lat, coords.lng, { httpReferrer: options?.httpReferrer });
     distanceKmForPricing = resolved.distanceKm;
   }
   const nearZone = distanceKmForPricing !== null && distanceKmForPricing <= FREE_ZONE_RADIUS_KM;
