@@ -82,6 +82,8 @@ export default async function SubscriptionInvoicePage({
     ? new Set(dayConfigs.map((dc: any) => dc.day_of_week)).size
     : 0;
   const weeklyDeliveryFee = (s.delivery_fee ?? 0) * uniqueDeliveryDays;
+  const computedSpreadTotal = bowlsSubtotal + customisationTotal + weeklyDeliveryFee;
+  const paidTotal = Number(s.total_amount_rs ?? (s.style === 'spread' ? computedSpreadTotal : 0));
 
   return (
     <>
@@ -263,26 +265,26 @@ export default async function SubscriptionInvoicePage({
                   {customisationTotal > 0 && (
                     <TotalRow label="Customisations / week" value={`₹ ${customisationTotal.toLocaleString('en-IN')}`} />
                   )}
+                  <TotalRow
+                    label={
+                      weeklyDeliveryFee > 0
+                        ? `Delivery (${uniqueDeliveryDays} day${uniqueDeliveryDays > 1 ? 's' : ''} × ₹${s.delivery_fee}/day)`
+                        : "Delivery"
+                    }
+                    value={weeklyDeliveryFee > 0 ? `₹ ${weeklyDeliveryFee.toLocaleString('en-IN')}` : "Free"}
+                    valueColor={weeklyDeliveryFee === 0 ? "#4E6B49" : undefined}
+                  />
                   {weeklyDeliveryFee > 0 && (
-                    <>
-                      <TotalRow
-                        label={`Delivery (${uniqueDeliveryDays} day${uniqueDeliveryDays > 1 ? 's' : ''} × ₹${s.delivery_fee}/day)`}
-                        value={`₹ ${weeklyDeliveryFee.toLocaleString('en-IN')}`}
-                      />
-                      <TotalRow
-                        label={`  Total delivery cost (Nutravoe covers ₹${weeklyDeliveryFee.toLocaleString('en-IN')})`}
-                        value={`₹ ${(weeklyDeliveryFee * 2).toLocaleString('en-IN')}`}
-                        valueColor="#9A9590"
-                        small
-                      />
-                    </>
-                  )}
-                  {weeklyDeliveryFee === 0 && (
-                    <TotalRow label="Delivery" value="Free" valueColor="#4E6B49" />
+                    <TotalRow
+                      label={`  Total delivery cost (Nutravoe covers ₹${weeklyDeliveryFee.toLocaleString('en-IN')})`}
+                      value={`₹ ${(weeklyDeliveryFee * 2).toLocaleString('en-IN')}`}
+                      valueColor="#9A9590"
+                      small
+                    />
                   )}
                 </>
               ) : (
-                <TotalRow label="Wallet amount loaded" value={`₹ ${Number(s.total_amount_rs).toLocaleString('en-IN')}`} />
+                <TotalRow label="Wallet amount loaded" value={`₹ ${paidTotal.toLocaleString('en-IN')}`} />
               )}
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -292,7 +294,7 @@ export default async function SubscriptionInvoicePage({
                   {s.style === 'spread' ? 'WEEKLY TOTAL' : 'TOTAL PAID'}
                 </span>
                 <span style={{ fontSize: '20px', fontWeight: '400', color: 'white', fontFamily: 'Georgia, serif' }}>
-                  ₹ {Number(s.total_amount_rs).toLocaleString('en-IN')}
+                  ₹ {paidTotal.toLocaleString('en-IN')}
                 </span>
               </div>
             </div>

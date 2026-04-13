@@ -37,6 +37,7 @@ export default async function DeliveryReceiptPage({
     .from('orders')
     .select(`
       id, status, delivery_date, created_at, subscription_id, order_type,
+      delivery_fee, subtotal, total,
       users!inner ( full_name, email, phone ),
       addresses ( line1, line2, city, state, pincode ),
       order_items ( bowl_name, quantity, unit_price, total_price, customizations ),
@@ -65,6 +66,9 @@ export default async function DeliveryReceiptPage({
   const address = o.addresses as any;
   const items = (o.order_items ?? []) as any[];
   const planName = o.subscriptions?.subscription_plans?.name ?? null;
+  const subtotal = Number(o.subtotal ?? 0);
+  const deliveryFee = Number(o.delivery_fee ?? 0);
+  const total = Number(o.total ?? subtotal + deliveryFee);
 
   return (
     <>
@@ -220,8 +224,37 @@ export default async function DeliveryReceiptPage({
               </p>
               <p style={{ fontSize: '12px', color: '#9A9590', fontFamily: 'sans-serif' }}>
                 This delivery is fulfilled under subscription {subscriptionRef ?? ''}
-                {planName ? ` · ${planName}` : ''}. No additional charge.
+                {planName ? ` · ${planName}` : ''}.
               </p>
+            </div>
+          </div>
+
+          {/* Totals */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '28px' }}>
+            <div style={{ minWidth: '270px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 14px' }}>
+                <span style={{ fontSize: '12px', color: '#9A9590', fontFamily: 'sans-serif' }}>Subtotal</span>
+                <span style={{ fontSize: '13px', color: '#1C1C1A', fontFamily: 'sans-serif', fontWeight: '500' }}>
+                  ₹ {subtotal.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 14px' }}>
+                <span style={{ fontSize: '12px', color: '#9A9590', fontFamily: 'sans-serif' }}>Delivery</span>
+                <span style={{ fontSize: '13px', color: deliveryFee === 0 ? '#4E6B49' : '#1C1C1A', fontFamily: 'sans-serif', fontWeight: '500' }}>
+                  {deliveryFee === 0 ? 'Free' : `₹ ${deliveryFee.toLocaleString('en-IN')}`}
+                </span>
+              </div>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '10px 14px', background: '#1C1C1A', borderRadius: '8px', marginTop: '8px',
+              }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'white', letterSpacing: '0.08em', fontFamily: 'sans-serif' }}>
+                  DELIVERY TOTAL
+                </span>
+                <span style={{ fontSize: '20px', fontWeight: '400', color: 'white', fontFamily: 'Georgia, serif' }}>
+                  ₹ {total.toLocaleString('en-IN')}
+                </span>
+              </div>
             </div>
           </div>
 

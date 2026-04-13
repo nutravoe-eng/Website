@@ -288,6 +288,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
         <div className="space-y-4">
           {activeSubs.map(sub => {
             const paused = sub.status === "paused";
+            const isCompleted = sub.status === "completed";
             const completedFlex =
               sub.status === "completed" &&
               sub.deliveryStyle === "flexible" &&
@@ -395,6 +396,15 @@ export default function SubscriptionsClient({ bowls }: Props) {
                         </svg>
                         Resend WhatsApp
                       </button>
+                    ) : isCompleted ? (
+                      <div className="space-y-2">
+                        <div className="w-full border border-black/10 bg-[#F9F8F6] text-stone font-body text-[13px] font-medium py-2.5 rounded-md text-center">
+                          Plan Completed
+                        </div>
+                        <p className="font-body text-[11px] text-stone leading-relaxed">
+                          Manage, cancel, and top-up are disabled after quota completion.
+                        </p>
+                      </div>
                     ) : (
                       <>
                         <button
@@ -418,21 +428,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
                             Top up Wallet
                           </button>
                         )}
-                        {paused ? (
-                          <button
-                            onClick={() => updateStatus(sub.id, "active")}
-                            className="w-full bg-ink hover:bg-black text-white font-body text-[13px] font-bold py-2.5 rounded-md transition-colors shadow-sm"
-                          >
-                            Resume Deliveries
-                          </button>
-                        ) : sub.status !== "completed" ? (
-                          <button
-                            onClick={() => updateStatus(sub.id, "paused")}
-                            className="w-full border border-black/10 hover:bg-[#F9F8F6] text-ink font-body text-[13px] font-medium py-2.5 rounded-md transition-colors"
-                          >
-                            Pause
-                          </button>
-                        ) : null}
+                        {/* Pause/resume controls intentionally hidden for now; keep API hooks in place for future re-enable. */}
                       </>
                     )}
                     {sub.paymentStatus === 'paid' && (
@@ -451,12 +447,14 @@ export default function SubscriptionsClient({ bowls }: Props) {
                         Invoice
                       </a>
                     )}
-                    <button
-                      onClick={() => sub.status === 'pending' ? handleDiscard(sub.id) : setCancellingId(sub.id)}
-                      className="text-stone hover:text-terracotta font-body text-[12px] font-medium transition-colors mt-1 text-left"
-                    >
-                      {sub.status === 'pending' ? 'Discard Request' : 'Cancel Plan'}
-                    </button>
+                    {sub.status !== 'completed' && (
+                      <button
+                        onClick={() => sub.status === 'pending' ? handleDiscard(sub.id) : setCancellingId(sub.id)}
+                        className="text-stone hover:text-terracotta font-body text-[12px] font-medium transition-colors mt-1 text-left"
+                      >
+                        {sub.status === 'pending' ? 'Discard Request' : 'Cancel Plan'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
