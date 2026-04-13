@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
     // Unique constraint violation = already ordered for this date on this subscription
     if (orderError.code === "23505") {
       return NextResponse.json(
-        { error: "You already have a wallet order for this delivery date" },
+        { error: "You already have a wallet order for this delivery slot. Choose a different time slot." },
         { status: 409, headers: limited.headers }
       );
     }

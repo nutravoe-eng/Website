@@ -21,7 +21,7 @@ export default function ConfirmationPage({
           <span className="text-3xl">✓</span>
         </div>
 
-        <p className="section-eyebrow mb-4">{isWallet ? "Order Confirmed" : "Order Received"}</p>
+        {isWallet && <p className="section-eyebrow mb-4">Order Confirmed</p>}
         <h1
           className="section-heading text-ink mb-6"
           style={{ fontSize: "clamp(36px, 5vw, 56px)" }}
