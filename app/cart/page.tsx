@@ -421,6 +421,9 @@ export default function CartPage() {
                     const basePrice = subscriberPricePerBowl ?? item.bowl.price;
                     const effectiveUnitPrice = basePrice + item.customizationCost;
                     const isDiscounted = subscriberPricePerBowl !== null && item.bowl.price > subscriberPricePerBowl;
+                    const extraLineItems = extras
+                      .map((c) => item.bowl.customizableIngredients?.find((i) => i.id === c.ingredientId))
+                      .filter((i): i is NonNullable<typeof item.bowl.customizableIngredients>[number] => Boolean(i));
 
                     return (
                       <div
@@ -442,6 +445,11 @@ export default function CartPage() {
                               </>
                             )}
                           </div>
+                          {item.customizationCost > 0 && (
+                            <p className="font-body text-[11px] text-stone/80 mt-1">
+                              Base {formatCurrency(basePrice)} + extras {formatCurrency(item.customizationCost)} = {formatCurrency(effectiveUnitPrice)} each
+                            </p>
+                          )}
                           {/* Customization summary */}
                           {(removed.length > 0 || extras.length > 0) && (
                             <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5">
@@ -459,11 +467,16 @@ export default function CartPage() {
                                 if (!ing) return null;
                                 return (
                                   <span key={c.ingredientId} className="font-body text-[11px] text-sage-dark">
-                                    +{ing.name}
+                                    +{ing.name} ({formatCurrency(ing.extraCost)})
                                   </span>
                                 );
                               })}
                             </div>
+                          )}
+                          {extraLineItems.length > 0 && (
+                            <p className="font-body text-[10px] text-stone/70 mt-1">
+                              Extras total per bowl: {formatCurrency(extraLineItems.reduce((sum, i) => sum + (i.extraCost ?? 0), 0))}
+                            </p>
                           )}
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
