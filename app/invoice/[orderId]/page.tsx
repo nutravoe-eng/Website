@@ -97,6 +97,8 @@ export default async function InvoicePage({
   // Subscriber discount = raw items sum minus stored subtotal
   const rawItemsTotal = o.order_items.reduce((s, i) => s + i.total_price, 0);
   const discount = Math.max(0, rawItemsTotal - Number(o.subtotal));
+  const inferredDeliveryFee = Math.max(0, Number(o.total) - Number(o.subtotal));
+  const shownDeliveryFee = Number(o.delivery_fee) > 0 ? Number(o.delivery_fee) : inferredDeliveryFee;
 
   return (
     <>
@@ -275,8 +277,8 @@ export default async function InvoicePage({
               )}
               <TotalRow
                 label="Delivery"
-                value={Number(o.delivery_fee) === 0 ? 'Free' : `₹ ${Number(o.delivery_fee).toLocaleString('en-IN')}`}
-                valueColor={Number(o.delivery_fee) === 0 ? '#4E6B49' : undefined}
+                value={shownDeliveryFee === 0 ? 'Free' : `₹ ${shownDeliveryFee.toLocaleString('en-IN')}`}
+                valueColor={shownDeliveryFee === 0 ? '#4E6B49' : undefined}
               />
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',

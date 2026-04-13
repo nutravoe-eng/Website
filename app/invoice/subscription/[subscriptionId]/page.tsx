@@ -81,9 +81,13 @@ export default async function SubscriptionInvoicePage({
   const uniqueDeliveryDays = s.style === 'spread'
     ? new Set(dayConfigs.map((dc: any) => dc.day_of_week)).size
     : 0;
-  const weeklyDeliveryFee = (s.delivery_fee ?? 0) * uniqueDeliveryDays;
-  const computedSpreadTotal = bowlsSubtotal + customisationTotal + weeklyDeliveryFee;
-  const paidTotal = Number(s.total_amount_rs ?? (s.style === 'spread' ? computedSpreadTotal : 0));
+  const paidTotal = Number(s.total_amount_rs ?? 0);
+  const explicitWeeklyDeliveryFee = (s.delivery_fee ?? 0) * uniqueDeliveryDays;
+  const inferredWeeklyDeliveryFee =
+    s.style === 'spread'
+      ? Math.max(0, paidTotal - (bowlsSubtotal + customisationTotal))
+      : 0;
+  const weeklyDeliveryFee = explicitWeeklyDeliveryFee > 0 ? explicitWeeklyDeliveryFee : inferredWeeklyDeliveryFee;
 
   return (
     <>

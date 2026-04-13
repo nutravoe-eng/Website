@@ -67,7 +67,8 @@ export default async function DeliveryReceiptPage({
   const items = (o.order_items ?? []) as any[];
   const planName = o.subscriptions?.subscription_plans?.name ?? null;
   const subtotal = Number(o.subtotal ?? 0);
-  const deliveryFee = Number(o.delivery_fee ?? 0);
+  const inferredDeliveryFee = Math.max(0, Number(o.total ?? 0) - subtotal);
+  const deliveryFee = Number(o.delivery_fee ?? 0) > 0 ? Number(o.delivery_fee) : inferredDeliveryFee;
   const total = Number(o.total ?? subtotal + deliveryFee);
 
   return (
@@ -204,31 +205,6 @@ export default async function DeliveryReceiptPage({
             </tbody>
           </table>
 
-          {/* Covered by subscription callout */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '14px',
-            padding: '14px 18px', background: '#F0F5EF',
-            border: '1px solid #B8CDB4', borderRadius: '8px', marginBottom: '32px',
-          }}>
-            <div style={{
-              width: '36px', height: '36px', borderRadius: '50%', background: '#4E6B49',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <div>
-              <p style={{ fontSize: '13px', color: '#1C1C1A', fontFamily: 'sans-serif', fontWeight: '600', marginBottom: '2px' }}>
-                Covered by your subscription
-              </p>
-              <p style={{ fontSize: '12px', color: '#9A9590', fontFamily: 'sans-serif' }}>
-                This delivery is fulfilled under subscription {subscriptionRef ?? ''}
-                {planName ? ` · ${planName}` : ''}.
-              </p>
-            </div>
-          </div>
-
           {/* Totals */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '28px' }}>
             <div style={{ minWidth: '270px' }}>
@@ -255,6 +231,31 @@ export default async function DeliveryReceiptPage({
                   ₹ {total.toLocaleString('en-IN')}
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* Covered by subscription callout */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '14px',
+            padding: '14px 18px', background: '#F0F5EF',
+            border: '1px solid #B8CDB4', borderRadius: '8px', marginBottom: '32px',
+          }}>
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '50%', background: '#4E6B49',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <div>
+              <p style={{ fontSize: '13px', color: '#1C1C1A', fontFamily: 'sans-serif', fontWeight: '600', marginBottom: '2px' }}>
+                Covered by your subscription
+              </p>
+              <p style={{ fontSize: '12px', color: '#9A9590', fontFamily: 'sans-serif' }}>
+                This delivery is fulfilled under subscription {subscriptionRef ?? ''}
+                {planName ? ` · ${planName}` : ''}.
+              </p>
             </div>
           </div>
 
