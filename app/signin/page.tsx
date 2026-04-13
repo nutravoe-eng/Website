@@ -597,9 +597,6 @@ function SignInForm() {
                   Use a Different Email
                 </button>
               </div>
-              <p className="font-body text-[11px] text-stone mt-6 text-center">
-                Need help? Contact us on <a href="/help" className="underline hover:text-ink">WhatsApp</a>
-              </p>
             </div>
           )}
 
@@ -627,12 +624,6 @@ function SignInForm() {
             </div>
           )}
 
-        </div>
-
-        <div className="bg-beige/60 px-8 py-5 border-t border-ink/5 flex justify-center">
-          <p className="font-body text-[11px] text-stone">
-            Need help? Contact us on <a href="/help" className="underline hover:text-ink">WhatsApp</a>
-          </p>
         </div>
       </div>
     </div>
