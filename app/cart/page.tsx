@@ -259,6 +259,9 @@ export default function CartPage() {
       return;
     }
 
+    // Open immediately in click handler context to avoid popup blockers
+    // after async order-preparation work completes.
+    const whatsappWindow = window.open("", "_blank", "noopener,noreferrer");
     setSubmitting(true);
     setError("");
 
@@ -316,10 +319,20 @@ export default function CartPage() {
       });
 
       const whatsappNumber = getWhatsAppNumber();
+      const whatsappUrl = getWhatsAppUrl(whatsappNumber, message);
       clearCart();
-      window.open(getWhatsAppUrl(whatsappNumber, message), "_blank", "noopener,noreferrer");
+      if (whatsappWindow) {
+        whatsappWindow.location.href = whatsappUrl;
+      } else {
+        // Fallback for strict popup settings: still complete flow in same tab.
+        window.location.href = whatsappUrl;
+        return;
+      }
       window.location.href = "/confirmation?payment_id=whatsapp";
     } catch {
+      if (whatsappWindow && !whatsappWindow.closed) {
+        whatsappWindow.close();
+      }
       setError("Something went wrong while preparing your WhatsApp order.");
     } finally {
       setSubmitting(false);
