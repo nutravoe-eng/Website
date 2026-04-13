@@ -36,6 +36,17 @@ export async function PATCH(
     return NextResponse.json({ error: 'delivery_date must be a string' }, { status: 422 });
   }
 
+  // Read current order state first so payment transitions can be enforced safely.
+  const { data: existingOrder, error: existingOrderError } = await adminSupabase
+    .from('orders')
+    .select('id, user_id, subscription_id, payment_method, payment_status, total')
+    .eq('id', id)
+    .single();
+
+  if (existingOrderError || !existingOrder) {
+    return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+  }
+
   // Cancellations go through the RPC so wallet is atomically refunded.
   if (status === 'cancelled') {
     const { data: rpcData, error: rpcError } = await adminSupabase
@@ -66,6 +77,29 @@ export async function PATCH(
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+  }
+
+  // Wallet-paid orders must debit wallet at the moment they become paid.
+  // This prevents any "marked paid but not debited" leakage path.
+  if (
+    payment_status === 'paid' &&
+    existingOrder.payment_status !== 'paid' &&
+    existingOrder.payment_method === 'wallet'
+  ) {
+    const { error: debitError } = await adminSupabase.rpc('consume_wallet_balance', {
+      p_user_id: existingOrder.user_id,
+      p_amount_rs: existingOrder.total,
+      p_reason: 'order_payment',
+      p_reference_id: existingOrder.id,
+      p_note: `Admin marked order ${existingOrder.id} as paid`,
+    });
+
+    if (debitError) {
+      return NextResponse.json(
+        { error: debitError.message.includes('insufficient') ? 'Insufficient wallet balance' : debitError.message },
+        { status: 400 }
+      );
+    }
   }
 
   const { data, error } = await adminSupabase

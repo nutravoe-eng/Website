@@ -196,7 +196,7 @@ export async function PATCH(
         day: c.day_of_week,
         timeSlot: c.delivery_time_slot ?? oldSub.delivery_time_slot ?? null,
       }));
-      const dateMap = scheduleDeliveryDates(daySlugList, true); // admin override for same-day
+      const dateMap = scheduleDeliveryDates(daySlugList);
 
       // Group configs by day_of_week — one order per delivery day, all bowls as line items.
       // Without this, multiple bowl types on the same day each try to create a separate order

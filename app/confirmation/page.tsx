@@ -40,8 +40,8 @@ export default function ConfirmationPage({
           </p>
         ) : (
           <p className="font-body text-[15px] font-light text-stone leading-loose mb-10 max-w-sm mx-auto">
-            We&apos;ll prepare your order fresh and deliver between
-            7 AM–9 PM. We&apos;ll message you on WhatsApp to confirm.
+            Request received. Please send the drafted WhatsApp message to confirm your order.
+            Once confirmed, we&apos;ll prepare it fresh and deliver between 7 AM-9 PM.
           </p>
         )}
 

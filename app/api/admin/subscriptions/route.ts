@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
     .select(`
       id, style, status, start_date, period_end_date,
       delivery_time_slot,
+      delivery_fee,
       total_amount_rs, payment_status, payment_reference, admin_notes,
       notes, created_at,
       users!inner ( id, full_name, phone, email ),

@@ -262,6 +262,56 @@ export default function CartPage() {
     // Open immediately in click handler context to avoid popup blockers
     // after async order-preparation work completes.
     const whatsappWindow = window.open("", "_blank", "noopener,noreferrer");
+    if (whatsappWindow) {
+      whatsappWindow.document.write(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preparing WhatsApp</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: #f8f4ee;
+        color: #262626;
+      }
+      .card {
+        text-align: center;
+        padding: 24px 20px;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        margin: 0 auto 14px;
+        background: #c86f4f;
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      p {
+        margin: 0;
+        font-size: 14px;
+        opacity: 0.85;
+      }
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 0.6; }
+        50% { transform: scale(1.35); opacity: 1; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="dot"></div>
+      <p>Preparing your WhatsApp order message...</p>
+    </div>
+  </body>
+</html>`);
+      whatsappWindow.document.close();
+    }
     setSubmitting(true);
     setError("");
 

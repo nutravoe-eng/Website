@@ -19,6 +19,7 @@ interface AdminSubscription {
   start_date: string;
   period_end_date: string | null;
   delivery_time_slot: string | null;
+  delivery_fee: number | null;
   total_amount_rs: number | null;
   payment_status: string;
   payment_reference: string | null;
@@ -48,6 +49,20 @@ export default function AdminSubscriptionsPage() {
   const [toast, setToast]                 = useState('');
   const [statusFilter, setStatusFilter]   = useState('pending');
   const [generatingOrders, setGeneratingOrders] = useState<string | null>(null);
+
+  function estimateDeliveryDebit(sub: AdminSubscription): {
+    baseRs: number;
+    extrasRs: number;
+    deliveryRs: number;
+    totalRs: number;
+  } {
+    const qty = sub.subscription_day_configs.reduce((sum, d) => sum + (d.quantity || 0), 0);
+    const baseUnit = sub.subscription_plans?.price_per_bowl ?? 0;
+    const baseRs = baseUnit * qty;
+    const extrasRs = sub.subscription_day_configs.reduce((sum, d) => sum + (d.customization_cost_rs ?? 0), 0);
+    const deliveryRs = sub.delivery_fee ?? 0;
+    return { baseRs, extrasRs, deliveryRs, totalRs: baseRs + extrasRs + deliveryRs };
+  }
 
   function showToast(msg: string) {
     setToast(msg);
@@ -497,13 +512,20 @@ export default function AdminSubscriptionsPage() {
         <Modal onClose={() => setDeliverModal(null)} title="Record Delivery">
           <div className="space-y-4">
             <p className="font-body text-[12px] text-stone">
-              Recording delivery for <strong className="text-ink">{deliverModal.users.full_name}</strong>.
-              Wallet will be debited for ₹{deliverModal.subscription_plans
-                ? (deliverModal.subscription_plans.price_per_bowl
-                   * deliverModal.subscription_day_configs.reduce((s, d) => s + d.quantity, 0)
-                   + deliverModal.subscription_day_configs.reduce((s, d) => s + (d.customization_cost_rs ?? 0), 0)
-                  ).toLocaleString('en-IN')
-                : '—'}.
+              {(() => {
+                const estimate = estimateDeliveryDebit(deliverModal);
+                return (
+                  <>
+                    Recording delivery for <strong className="text-ink">{deliverModal.users.full_name}</strong>.
+                    Estimated wallet debit: <strong className="text-ink">₹{estimate.totalRs.toLocaleString('en-IN')}</strong>
+                    {' '}(
+                    base ₹{estimate.baseRs.toLocaleString('en-IN')}
+                    {estimate.extrasRs > 0 ? ` + extras ₹${estimate.extrasRs.toLocaleString('en-IN')}` : ''}
+                    {estimate.deliveryRs > 0 ? ` + delivery ₹${estimate.deliveryRs.toLocaleString('en-IN')}` : ''}
+                    ).
+                  </>
+                );
+              })()}
             </p>
             <div>
               <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">Delivery Date</label>

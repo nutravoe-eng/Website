@@ -76,6 +76,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Spread plans require at least one delivery day" }, { status: 400, headers: limited.headers });
   }
 
+  if (deliveryStyle === "flexible" && dayConfigs.length > 0) {
+    return NextResponse.json({ error: "Flexible subscriptions cannot include spread day configurations" }, { status: 400, headers: limited.headers });
+  }
+
   if (dayConfigs.some((config) => !config?.bowlId || !Number.isFinite(config?.quantity) || Number(config.quantity) <= 0)) {
     return NextResponse.json({ error: "Invalid subscription bowl configuration" }, { status: 400, headers: limited.headers });
   }

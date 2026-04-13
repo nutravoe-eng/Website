@@ -44,7 +44,7 @@ export async function POST(
     day: c.day_of_week,
     timeSlot: c.delivery_time_slot ?? sub.delivery_time_slot ?? null,
   }));
-  const dateMap = scheduleDeliveryDates(daySlugList, true); // admin override for same-day
+  const dateMap = scheduleDeliveryDates(daySlugList);
 
   // Group configs by day_of_week — one order per delivery day, all bowls as line items
   const configsByDay: Record<string, typeof sub.subscription_day_configs> = {};

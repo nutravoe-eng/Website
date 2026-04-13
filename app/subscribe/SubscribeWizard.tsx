@@ -178,6 +178,15 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             setIsRenewalFlow(true);
           }
         }
+      } else {
+        // Guard against stale session state from a previous subscription flow.
+        // New starts must always re-confirm delivery style to avoid accidental
+        // carry-over (e.g., prior flexible selection showing up for spread intent).
+        setState(s => ({
+          ...s,
+          step: 1,
+          deliveryStyle: null,
+        }));
       }
 
       // Load default delivery address from Supabase
