@@ -67,8 +67,49 @@ export async function getActiveSubscription(): Promise<Subscription | null> {
 }
 
 export async function getActivePlanConfig(): Promise<PlanConfig | null> {
+  const supabase = createClient();
   const sub = await getActiveSubscription();
   if (!sub) return null;
+
+  const { data: subMeta } = await supabase
+    .from('subscriptions')
+    .select('id, style, billing_cycle, start_date, period_end_date, subscription_plans ( min_bowls )')
+    .eq('id', sub.id)
+    .maybeSingle();
+
+  const planLimit = Number((subMeta?.subscription_plans as { min_bowls?: number } | null)?.min_bowls ?? 0);
+  if (planLimit > 0) {
+    const isWeekly = (subMeta?.billing_cycle ?? 'weekly') !== 'monthly';
+    const cycleDays = isWeekly ? 7 : 30;
+    let periodEndStr = subMeta?.period_end_date ?? '';
+    let periodStartStr: string;
+
+    if (periodEndStr) {
+      const periodEndDate = new Date(periodEndStr);
+      const periodStartDate = new Date(periodEndDate.getTime() - cycleDays * 24 * 60 * 60 * 1000);
+      periodStartStr = periodStartDate.toISOString().split('T')[0];
+    } else {
+      periodStartStr = subMeta?.start_date ?? '2000-01-01';
+      periodEndStr = new Date(Date.now() + cycleDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    }
+
+    const { data: orderedData } = await supabase
+      .from('orders')
+      .select('order_items ( quantity )')
+      .eq('subscription_id', sub.id)
+      .in('status', ['confirmed', 'delivered'])
+      .gte('delivery_date', periodStartStr)
+      .lte('delivery_date', periodEndStr);
+
+    const alreadyOrderedCount = (orderedData ?? []).reduce((acc, order: { order_items?: unknown }) => {
+      const items = Array.isArray(order.order_items) ? order.order_items : [];
+      return acc + items.reduce((sum: number, item: { quantity?: number }) => sum + (item?.quantity ?? 0), 0);
+    }, 0);
+
+    if (alreadyOrderedCount >= planLimit) {
+      return null;
+    }
+  }
 
   try {
     const sanityPlans = await getSubscriptionPlans();

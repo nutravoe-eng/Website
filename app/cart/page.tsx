@@ -185,6 +185,7 @@ export default function CartPage() {
     : 0;
   const effectiveTotal = total - subscriberDiscount;
   const grandTotal = effectiveTotal + deliveryFee;
+  const canPayFromWallet = hasActivePaidSub && !deliveryFeeLoading && walletBalanceRs >= grandTotal;
 
   // Record order in Supabase — returns short order ref on success
   const recordOrder = async (): Promise<string | null> => {
@@ -261,9 +262,12 @@ export default function CartPage() {
 
     // Open immediately in click handler context to avoid popup blockers
     // after async order-preparation work completes.
-    const whatsappWindow = window.open("", "_blank", "noopener,noreferrer");
-    if (whatsappWindow) {
-      whatsappWindow.document.write(`<!doctype html>
+    const whatsappWindow = window.open("", "_blank");
+    if (!whatsappWindow) {
+      setError("Please allow popups for Nutravoe to open WhatsApp, then resend from your Orders page.");
+      return;
+    }
+    whatsappWindow.document.write(`<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -310,8 +314,7 @@ export default function CartPage() {
     </div>
   </body>
 </html>`);
-      whatsappWindow.document.close();
-    }
+    whatsappWindow.document.close();
     setSubmitting(true);
     setError("");
 
@@ -371,13 +374,7 @@ export default function CartPage() {
       const whatsappNumber = getWhatsAppNumber();
       const whatsappUrl = getWhatsAppUrl(whatsappNumber, message);
       clearCart();
-      if (whatsappWindow) {
-        whatsappWindow.location.href = whatsappUrl;
-      } else {
-        // Fallback for strict popup settings: still complete flow in same tab.
-        window.location.href = whatsappUrl;
-        return;
-      }
+      whatsappWindow.location.href = whatsappUrl;
       window.location.href = "/confirmation?payment_id=whatsapp";
     } catch {
       if (whatsappWindow && !whatsappWindow.closed) {
@@ -592,11 +589,11 @@ export default function CartPage() {
                   <div className="mb-3">
                     <button
                       onClick={handlePayFromWallet}
-                      disabled={submitting || walletBalanceRs < grandTotal || deliveryFeeLoading}
+                      disabled={submitting || !canPayFromWallet}
                       className="w-full bg-sage hover:bg-sage-dark disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>
-                      {walletBalanceRs >= grandTotal
+                      {canPayFromWallet
                         ? `Pay ${formatCurrency(grandTotal)} from Wallet`
                         : `Wallet balance low (${formatCurrency(walletBalanceRs)} available)`}
                     </button>
@@ -609,13 +606,13 @@ export default function CartPage() {
                 <button
                   onClick={handlePlaceOrder}
                   disabled={submitting}
-                  className={`w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm ${hasActivePaidSub ? "bg-black/20 hover:bg-black/30 text-ink" : "bg-terracotta hover:bg-[#D55F43]"}`}
+                  className={`w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 hover:bg-black/30 text-ink" : "bg-terracotta hover:bg-[#D55F43]"}`}
                 >
-                  {hasActivePaidSub ? "Order via WhatsApp instead" : "Place an order"}
+                  {canPayFromWallet ? "Order via WhatsApp instead" : "Place an order"}
                 </button>
 
                 <p className="font-body text-[11px] text-stone text-center mt-4">
-                  {user ? (hasActivePaidSub ? "" : "Your full order details will open in WhatsApp for confirmation.") : "You will be asked to sign in to your Nutravoe account to continue."}
+                  {user ? (canPayFromWallet ? "" : "Your full order details will open in WhatsApp for confirmation.") : "You will be asked to sign in to your Nutravoe account to continue."}
                 </p>
               </div>
             )}

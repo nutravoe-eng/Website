@@ -37,11 +37,7 @@ export async function planSlugForCheckoutPricing(
   const plan = subscriptionPlanJoin(pricedSub.subscription_plans);
   const slug = plan?.slug ?? null;
 
-  if (pricedSub.style !== "flexible") {
-    return slug;
-  }
-
-  if (pricedSub.status === "completed") {
+  if (pricedSub.style === "flexible" && pricedSub.status === "completed") {
     return null;
   }
 
