@@ -14,6 +14,7 @@ export const STUB_BOWLS: Bowl[] = [
     image: "/tropical-mango.png",
     tags: ["bestseller"],
     available: true,
+    inStock: true,
     displayOrder: 1,
     nutrition: { calories: 510, protein: 20, fibre: 11 },
     ingredients: [
@@ -45,6 +46,7 @@ export const STUB_BOWLS: Bowl[] = [
     image: "/very-fruity.png",
     tags: ["high-protein"],
     available: true,
+    inStock: true,
     displayOrder: 2,
     nutrition: { calories: 480, protein: 19, fibre: 12 },
     ingredients: [
@@ -76,6 +78,7 @@ export const STUB_BOWLS: Bowl[] = [
     image: "/very-berry-bowl.png",
     tags: ["seasonal"],
     available: true,
+    inStock: true,
     displayOrder: 3,
     nutrition: { calories: 470, protein: 20, fibre: 11 },
     ingredients: [
@@ -106,6 +109,7 @@ export const STUB_BOWLS: Bowl[] = [
     image: "/banana-peanut-butter-bowl.png",
     tags: ["high-protein"],
     available: true,
+    inStock: true,
     displayOrder: 4,
     nutrition: { calories: 530, protein: 23, fibre: 13 },
     ingredients: [
@@ -136,6 +140,7 @@ export const STUB_BOWLS: Bowl[] = [
     image: "/very-nutty-bowl.png",
     tags: ["high-protein"],
     available: true,
+    inStock: true,
     displayOrder: 5,
     nutrition: { calories: 550, protein: 21, fibre: 14 },
     ingredients: [
@@ -244,6 +249,7 @@ export async function getAllBowls(): Promise<Bowl[]> {
     "image": image.asset->url + "?w=800&fm=webp&q=80",
     tags,
     available,
+    inStock,
     displayOrder,
     ingredients,
     nutrition,
@@ -272,6 +278,7 @@ export async function getBowlBySlug(slug: string): Promise<Bowl | null> {
     "image": image.asset->url + "?w=800&fm=webp&q=80",
     tags,
     available,
+    inStock,
     displayOrder,
     ingredients,
     nutrition,
