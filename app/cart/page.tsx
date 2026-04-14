@@ -67,6 +67,7 @@ interface StoredUser {
 export default function CartPage() {
   const router = useRouter();
   const { items, total, clearCart, removeItem, updateQuantity } = useCart();
+  const hasOutOfStockItems = items.some((item) => item.bowl.inStock === false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [user, setUser] = useState<StoredUser | null>(null);
@@ -465,6 +466,11 @@ export default function CartPage() {
                               })}
                             </div>
                           )}
+                          {item.bowl.inStock === false && (
+                            <p className="font-body text-[11px] font-medium text-terracotta mt-2">
+                              Out of stock — please remove to continue.
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
                           <div className="flex items-center gap-2 bg-white rounded-md border border-black/10 px-2 py-1">
@@ -589,7 +595,7 @@ export default function CartPage() {
                   <div className="mb-3">
                     <button
                       onClick={handlePayFromWallet}
-                      disabled={submitting || !canPayFromWallet}
+                      disabled={submitting || !canPayFromWallet || hasOutOfStockItems}
                       className="w-full bg-sage hover:bg-sage-dark disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>
@@ -605,7 +611,7 @@ export default function CartPage() {
 
                 <button
                   onClick={handlePlaceOrder}
-                  disabled={submitting}
+                  disabled={submitting || hasOutOfStockItems}
                   className={`w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 hover:bg-black/30 text-ink" : "bg-terracotta hover:bg-[#D55F43]"}`}
                 >
                   {canPayFromWallet ? "Order via WhatsApp instead" : "Place an order"}
