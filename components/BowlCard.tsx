@@ -46,7 +46,7 @@ export default function BowlCard({ bowl }: BowlCardProps) {
 
   return (
     <>
-      <div className={`group bg-white rounded-sm overflow-hidden border border-ink/5 transition-all duration-500 flex flex-col ${bowl.inStock === false ? 'opacity-60' : 'hover:shadow-2xl hover:-translate-y-1'}`}>
+      <div className={`${bowl.inStock === false ? 'opacity-60' : 'group hover:shadow-2xl hover:-translate-y-1'} bg-white rounded-sm overflow-hidden border border-ink/5 transition-all duration-500 flex flex-col`}>
         {/* Image */}
         <div className="relative aspect-square overflow-hidden bg-cream">
           <Image
