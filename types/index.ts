@@ -22,6 +22,7 @@ export interface Bowl {
   image: string; // URL string (resolved from Sanity or local path)
   tags: BowlTag[];
   available: boolean;
+  inStock?: boolean;
   displayOrder: number;
   nutrition?: {
     calories: number;
