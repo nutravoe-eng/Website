@@ -105,8 +105,9 @@ export async function POST(req: NextRequest) {
     quote = await buildAuthoritativeOrder(items, address, activePlanSlug, {
       httpReferrer: requestOriginReferrer(req),
     });
-  } catch {
-    return NextResponse.json({ error: "Unable to price this order" }, { status: 400, headers: limited.headers });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unable to price this order";
+    return NextResponse.json({ error: message }, { status: 400, headers: limited.headers });
   }
 
   const deliveryDate = getDeliveryDateFromSlot(selectedSlot);
