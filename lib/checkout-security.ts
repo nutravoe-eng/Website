@@ -141,6 +141,9 @@ export async function buildAuthoritativeOrder(
     if (!bowl) {
       throw new Error(`Unknown bowl: ${item.bowlSlug}`);
     }
+    if (bowl.inStock === false) {
+      throw new Error(`'${bowl.name}' is currently out of stock`);
+    }
 
     const quantity = Math.max(1, Math.trunc(item.quantity));
     const customizationUpcharge = getCustomizationUpcharge(bowl, item.customizations);
