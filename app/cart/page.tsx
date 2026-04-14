@@ -210,6 +210,10 @@ export default function CartPage() {
   };
 
   async function handlePayFromWallet() {
+    if (hasOutOfStockItems) {
+      setError("Remove out-of-stock items before placing an order.");
+      return;
+    }
     if (items.length === 0) { setError("Your cart is empty. Add some bowls first."); return; }
     if (!selectedSlot) { setError("Please select a delivery slot before placing an order."); return; }
     if (!user) { router.push("/signin?next=/cart"); return; }
@@ -247,6 +251,10 @@ export default function CartPage() {
   }
 
   async function handlePlaceOrder() {
+    if (hasOutOfStockItems) {
+      setError("Remove out-of-stock items before placing an order.");
+      return;
+    }
     if (items.length === 0) {
       setError("Your cart is empty. Add some bowls first.");
       return;
@@ -425,7 +433,7 @@ export default function CartPage() {
 
                     return (
                       <div
-                        key={item.bowl._id}
+                        key={item.instanceId}
                         className="flex items-start gap-4 bg-[#F9F8F6] p-4 rounded-lg"
                       >
                         <div className="flex-1 min-w-0">

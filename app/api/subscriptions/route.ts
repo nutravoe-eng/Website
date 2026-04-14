@@ -154,9 +154,10 @@ export async function POST(req: NextRequest) {
     quote = await buildSubscriptionQuote(planId, address, dayConfigs, {
       httpReferrer: requestOriginReferrer(req),
     });
-  } catch (e) {
-    console.error("Quote error:", e);
-    return NextResponse.json({ error: "Unable to price this subscription" }, { status: 400, headers: limited.headers });
+  } catch (err) {
+    console.error("Quote error:", err);
+    const message = err instanceof Error ? err.message : "Unable to price this subscription";
+    return NextResponse.json({ error: message }, { status: 400, headers: limited.headers });
   }
 
   // Compute per-trip delivery fee to store in subscriptions.delivery_fee

@@ -208,6 +208,9 @@ export async function buildSubscriptionQuote(
   for (const config of dayConfigs) {
     const bowl = bowlMap.get(config.bowlId);
     if (!bowl) continue;
+    if (bowl.inStock === false) {
+      throw new Error(`'${bowl.name}' is currently out of stock and cannot be used in a subscription`);
+    }
 
     const customsRaw = config.customizations as unknown;
     const isPerInstance = Array.isArray((customsRaw as unknown[])?.[0]);
