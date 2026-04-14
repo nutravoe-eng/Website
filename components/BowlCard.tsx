@@ -46,7 +46,7 @@ export default function BowlCard({ bowl }: BowlCardProps) {
 
   return (
     <>
-      <div className="group bg-white rounded-sm overflow-hidden border border-ink/5 transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 flex flex-col">
+      <div className={`group bg-white rounded-sm overflow-hidden border border-ink/5 transition-all duration-500 flex flex-col ${bowl.inStock === false ? 'opacity-60' : 'hover:shadow-2xl hover:-translate-y-1'}`}>
         {/* Image */}
         <div className="relative aspect-square overflow-hidden bg-cream">
           <Image
@@ -60,6 +60,11 @@ export default function BowlCard({ bowl }: BowlCardProps) {
           {bowl.nutrition && (
             <span className="absolute top-3 left-3 z-10 px-3 py-1.5 rounded-full bg-terracotta/90 font-body text-[11px] text-white font-medium tracking-wide leading-none">
               {bowl.nutrition.calories} kcal &middot; {bowl.nutrition.protein}g protein &middot; {bowl.nutrition.fibre}g fibre
+            </span>
+          )}
+          {bowl.inStock === false && (
+            <span className="absolute top-3 right-3 z-10 px-3 py-1.5 rounded-full bg-ink/75 font-body text-[11px] text-white font-medium tracking-wide leading-none">
+              Out of stock
             </span>
           )}
         </div>
@@ -96,7 +101,14 @@ export default function BowlCard({ bowl }: BowlCardProps) {
               <span className="font-display text-[22px] text-sage-dark">&#8377; {bowl.price}</span>
               <span className="font-body text-[12px] text-stone/60">/bowl</span>
             </span>
-            {quantity > 0 ? (
+            {bowl.inStock === false ? (
+              <button
+                disabled
+                className="font-body text-xs font-medium tracking-widest px-5 h-9 rounded-sm bg-black/10 text-stone cursor-not-allowed"
+              >
+                Out of Stock
+              </button>
+            ) : quantity > 0 ? (
               <div className="flex items-center gap-2">
                 {/* Edit customisation button */}
                 <button
