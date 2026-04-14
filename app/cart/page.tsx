@@ -487,7 +487,8 @@ export default function CartPage() {
                             <button
                               aria-label={`Increase quantity of ${item.bowl.name}`}
                               onClick={() => updateQuantity(item.instanceId, item.quantity + 1)}
-                              className="w-6 h-6 flex items-center justify-center text-stone hover:text-ink transition-colors cursor-pointer"
+                              disabled={item.bowl.inStock === false}
+                              className="w-6 h-6 flex items-center justify-center text-stone hover:text-ink transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               +
                             </button>
@@ -584,6 +585,14 @@ export default function CartPage() {
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone group-hover:text-sage transition-colors"><path d="m6 9 6 6 6-6"/></svg>
                   </button>
                 </div>
+
+                {hasOutOfStockItems && (
+                  <div className="mb-4 p-4 bg-terracotta/5 border border-terracotta/20 rounded-md">
+                    <p className="font-body text-[13px] font-medium text-terracotta">
+                      Remove out-of-stock items above before checking out.
+                    </p>
+                  </div>
+                )}
 
                 {error && (
                   <div className="mb-4 p-4 bg-terracotta/5 border border-terracotta/20 rounded-md">
