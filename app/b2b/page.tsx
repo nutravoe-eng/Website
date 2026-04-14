@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { getWhatsAppNumber } from "@/lib/contact";
+import { DELIVERY_TIME_SLOTS } from "@/lib/delivery-slots";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -461,9 +462,11 @@ export default function B2BPage() {
                     aria-invalid={!!errors.deliveryTime}
                   >
                     <option value="" disabled>Select window…</option>
-                    <option value="7–8 AM">7–8 AM</option>
-                    <option value="8–9 AM">8–9 AM</option>
-                    <option value="9–10 AM">9–10 AM</option>
+                    {DELIVERY_TIME_SLOTS.map((slot) => (
+                      <option key={slot} value={slot}>
+                        {slot}
+                      </option>
+                    ))}
                     <option value="Flexible">Flexible</option>
                   </select>
                 </Field>
