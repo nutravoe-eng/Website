@@ -47,7 +47,8 @@ export default async function HomePage() {
             </p>
             <h1 className="font-display text-white mb-5"
               style={{ fontSize: "clamp(46px, 6vw, 76px)", lineHeight: "1.05" }}>
-              Wholesome yoghurt bowls<br />
+              Wholesome, nourishin&apos;<br />
+              yoghurt bowls<br />
               <em className="text-sage-light">that show up for you.</em>
             </h1>
             <p className="font-body text-[15px] font-light text-white/90 leading-relaxed mb-8 max-w-md">
