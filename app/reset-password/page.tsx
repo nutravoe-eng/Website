@@ -70,7 +70,7 @@ function ResetPasswordForm() {
     <div className="min-h-[calc(100vh-64px)] pt-24 pb-16 px-6 bg-[#F9F8F6] flex flex-col items-center justify-center">
       <Link href="/" className="mb-8">
         <div className="relative w-12 h-12">
-          <Image src="/circular-logo-print-2400px.png" alt="Nutravoe" fill className="object-contain" />
+          <Image src="/Nutravoe Logo.png" alt="Nutravoe" fill className="object-contain" />
         </div>
       </Link>
 

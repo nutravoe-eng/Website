@@ -112,7 +112,7 @@ export default async function SubscriptionInvoicePage({
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <Image
-                src="/circular-logo-print-2400px.png"
+                src="/Nutravoe Logo.png"
                 alt="Nutravoe"
                 width={40}
                 height={40}
@@ -354,7 +354,7 @@ export default async function SubscriptionInvoicePage({
               </p>
             </div>
             <Image
-              src="/circular-logo-print-2400px.png"
+              src="/Nutravoe Logo.png"
               alt="Nutravoe"
               width={56}
               height={56}

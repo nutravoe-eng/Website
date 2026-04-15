@@ -11,7 +11,7 @@ export default function Footer() {
           <Link href="/" className="flex items-center gap-3.5 group mb-5 inline-flex">
             <div className="relative w-8 h-8 md:w-9 md:h-9 transition-all duration-300">
               <Image
-                src="/circular-logo-print-2400px.png"
+                src="/Nutravoe Logo.png"
                 alt="Nutravoe Circular Logo"
                 fill
                 className="object-contain"

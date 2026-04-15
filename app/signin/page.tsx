@@ -287,7 +287,7 @@ function SignInForm() {
       {/* Brand Logo */}
       <Link href="/" className="mb-8">
         <div className="relative w-12 h-12">
-          <Image src="/circular-logo-print-2400px.png" alt="Nutravoe" fill className="object-contain" />
+          <Image src="/Nutravoe Logo.png" alt="Nutravoe" fill className="object-contain" />
         </div>
       </Link>
 

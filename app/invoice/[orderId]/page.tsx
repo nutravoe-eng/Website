@@ -135,7 +135,7 @@ export default async function InvoicePage({
             {/* Brand — same as navbar: circular logo + "nutravoe" in display font */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <Image
-                src="/circular-logo-print-2400px.png"
+                src="/Nutravoe Logo.png"
                 alt="Nutravoe"
                 width={40}
                 height={40}
@@ -352,7 +352,7 @@ export default async function InvoicePage({
               </p>
             </div>
             <Image
-              src="/circular-logo-print-2400px.png"
+              src="/Nutravoe Logo.png"
               alt="Nutravoe"
               width={56}
               height={56}
