@@ -51,6 +51,12 @@ function canonicalizeCity(city: string): string {
   return city;
 }
 
+function isLikelyLocality(token: string): boolean {
+  const t = normalizeToken(token);
+  // Common locality/micro-area markers across Indian addresses.
+  return /(?:^|\s)(road|rd|street|st|lane|ln|main|cross|layout|phase|block|sector|colony|nagar|extension|extn|tehsil|taluk|mandal|village|area|market|bazar|circle|chowk|industrial area)(?:\s|$)/.test(t);
+}
+
 function parseCityState(displayName?: string): { city?: string; state?: string } {
   if (!displayName) return {};
   const parts = displayName
@@ -68,17 +74,20 @@ function parseCityState(displayName?: string): { city?: string; state?: string }
   const stateIdx = normalizedParts.findLastIndex((part) => INDIAN_STATES_AND_UTS.has(part));
 
   const state = stateIdx >= 0 ? cleaned[stateIdx] : cleaned[cleaned.length - 1];
-  const cityCandidates =
-    stateIdx > 0 ? cleaned.slice(0, stateIdx) : cleaned.slice(0, cleaned.length - 1);
+  const cityCandidates = stateIdx > 0 ? cleaned.slice(0, stateIdx) : cleaned;
   const normalizedCityCandidates = cityCandidates.map((part) => normalizeToken(part));
 
   const bengaluruMatchIdx = normalizedCityCandidates.findIndex((part) =>
     /^(bengaluru|bangalore)( urban)?$/.test(part),
   );
-  const pickedCity =
-    bengaluruMatchIdx >= 0
-      ? cityCandidates[bengaluruMatchIdx]
-      : cityCandidates[cityCandidates.length - 1] ?? cleaned[0];
+  let pickedCity: string;
+  if (bengaluruMatchIdx >= 0) {
+    pickedCity = cityCandidates[bengaluruMatchIdx];
+  } else {
+    // Prefer rightmost non-locality token in hierarchy (closest to district/city level).
+    const nonLocality = [...cityCandidates].reverse().find((part) => !isLikelyLocality(part));
+    pickedCity = nonLocality ?? cityCandidates[cityCandidates.length - 1] ?? cleaned[0];
+  }
 
   return { city: canonicalizeCity(pickedCity), state };
 }
