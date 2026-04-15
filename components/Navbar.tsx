@@ -582,8 +582,19 @@ export default function Navbar() {
                       disabled={checkingZone}
                       onClick={async () => {
                         setPinInputError("");
+                        setLocationState("idle");
                         if (inputPincode.length !== 6) {
                           setPinInputError("Enter a valid PIN code in India.");
+                          return;
+                        }
+                        if (!inputPincode.startsWith("560")) {
+                          // Serviceability is currently limited to Bengaluru pincodes.
+                          setDeliveryZone(null);
+                          setSavedPincode(inputPincode);
+                          if (!user) {
+                            clearGuestDeliveryContext();
+                          }
+                          setLocationState("invalid");
                           return;
                         }
                         // Valid 6-digit pincode — saved map pin for this pincode when available, else geocode
