@@ -50,7 +50,7 @@ export default function Navbar() {
   const [waitlistEmail, setWaitlistEmail] = useState("");
   const [waitlistPhone, setWaitlistPhone] = useState("");
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
-  const [savedPincode, setSavedPincode] = useState("560001");
+  const [savedPincode, setSavedPincode] = useState("560071");
   const [inputPincode, setInputPincode] = useState("");
   const [pinInputError, setPinInputError] = useState("");
   const [locationState, setLocationState] = useState<"idle" | "invalid" | "waitlist" | "success">("idle");
@@ -123,7 +123,7 @@ export default function Navbar() {
         setUser(null);
         setSavedAddresses([]);
         setWalletBalanceRs(null);
-        setSavedPincode("560001");
+        setSavedPincode("560071");
         localStorage.removeItem("nutravoe_addresses");
       }
     };
@@ -569,7 +569,7 @@ export default function Navbar() {
                       type="text" 
                       value={inputPincode}
                       onChange={(e) => setInputPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="e.g. 560001"
+                      placeholder="e.g. 560071"
                       className="flex-1 border border-black/20 rounded-md px-3 font-body text-sm focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
