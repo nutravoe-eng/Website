@@ -153,6 +153,34 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
     [onChange],
   );
 
+  const handleZoomIn = useCallback(() => {
+    try {
+      mapRef.current?.zoomIn?.();
+    } catch {
+      /* ignore map control errors */
+    }
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    try {
+      mapRef.current?.zoomOut?.();
+    } catch {
+      /* ignore map control errors */
+    }
+  }, []);
+
+  const handleResetView = useCallback(() => {
+    try {
+      const [lng, lat] = initialCenterRef.current;
+      const pos: [number, number] = [lng, lat];
+      mapRef.current?.setCenter?.(pos);
+      markerRef.current?.setLngLat?.(pos);
+      onChangeRef.current(lat, lng);
+    } catch {
+      /* ignore map control errors */
+    }
+  }, []);
+
   return (
     <div className="flex flex-col gap-2">
       <div className="relative">
@@ -239,12 +267,43 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
       {mapError ? (
         <div className="w-full rounded-lg border border-black/10 bg-[#F9F8F6] px-3 py-4 font-body text-[13px] text-stone">{mapError}</div>
       ) : (
-        <div
-          ref={containerRef}
-          id={mapContainerId}
-          className="w-full rounded-lg border border-black/10 overflow-hidden"
-          style={{ height: "240px", zIndex: 0 }}
-        />
+        <div className="relative">
+          <div
+            ref={containerRef}
+            id={mapContainerId}
+            className="w-full rounded-lg border border-black/10 overflow-hidden"
+            style={{ height: "240px", zIndex: 0 }}
+          />
+          <div className="absolute right-2 top-2 z-10 flex flex-col gap-1.5">
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              className="w-8 h-8 rounded-md border border-black/10 bg-white/95 text-ink shadow-sm hover:bg-white transition-colors font-body text-lg leading-none"
+              aria-label="Zoom in"
+              title="Zoom in"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              className="w-8 h-8 rounded-md border border-black/10 bg-white/95 text-ink shadow-sm hover:bg-white transition-colors font-body text-lg leading-none"
+              aria-label="Zoom out"
+              title="Zoom out"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={handleResetView}
+              className="px-2 h-8 rounded-md border border-black/10 bg-white/95 text-ink shadow-sm hover:bg-white transition-colors font-body text-[11px] font-medium tracking-wide"
+              aria-label="Reset map view"
+              title="Reset map view"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
