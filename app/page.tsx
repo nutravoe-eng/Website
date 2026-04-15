@@ -47,12 +47,12 @@ export default async function HomePage() {
             </p>
             <h1 className="font-display text-white mb-5"
               style={{ fontSize: "clamp(46px, 6vw, 76px)", lineHeight: "1.05" }}>
-              The meal that<br />
-              <em className="text-sage-light">shows up for you.</em>
+              Wholesome yoghurt bowls<br />
+              <em className="text-sage-light">that show up for you.</em>
             </h1>
             <p className="font-body text-[15px] font-light text-white/90 leading-relaxed mb-8 max-w-md">
-              Wholesome, nourishing yoghurt bowls made fresh in small batches every day.
-              High fibre, gut-friendly, no added sugar — a complete meal delivered
+              Freshly made in small batches every day for steady energy and everyday ease.
+              High protein, high fibre, gut-friendly, no added sugar — a complete meal delivered
               to your doorstep whenever you need one.
             </p>
             <div className="flex flex-wrap gap-4 items-center">
