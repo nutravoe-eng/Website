@@ -18,7 +18,7 @@ export interface AdminOrder {
   admin_notes: string | null;
   created_at: string;
   users: { id: string; full_name: string; phone: string; email: string };
-  addresses: { line1: string; line2: string | null; city: string; pincode: string } | null;
+  addresses: { line1: string; line2: string | null; city: string; pincode: string; lat?: number | null; lng?: number | null } | null;
   order_items: { id: string; bowl_name: string; quantity: number; unit_price: number; total_price: number; customizations: { removed?: string[]; added?: string[] } | null }[];
 }
 
@@ -290,7 +290,11 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                   <td className="px-4 py-3 max-w-[180px]">
                     {order.addresses ? (() => {
                       const addr = `${order.addresses.line1}${order.addresses.line2 ? ', ' + order.addresses.line2 : ''}, ${order.addresses.city} ${order.addresses.pincode}`;
-                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
+                      const mapsQuery =
+                        typeof order.addresses.lat === "number" && typeof order.addresses.lng === "number"
+                          ? `${order.addresses.lat},${order.addresses.lng}`
+                          : addr;
+                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`;
                       return (
                         <div className="space-y-1">
                           <p className="font-body text-[11px] text-ink leading-snug">{addr}</p>

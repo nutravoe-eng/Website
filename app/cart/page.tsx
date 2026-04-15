@@ -8,11 +8,13 @@ import { getActivePlanConfig } from "@/lib/subscription";
 import { getWallet } from "@/lib/wallet";
 import { resolveDeliveryCoords } from "@/lib/geocodeCache";
 import type { DeliveryPriceBreakdown } from "@/lib/delivery";
+import { HUBS } from "@/lib/delivery";
 import { createClient } from "@/lib/supabase/client";
 import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
 import { getWhatsAppNumber } from "@/lib/contact";
 import { isPaidFlexibleWalletEligible } from "@/lib/flexible-subscription";
 import DeliveryMarquee from "@/components/DeliveryMarquee";
+import { GUEST_DELIVERY_CONTEXT_EVENT, readGuestDeliveryContext } from "@/lib/guest-delivery";
 
 // Delivery slot generation rules:
 // - Midnight to 7:59 AM  → floor: earliest same-day = 10:00 AM
@@ -64,6 +66,19 @@ interface StoredUser {
   email: string;
 }
 
+interface DeliveryAddress {
+  id: string;
+  label: string | null;
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string | null;
+  pincode: string;
+  is_default: boolean;
+  lat: number | null;
+  lng: number | null;
+}
+
 export default function CartPage() {
   const router = useRouter();
   const { items, total, clearCart, removeItem, updateQuantity } = useCart();
@@ -77,6 +92,9 @@ export default function CartPage() {
   const [showSlotPicker, setShowSlotPicker] = useState(false);
   const slotDialogRef = useRef<HTMLDivElement>(null);
   useDialogAccessibility(slotDialogRef, () => setShowSlotPicker(false));
+  const [showAddressPicker, setShowAddressPicker] = useState(false);
+  const addressDialogRef = useRef<HTMLDivElement>(null);
+  useDialogAccessibility(addressDialogRef, () => setShowAddressPicker(false));
   const deliverySlots = getDeliverySlots();
 
   // Subscriber discount
@@ -90,11 +108,59 @@ export default function CartPage() {
   const [deliveryFee, setDeliveryFee] = useState<number>(0);
   const [deliveryBreakdown, setDeliveryBreakdown] = useState<({ isFree: false } & DeliveryPriceBreakdown) | { isFree: true; distanceKm: number } | null>(null);
   const [deliveryFeeLoading, setDeliveryFeeLoading] = useState(true);
-  const [nearestHubName, setNearestHubName] = useState<string>('');
+  const [nearestHubName, setNearestHubName] = useState<string>(HUBS[0]?.name ?? "Domlur Kitchen");
   const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<DeliveryAddress[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [savingAddressId, setSavingAddressId] = useState<string | null>(null);
+
+  const formatAddressSingleLine = (address: DeliveryAddress | null) => {
+    if (!address) return "No delivery address selected";
+    return [address.line1, address.line2, `${address.city}, ${address.pincode}`]
+      .filter((part) => typeof part === "string" && part.trim().length > 0)
+      .join(", ");
+  };
+
+  const selectedAddress =
+    savedAddresses.find((addr) => addr.id === selectedAddressId) ??
+    savedAddresses.find((addr) => addr.is_default) ??
+    savedAddresses[0] ??
+    null;
+
+  const syncAddressCache = (addresses: DeliveryAddress[]) => {
+    const legacy = addresses.map((a) => ({
+      id: a.id,
+      tag: a.label ?? undefined,
+      line1: a.line1,
+      line2: a.line2 ?? "",
+      pincode: a.pincode,
+      isDefault: a.is_default,
+      ...(typeof a.lat === "number" && typeof a.lng === "number" ? { lat: a.lat, lng: a.lng } : {}),
+    }));
+    localStorage.setItem("nutravoe_addresses", JSON.stringify(legacy));
+    window.dispatchEvent(new Event("address_change"));
+  };
+
+  const handleSelectAddress = async (addressId: string) => {
+    const supabase = createClient();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return;
+    setSavingAddressId(addressId);
+    try {
+      await supabase.from("addresses").update({ is_default: false }).eq("user_id", authUser.id);
+      await supabase.from("addresses").update({ is_default: true }).eq("id", addressId);
+      const updated = savedAddresses.map((a) => ({ ...a, is_default: a.id === addressId }));
+      setSavedAddresses(updated);
+      setSelectedAddressId(addressId);
+      syncAddressCache(updated);
+      setShowAddressPicker(false);
+    } finally {
+      setSavingAddressId(null);
+    }
+  };
 
   useEffect(() => {
-    (async () => {
+    const hydrateDeliveryFee = async () => {
       const supabase = createClient();
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
@@ -128,16 +194,19 @@ export default function CartPage() {
         }
       }
 
-      // Resolve delivery fee: prefer saved map pin (lat/lng), else pincode geocode
+      // Resolve delivery fee: prefer signed-in selected/default address
       type CachedAddr = { pincode: string; isDefault?: boolean; lat?: number; lng?: number };
       let addrPick: { pincode: string; lat: number | null; lng: number | null } | null = null;
       if (authUser) {
         const { data: addrs } = await supabase
           .from("addresses")
-          .select("pincode, lat, lng, is_default")
+          .select("id, label, line1, line2, city, state, pincode, lat, lng, is_default")
           .eq("user_id", authUser.id)
           .order("is_default", { ascending: false });
-        const row = addrs?.find((a) => a.is_default) ?? addrs?.[0];
+        const normalized = (addrs ?? []) as DeliveryAddress[];
+        setSavedAddresses(normalized);
+        const row = normalized.find((a) => a.is_default) ?? normalized[0];
+        if (row?.id) setSelectedAddressId(row.id);
         if (row?.pincode) addrPick = { pincode: row.pincode, lat: row.lat, lng: row.lng };
       }
       if (!addrPick) {
@@ -154,6 +223,30 @@ export default function CartPage() {
           }
         }
       }
+      if (!addrPick && !authUser) {
+        const guestCtx = readGuestDeliveryContext();
+        if (guestCtx) {
+          setDeliveryFee(guestCtx.deliveryFee);
+          setNearestHubName(guestCtx.hubName || HUBS[0]?.name || "Domlur Kitchen");
+          setDeliveryDistanceKm(guestCtx.distanceKm);
+          if (guestCtx.deliveryFee > 0) {
+            const ceilKm = Math.ceil(guestCtx.distanceKm);
+            setDeliveryBreakdown({
+              isFree: false,
+              distanceKm: guestCtx.distanceKm,
+              ceilKm,
+              totalCostRs: ceilKm * 10,
+              nutravoeCoverageRs: ceilKm * 5,
+              customerPaysRs: guestCtx.deliveryFee,
+            });
+          } else {
+            setDeliveryBreakdown({ isFree: true, distanceKm: guestCtx.distanceKm });
+          }
+          setDeliveryFeeLoading(false);
+          return;
+        }
+      }
+
       if (addrPick) {
         const coords = await resolveDeliveryCoords(addrPick.pincode, addrPick.lat, addrPick.lng);
         if (coords) {
@@ -177,7 +270,14 @@ export default function CartPage() {
         }
       }
       setDeliveryFeeLoading(false);
-    })();
+    };
+    hydrateDeliveryFee();
+    window.addEventListener("address_change", hydrateDeliveryFee);
+    window.addEventListener(GUEST_DELIVERY_CONTEXT_EVENT, hydrateDeliveryFee);
+    return () => {
+      window.removeEventListener("address_change", hydrateDeliveryFee);
+      window.removeEventListener(GUEST_DELIVERY_CONTEXT_EVENT, hydrateDeliveryFee);
+    };
   }, []);
 
   // Subscriber discount — applied per bowl (customization extras still at full cost)
@@ -217,6 +317,7 @@ export default function CartPage() {
     if (items.length === 0) { setError("Your cart is empty. Add some bowls first."); return; }
     if (!selectedSlot) { setError("Please select a delivery slot before placing an order."); return; }
     if (!user) { router.push("/signin?next=/cart"); return; }
+    if (!selectedAddress) { setError("Please select a delivery address before placing an order."); return; }
 
     setSubmitting(true);
     setError("");
@@ -266,6 +367,10 @@ export default function CartPage() {
 
     if (!user) {
       router.push("/signin?next=/cart");
+      return;
+    }
+    if (!selectedAddress) {
+      setError("Please select a delivery address before placing an order.");
       return;
     }
 
@@ -330,16 +435,20 @@ export default function CartPage() {
     try {
       const supabase = createClient();
       let deliveryAddress = "";
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
-        const { data: addrs } = await supabase
-          .from("addresses")
-          .select("line1, line2, pincode, is_default")
-          .eq("user_id", authUser.id)
-          .order("is_default", { ascending: false })
-          .limit(1);
-        const a = addrs?.[0];
-        if (a) deliveryAddress = `${a.line1}, ${a.line2}, ${a.pincode}`;
+      if (selectedAddress) {
+        deliveryAddress = formatAddressSingleLine(selectedAddress);
+      } else {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+          const { data: addrs } = await supabase
+            .from("addresses")
+            .select("line1, line2, city, pincode, is_default")
+            .eq("user_id", authUser.id)
+            .order("is_default", { ascending: false })
+            .limit(1);
+          const a = addrs?.[0];
+          if (a) deliveryAddress = [a.line1, a.line2, `${a.city}, ${a.pincode}`].filter(Boolean).join(", ");
+        }
       }
 
       const detailedItems = items.map((item) => {
@@ -517,6 +626,26 @@ export default function CartPage() {
                   })}
                 </div>
 
+                {user && (
+                  <div className="mb-6 rounded-lg border border-black/10 bg-[#F9F8F6] px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-1">Deliver to</p>
+                        <p className="font-body text-[13px] text-ink truncate">
+                          {formatAddressSingleLine(selectedAddress)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddressPicker(true)}
+                        className="font-body text-[12px] font-bold text-sage hover:text-sage-dark underline shrink-0"
+                      >
+                        Edit address
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="border-t border-black/5 pt-6 mb-6 space-y-2">
                   {subscriberDiscount > 0 && (
                     <>
@@ -564,7 +693,7 @@ export default function CartPage() {
                     )}
                     {!deliveryFeeLoading && (
                       <p className="font-body text-[10px] text-stone/70">
-                        Delivery is free within 10 km. If delivery is charged, your address is beyond 10 km from {nearestHubName}.
+                        Delivery is free within 10 km. If delivery is charged, your address is beyond 10 km from Domlur Kitchen.
                       </p>
                     )}
                   </div>
@@ -656,6 +785,106 @@ export default function CartPage() {
           </div>
         </div>
       </section>
+
+      {showAddressPicker && (
+        <div className="fixed inset-0 z-[120] flex items-end md:items-center justify-center p-0 md:p-4 bg-ink/70 backdrop-blur-sm animate-in fade-in duration-300">
+          <div
+            ref={addressDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delivery-address-title"
+            tabIndex={-1}
+            className="bg-white rounded-t-3xl md:rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-[50%] md:zoom-in-95 duration-300"
+          >
+            <div className="px-5 py-4 border-b border-black/5 flex items-center justify-between">
+              <h3 id="delivery-address-title" className="font-display text-2xl text-ink">Choose delivery address</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddressPicker(false)}
+                className="w-8 h-8 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center text-stone"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto space-y-3">
+              {savedAddresses.length === 0 ? (
+                <p className="font-body text-[13px] text-stone">No saved addresses found.</p>
+              ) : (
+                savedAddresses.map((address) => (
+                  <button
+                    key={address.id}
+                    type="button"
+                    onClick={() => handleSelectAddress(address.id)}
+                    disabled={savingAddressId !== null}
+                    className={`w-full text-left rounded-xl border px-4 py-3 transition-colors ${
+                      selectedAddress?.id === address.id
+                        ? "border-sage bg-sage/5 shadow-sm"
+                        : "border-black/10 bg-white hover:border-sage/30 hover:bg-[#F9F8F6]"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                        selectedAddress?.id === address.id ? "bg-sage/15 text-sage-dark" : "bg-[#F0F2F2] text-stone"
+                      }`}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-body text-[13px] font-bold text-ink">
+                            {address.label || "Address"}
+                          </p>
+                          {address.is_default && (
+                            <span className="font-body text-[10px] font-bold uppercase tracking-wider bg-sage/15 text-sage-dark px-2 py-0.5 rounded-full">
+                              Default
+                            </span>
+                          )}
+                          {selectedAddress?.id === address.id && (
+                            <span className="font-body text-[10px] font-bold uppercase tracking-wider bg-ink/5 text-ink px-2 py-0.5 rounded-full">
+                              Selected
+                            </span>
+                          )}
+                        </div>
+                        <p className="font-body text-[12px] text-stone mt-1 leading-relaxed">{formatAddressSingleLine(address)}</p>
+                      </div>
+                      {savingAddressId === address.id ? (
+                        <span className="font-body text-[11px] text-stone shrink-0">Saving…</span>
+                      ) : (
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className={`shrink-0 mt-1 ${selectedAddress?.id === address.id ? "text-sage-dark" : "text-stone/50"}`}
+                        >
+                          <path d="m9 18 6-6-6-6"/>
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="px-4 py-4 border-t border-black/5 bg-white">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddressPicker(false);
+                  router.push("/addresses?new=1");
+                }}
+                className="w-full bg-sage hover:bg-sage-dark text-white font-body text-[13px] font-bold py-3 rounded-md transition-colors"
+              >
+                Add new address
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delivery Slot Picker Modal */}
       {showSlotPicker && (

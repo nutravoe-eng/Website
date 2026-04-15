@@ -30,8 +30,8 @@ export default function MenuClient({ bowls }: { bowls: Bowl[] }) {
               className="section-heading"
               style={{ fontSize: "clamp(48px, 5vw, 72px)" }}
             >
-              Five bowls.<br />
-              <em className="text-sage">All considered.</em>
+              Our menu.<br />
+              <em className="text-sage">Nothing here by accident.</em>
             </h1>
             <p className="font-body text-sm text-stone max-w-xs leading-relaxed">
               Made fresh daily. No added sugar. Probiotic yogurt base.

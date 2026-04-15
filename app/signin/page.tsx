@@ -32,10 +32,11 @@ function SignInForm() {
   const [pincode, setPincode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showMap, setShowMap] = useState(false);
   const [pinLat, setPinLat] = useState<number | null>(null);
   const [pinLng, setPinLng] = useState<number | null>(null);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>();
+  const [pincodeLookupLoading, setPincodeLookupLoading] = useState(false);
+  const [isIndianPincode, setIsIndianPincode] = useState<boolean | null>(null);
 
   // Redirect on success
   useEffect(() => {
@@ -49,7 +50,13 @@ function SignInForm() {
 
   // Geocode pincode to center the map when pincode is complete
   useEffect(() => {
-    if (pincode.length !== 6) return;
+    if (pincode.length !== 6) {
+      setIsIndianPincode(null);
+      setPinLat(null);
+      setPinLng(null);
+      return;
+    }
+    setPincodeLookupLoading(true);
     fetch(`/api/geocode?pincode=${pincode}`)
       .then((r) => r.json())
       .then((d) => {
@@ -57,9 +64,23 @@ function SignInForm() {
           setMapCenter({ lat: d.lat, lng: d.lng });
           setPinLat(d.lat);
           setPinLng(d.lng);
+          if (typeof d.city === "string") setCity(d.city);
+          if (typeof d.state === "string") setAddressState(d.state);
+          setIsIndianPincode(true);
+        } else {
+          setIsIndianPincode(false);
+          setPinLat(null);
+          setPinLng(null);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setIsIndianPincode(false);
+        setPinLat(null);
+        setPinLng(null);
+      })
+      .finally(() => {
+        setPincodeLookupLoading(false);
+      });
   }, [pincode]);
 
   /* ── Step 1: detect identifier type and check if account exists ── */
@@ -133,9 +154,11 @@ function SignInForm() {
     if (!name.trim()) { setError("Please enter your name."); return; }
     if (!phone.trim() || phone.replace(/\D/g, "").length < 10) { setError("Please enter a valid 10-digit mobile number."); return; }
     if (!addressLine1.trim()) { setError("Please enter your street address."); return; }
+    if (!/^\d{6}$/.test(pincode)) { setError("Enter a valid PIN code in India."); return; }
+    if (isIndianPincode === false) { setError("Enter a valid PIN code in India."); return; }
     if (!city.trim()) { setError("Please enter your city."); return; }
     if (!addressState) { setError("Please select your state."); return; }
-    if (!/^\d{6}$/.test(pincode)) { setError("Please enter a valid 6-digit PIN code."); return; }
+    if (pinLat === null || pinLng === null) { setError("Pin drop is required to continue."); return; }
     if (!email || !password) { setError("Please fill in all fields."); return; }
     if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
 
@@ -191,7 +214,8 @@ function SignInForm() {
           city: city.trim(),
           state: addressState,
           pincode: pincode.trim(),
-          ...(showMap && pinLat && pinLng ? { lat: pinLat, lng: pinLng } : {}),
+          lat: pinLat,
+          lng: pinLng,
         },
       }),
     });
@@ -386,7 +410,7 @@ function SignInForm() {
                 Looks like you're new here!
               </h1>
               <p className="font-body text-[13.5px] text-stone mb-8 text-center px-4">
-                We're absolutely thrilled to have you. Let's get your account set up.
+                Good to meet you. Let&apos;s get your account set up in under a minute.
               </p>
 
               <form onSubmit={handleSignUp} className="flex flex-col gap-4">
@@ -443,18 +467,6 @@ function SignInForm() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label htmlFor="signup-city" className="block font-body text-[13px] font-medium text-ink mb-1.5">City</label>
-                        <input
-                          id="signup-city"
-                          type="text"
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          placeholder="e.g. Bengaluru"
-                          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
-                          required
-                        />
-                      </div>
-                      <div>
                         <label htmlFor="signup-pincode" className="block font-body text-[13px] font-medium text-ink mb-1.5">PIN Code</label>
                         <input
                           id="signup-pincode"
@@ -462,6 +474,21 @@ function SignInForm() {
                           value={pincode}
                           onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                           placeholder="6 digits"
+                          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
+                          required
+                        />
+                        {pincode.length === 6 && isIndianPincode === false && (
+                          <p className="font-body text-[11px] text-terracotta mt-1">Enter a valid PIN code in India.</p>
+                        )}
+                      </div>
+                      <div>
+                        <label htmlFor="signup-city" className="block font-body text-[13px] font-medium text-ink mb-1.5">City</label>
+                        <input
+                          id="signup-city"
+                          type="text"
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          placeholder={pincodeLookupLoading ? "Auto-filling..." : "e.g. Bengaluru"}
                           className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
                           required
                         />
@@ -483,13 +510,9 @@ function SignInForm() {
                       </select>
                     </div>
 
-                    {/* Optional map pin */}
+                    {/* Mandatory map pin */}
                     <div className="border border-dashed border-black/15 rounded-lg overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() => setShowMap((v) => !v)}
-                        className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-black/[0.02] transition-colors"
-                      >
+                      <div className="w-full flex items-center gap-2.5 px-4 py-3 text-left">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sage shrink-0">
                           <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
                           <circle cx="12" cy="10" r="3"/>
@@ -497,23 +520,18 @@ function SignInForm() {
                         <span className="font-body text-[13px] text-ink font-medium">
                           Pin your exact location
                         </span>
-                        <span className="font-body text-[11px] text-stone ml-1">(optional — helps with delivery)</span>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`ml-auto text-stone transition-transform ${showMap ? "rotate-180" : ""}`}>
-                          <path d="m6 9 6 6 6-6"/>
-                        </svg>
-                      </button>
-                      {showMap && (
-                        <div className="px-4 pb-4">
-                          <p className="font-body text-[12px] text-stone mb-3">
-                            Drag the pin or tap the map to mark your exact gate or building entrance.
-                          </p>
-                          <MapPicker
-                            centerLat={mapCenter?.lat}
-                            centerLng={mapCenter?.lng}
-                            onChange={(lat, lng) => { setPinLat(lat); setPinLng(lng); }}
-                          />
-                        </div>
-                      )}
+                        <span className="font-body text-[11px] text-terracotta ml-1">(required)</span>
+                      </div>
+                      <div className="px-4 pb-4">
+                        <p className="font-body text-[12px] text-stone mb-3">
+                          Drag the pin or tap the map to mark your exact gate or building entrance.
+                        </p>
+                        <MapPicker
+                          centerLat={mapCenter?.lat}
+                          centerLng={mapCenter?.lng}
+                          onChange={(lat, lng) => { setPinLat(lat); setPinLng(lng); }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

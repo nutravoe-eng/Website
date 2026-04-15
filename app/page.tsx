@@ -43,21 +43,21 @@ export default async function HomePage() {
           <div className="max-w-7xl mx-auto w-full -mt-4">
             <div className="max-w-2xl">
             <p className="font-body text-[11px] font-medium tracking-[0.25em] mb-4 text-sage-light" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}>
-              FRESH · BANGALORE · DELIVERED 7 AM–9 PM
+              Bangalore · Fresh Daily · Delivered 7 AM–9 PM
             </p>
             <h1 className="font-display text-white mb-5"
               style={{ fontSize: "clamp(46px, 6vw, 76px)", lineHeight: "1.05" }}>
-              Wholesome protein bowls.<br />
-              Any meal.<br />
-              <em className="text-sage-light">At your door.</em>
+              The meal that<br />
+              <em className="text-sage-light">shows up for you.</em>
             </h1>
             <p className="font-body text-[15px] font-light text-white/90 leading-relaxed mb-8 max-w-md">
-              Fresh yogurt bowls crafted daily. High protein, gut-friendly,
-              no added sugar — a complete meal you'll actually look forward to.
+              Wholesome, nourishing yoghurt bowls made fresh in small batches every day.
+              High fibre, gut-friendly, no added sugar — a complete meal delivered
+              to your doorstep whenever you need one.
             </p>
             <div className="flex flex-wrap gap-4 items-center">
               <Link href="/menu" className="btn-sage shadow-[0_4px_20px_rgba(196,165,116,0.35)] hover:shadow-[0_4px_25px_rgba(196,165,116,0.55)] transition-all duration-300">
-                See the Menu
+                Order Now
               </Link>
               <Link
                 href="/about"
@@ -80,7 +80,7 @@ export default async function HomePage() {
           {[
             {
               icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg>,
-              title: "Probiotic Yogurt Base", sub: "Gut-friendly, every bowl"
+              title: "Probiotic Yogurt Base", sub: "Good for your gut, every time"
             },
             {
               icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>,
@@ -125,8 +125,8 @@ export default async function HomePage() {
               <p className="section-eyebrow mb-4">The Menu</p>
               <h2 className="section-heading"
                 style={{ fontSize: "clamp(40px, 4.5vw, 60px)" }}>
-                Five bowls.<br />
-                <em className="text-sage">All considered.</em>
+                Our menu.<br />
+                <em className="text-sage">Nothing here by accident.</em>
               </h2>
             </div>
             <p className="font-body text-sm text-stone max-w-xs mt-4 md:mt-0 md:text-right leading-relaxed">
@@ -143,7 +143,7 @@ export default async function HomePage() {
 
           <div className="text-center mt-12">
             <Link href="/menu" className="btn-ghost">
-              See All Five Bowls →
+              See All Bowls →
             </Link>
           </div>
         </div>
@@ -163,9 +163,9 @@ export default async function HomePage() {
           </h2>
           <p className="font-body text-[14px] font-light leading-loose text-stone max-w-md mb-10">
             On a trip to Austria, Harshita noticed something simple and brilliant —
-            grab-and-go protein bowls. Fresh, healthy, and just there. Nothing like it
+            grab-and-go yoghurt bowls. Fresh, wholesome, and just there. Nothing like it
             existed in India. Nutravoe is her answer: a premium daily ritual, made by hand
-            and at your door before 10 AM.
+            and at your doorstep whenever you need it.
           </p>
           <p className="font-display text-[20px] italic text-stone">
             — Harshita, founder
@@ -192,23 +192,21 @@ export default async function HomePage() {
       <section className="py-28 px-6 lg:px-16 text-center bg-cream">
         <div className="max-w-3xl mx-auto">
           <p className="font-body text-xs font-medium tracking-[0.22em] uppercase text-stone mb-8">
-            Delivered 7 AM–9 PM · Order by WhatsApp · Bangalore
+            Delivered 7 AM–9 PM · Bangalore
           </p>
           <h2 className="font-display text-ink mb-10"
             style={{ fontSize: "clamp(36px, 4vw, 60px)", lineHeight: "1.2" }}>
-            A complete meal.<br />
+            A proper meal.<br />
             <strong className="font-medium italic text-sage-dark">
-              At your door before you need it.
+              At your doorstep, whenever you need one.
             </strong>
           </h2>
-          <a
-            href={getWhatsAppHref()}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/menu"
             className="inline-block btn-sage text-xs tracking-widest shadow-[0_4px_20px_rgba(196,165,116,0.35)] hover:shadow-[0_4px_25px_rgba(196,165,116,0.55)] transition-all duration-300"
           >
-            Order Your First Bowl →
-          </a>
+            Order Now →
+          </Link>
         </div>
       </section>
 

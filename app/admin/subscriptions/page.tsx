@@ -320,7 +320,11 @@ export default function AdminSubscriptionsPage() {
                   <p className="font-body text-[11px] text-stone">{sub.users.phone || sub.users.email}</p>
                   {sub.addresses && (() => {
                     const addr = `${sub.addresses.line1}${sub.addresses.line2 ? ', ' + sub.addresses.line2 : ''}, ${sub.addresses.city} ${sub.addresses.pincode}`;
-                    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
+                    const mapsQuery =
+                      typeof sub.addresses.lat === "number" && typeof sub.addresses.lng === "number"
+                        ? `${sub.addresses.lat},${sub.addresses.lng}`
+                        : addr;
+                    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`;
                     return (
                       <div className="mt-1 space-y-0.5">
                         <p className="font-body text-[11px] text-stone">{addr}</p>

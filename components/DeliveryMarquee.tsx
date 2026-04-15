@@ -3,9 +3,9 @@
 // Animation defined in styles/globals.css as @keyframes marquee.
 
 const ITEMS = [
-  { icon: "🌅", text: "7–10 AM deliveries if ordered before 11 PM" },
-  { icon: "⚡", text: "Same-day delivery with 2 hours' notice after 9 AM" },
-  { icon: "🚚", text: "Delivered 7 AM–9 PM across Bangalore" },
+  { icon: "🌅", text: "Want delivery between 7–10 AM? Place your order before 11 PM the night before" },
+  { icon: "⚡", text: "Order after 9 AM and get same-day delivery — we only need 2 hours" },
+  { icon: "🚚", text: "We deliver across Bangalore daily, any time between 7 AM and 9 PM" },
 ];
 
 interface DeliveryMarqueeProps {

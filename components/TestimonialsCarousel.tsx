@@ -42,7 +42,7 @@ const reviews: Review[] = [
     initials: "DI",
     avatarColor: "#7D9B76",
     stars: 4,
-    text: "Super convenient for a WFH person like me. I used to skip breakfast all the time but now I actually look forward to it. The fig and honey one is incredible 🍯",
+    text: "Super convenient for a WFH person like me. I used to skip meals all the time but now I actually look forward to them. The banana peanut butter one is incredible 🍯",
   },
   {
     name: "Aditya Krishnamurthy",
@@ -142,14 +142,14 @@ export default function TestimonialsCarousel() {
       {/* Section header */}
       <div className="max-w-7xl mx-auto px-6 lg:px-16 mb-14 text-center">
         <p className="section-eyebrow text-terracotta mb-4">
-          What our customers say
+          From Bangalore, with love
         </p>
         <h2
           className="font-display text-ink"
           style={{ fontSize: "clamp(36px, 3.5vw, 52px)", lineHeight: "1.15" }}
         >
-          Real people.{" "}
-          <em className="text-terracotta">Real stories.</em>
+          Why they keep{" "}
+          <em className="text-terracotta">coming back.</em>
         </h2>
       </div>
 

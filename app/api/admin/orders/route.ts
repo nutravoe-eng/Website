@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
       delivery_date, delivery_time_slot, delivery_fee,
       subtotal, total, notes, admin_notes, created_at,
       users!inner ( id, full_name, phone, email ),
-      addresses ( id, line1, line2, city, pincode ),
+      addresses ( id, line1, line2, city, pincode, lat, lng ),
       order_items ( id, bowl_slug, bowl_name, quantity, unit_price, total_price, customizations )
     `)
     .order('delivery_date', { ascending: false })

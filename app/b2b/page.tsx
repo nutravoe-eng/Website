@@ -250,16 +250,17 @@ export default function B2BPage() {
       {/* ── Hero strip ───────────────────────────────────── */}
       <section className="bg-ink pt-32 pb-20 px-6 lg:px-16" aria-labelledby="b2b-hero-heading">
         <div className="max-w-7xl mx-auto">
-          <p className="section-eyebrow text-terracotta mb-5">B2B Partnerships</p>
+          <p className="section-eyebrow text-terracotta mb-5">For Offices &amp; Teams</p>
           <h1
             id="b2b-hero-heading"
             className="font-display text-white mb-5"
             style={{ fontSize: "clamp(42px, 5.5vw, 72px)", lineHeight: "1.06" }}
           >
-            Partner with Nutravoe
+            Wholesome meals for your whole team.{" "}
+            <em className="text-sage-light">We&apos;ll sort it out.</em>
           </h1>
           <p className="font-body text-[16px] font-light text-white/60 max-w-xl leading-relaxed mb-16">
-            Wholesome protein bowls for your entire team — delivered fresh, billed weekly.
+            Wholesome, nourishing bowls for your entire team — delivered fresh, billed weekly.
           </p>
 
           {/* Benefit blocks */}

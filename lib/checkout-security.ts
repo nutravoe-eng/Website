@@ -12,9 +12,11 @@ import { getAllBowls, getSubscriptionPlans } from "@/lib/sanity";
 import type { Bowl, IngredientCustomization, SubscriptionPlan } from "@/types";
 
 export interface AddressForPricing {
+  id?: string | null;
   pincode?: string | null;
   lat?: number | null;
   lng?: number | null;
+  distance_km?: number | null;
 }
 
 interface PricingContextOptions {
@@ -49,6 +51,9 @@ async function resolveAddressCoordinates(address: AddressForPricing): Promise<{ 
 }
 
 export async function isNearZoneAddress(address: AddressForPricing, options?: PricingContextOptions): Promise<boolean> {
+  if (typeof address.distance_km === "number" && Number.isFinite(address.distance_km)) {
+    return address.distance_km <= FREE_ZONE_RADIUS_KM;
+  }
   const coords = await resolveAddressCoordinates(address);
   // Fail safe: assume far zone when coords are unavailable to avoid unintended free delivery
   if (!coords) return false;
@@ -57,6 +62,9 @@ export async function isNearZoneAddress(address: AddressForPricing, options?: Pr
 }
 
 export async function getAddressDeliveryFee(address: AddressForPricing, options?: PricingContextOptions): Promise<number> {
+  if (typeof address.distance_km === "number" && Number.isFinite(address.distance_km)) {
+    return deliveryFeeFromDistanceKm(address.distance_km);
+  }
   const coords = await resolveAddressCoordinates(address);
   // Fail safe: charge the standard delivery fee when coords are unavailable
   if (!coords) return DELIVERY_FEE_RS;
@@ -68,6 +76,9 @@ export async function getAddressDeliveryBreakdown(
   address: AddressForPricing,
   options?: PricingContextOptions,
 ): Promise<({ isFree: true; distanceKm: number } | ({ isFree: false } & DeliveryPriceBreakdown)) | null> {
+  if (typeof address.distance_km === "number" && Number.isFinite(address.distance_km)) {
+    return deliveryPricingFromDistanceKm(address.distance_km);
+  }
   const coords = await resolveAddressCoordinates(address);
   if (!coords) return null;
   const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng, { httpReferrer: options?.httpReferrer });
@@ -194,7 +205,9 @@ export async function buildSubscriptionQuote(
   }
 
   let distanceKmForPricing: number | null = null;
-  if (coords) {
+  if (typeof address.distance_km === "number" && Number.isFinite(address.distance_km)) {
+    distanceKmForPricing = address.distance_km;
+  } else if (coords) {
     const resolved = await resolveDeliveryDistanceKm(coords.lat, coords.lng, { httpReferrer: options?.httpReferrer });
     distanceKmForPricing = resolved.distanceKm;
   }

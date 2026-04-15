@@ -29,19 +29,20 @@ export default function ConfirmationPage({
           {isWallet ? (
             <>Your bowl is<br /><em className="text-sage">on its way.</em></>
           ) : (
-            <>Request<br /><em className="text-sage">received!</em></>
+            <>Almost<br /><em className="text-sage">there!</em></>
           )}
         </h1>
 
         {isWallet ? (
           <p className="font-body text-[15px] font-light text-stone leading-loose mb-10 max-w-sm mx-auto">
             Your order is confirmed and payment has been deducted from your wallet.
-            We&apos;ll prepare it fresh and deliver between 7 AM–9 PM.
+            We&apos;ll prepare it fresh and deliver it the same day.
           </p>
         ) : (
           <p className="font-body text-[15px] font-light text-stone leading-loose mb-10 max-w-sm mx-auto">
-            Request received. Please send the drafted WhatsApp message to confirm your order.
-            Once confirmed, we&apos;ll prepare it fresh and deliver between 7 AM-9 PM.
+            Your bowl is one tap away. A WhatsApp message has been drafted for you — just
+            hit Send to confirm. Once we get it, we&apos;ll prepare your bowl fresh and
+            deliver it the same day.
           </p>
         )}
 

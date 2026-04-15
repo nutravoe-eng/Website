@@ -11,6 +11,10 @@ import { formatCurrency } from "@/lib/utils";
 import { resolveDeliveryCoords } from "@/lib/geocodeCache";
 import { FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
 import { getWhatsAppHref } from "@/lib/contact";
+import {
+  clearGuestDeliveryContext,
+  writeGuestDeliveryContext,
+} from "@/lib/guest-delivery";
 
 const NAV_LINKS = [
   { href: "/menu", label: "Menu" },
@@ -48,6 +52,7 @@ export default function Navbar() {
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [savedPincode, setSavedPincode] = useState("560001");
   const [inputPincode, setInputPincode] = useState("");
+  const [pinInputError, setPinInputError] = useState("");
   const [locationState, setLocationState] = useState<"idle" | "invalid" | "waitlist" | "success">("idle");
   const [deliveryZone, setDeliveryZone] = useState<{ fee: number; distanceKm: number; hubName: string } | null>(null);
   const [checkingZone, setCheckingZone] = useState(false);
@@ -189,6 +194,7 @@ export default function Navbar() {
             <button 
               onClick={() => {
                 setInputPincode("");
+                setPinInputError("");
                 setLocationState("idle");
                 setDeliveryZone(null);
                 setShowLocationModal(true);
@@ -395,6 +401,7 @@ export default function Navbar() {
               onClick={() => {
                 setMenuOpen(false);
                 setInputPincode("");
+                setPinInputError("");
                 setLocationState("idle");
                 setDeliveryZone(null);
                 setShowLocationModal(true);
@@ -574,19 +581,21 @@ export default function Navbar() {
                       id="apply-pin-btn"
                       disabled={checkingZone}
                       onClick={async () => {
+                        setPinInputError("");
                         if (inputPincode.length !== 6) {
-                          setLocationState("invalid");
+                          setPinInputError("Enter a valid PIN code in India.");
                           return;
                         }
-                        if (!inputPincode.startsWith("56")) {
-                          setLocationState("invalid");
-                          return;
-                        }
-                        // Valid Bangalore pincode — saved map pin for this pincode when available, else geocode
+                        // Valid 6-digit pincode — saved map pin for this pincode when available, else geocode
                         setCheckingZone(true);
                         setDeliveryZone(null);
                         const match = savedAddresses.find((a) => a.pincode === inputPincode);
                         const coords = await resolveDeliveryCoords(inputPincode, match?.lat, match?.lng);
+                        if (!coords) {
+                          setPinInputError("Enter a valid PIN code in India.");
+                          setCheckingZone(false);
+                          return;
+                        }
                         if (coords) {
                           const res = await fetch(
                             `/api/delivery-distance?lat=${encodeURIComponent(String(coords.lat))}&lng=${encodeURIComponent(String(coords.lng))}`,
@@ -602,9 +611,23 @@ export default function Navbar() {
                               distanceKm: Math.round(data.distanceKm * 10) / 10,
                               hubName: data.hub.name,
                             });
+                            if (!user) {
+                              writeGuestDeliveryContext({
+                                pincode: inputPincode,
+                                lat: coords.lat,
+                                lng: coords.lng,
+                                distanceKm: Math.round(data.distanceKm * 10) / 10,
+                                deliveryFee: data.deliveryFee,
+                                hubName: data.hub.name,
+                                ts: Date.now(),
+                              });
+                            }
                           }
                         }
                         setSavedPincode(inputPincode);
+                        if (user) {
+                          clearGuestDeliveryContext();
+                        }
                         setCheckingZone(false);
                       }}
                       className="px-6 bg-sage hover:bg-sage-dark disabled:opacity-60 text-white rounded-md font-body text-sm font-medium transition-colors shadow-sm cursor-pointer border border-black/5"
@@ -612,6 +635,9 @@ export default function Navbar() {
                       {checkingZone ? 'Checking…' : 'Apply'}
                     </button>
                   </div>
+                  {pinInputError && (
+                    <p className="font-body text-[12px] text-terracotta">{pinInputError}</p>
+                  )}
                   
                   {/* Delivery zone result */}
                   {deliveryZone && (
@@ -631,7 +657,15 @@ export default function Navbar() {
                           {deliveryZone.fee === 0 ? ` · within ${FREE_ZONE_RADIUS_KM} km zone` : ` · beyond ${FREE_ZONE_RADIUS_KM} km zone`}
                         </p>
                       </div>
-                      <button onClick={() => setShowLocationModal(false)} className="shrink-0 font-body text-[11px] font-bold text-stone hover:text-ink underline">
+                      <button
+                        onClick={() => {
+                          if (!user && deliveryZone) {
+                            window.dispatchEvent(new Event("address_change"));
+                          }
+                          setShowLocationModal(false);
+                        }}
+                        className="shrink-0 font-body text-[11px] font-bold text-stone hover:text-ink underline"
+                      >
                         Done
                       </button>
                     </div>

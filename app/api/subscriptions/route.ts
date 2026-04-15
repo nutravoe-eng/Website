@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
 
   const { data: address, error: addressError } = await adminSupabase
     .from("addresses")
-    .select("id, pincode, lat, lng")
+    .select("id, pincode, lat, lng, distance_km")
     .eq("user_id", user.id)
     .order("is_default", { ascending: false })
     .limit(1)
@@ -165,12 +165,15 @@ export async function POST(req: NextRequest) {
   const addrCoords = (typeof address.lat === "number" && typeof address.lng === "number")
     ? { lat: address.lat, lng: address.lng }
     : null;
-  const perTripDeliveryFee = addrCoords
-    ? deliveryFeeFromDistanceKm(
-        (await resolveDeliveryDistanceKm(addrCoords.lat, addrCoords.lng, { httpReferrer: requestOriginReferrer(req) }))
-          .distanceKm,
-      )
-    : DELIVERY_FEE_RS;
+  const perTripDeliveryFee =
+    typeof address.distance_km === "number" && Number.isFinite(address.distance_km)
+      ? deliveryFeeFromDistanceKm(address.distance_km)
+      : addrCoords
+        ? deliveryFeeFromDistanceKm(
+            (await resolveDeliveryDistanceKm(addrCoords.lat, addrCoords.lng, { httpReferrer: requestOriginReferrer(req) }))
+              .distanceKm,
+          )
+        : DELIVERY_FEE_RS;
 
   const nowIso = new Date().toISOString();
   const { data: subscription, error: subscriptionError } = await adminSupabase

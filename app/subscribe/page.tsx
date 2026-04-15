@@ -25,13 +25,13 @@ export default async function SubscribePage() {
         {/* Text overlay */}
         <div className="absolute inset-0 flex flex-col justify-center px-8 md:px-16 max-w-2xl">
           <span className="font-body text-[11px] font-bold tracking-[0.15em] uppercase text-white/70 mb-3">
-            Fresh · Weekly · Yours
+            Your Daily Ritual
           </span>
           <h1 className="font-display text-4xl md:text-5xl font-medium text-white leading-tight mb-3">
-            Subscribe & Save
+            A proper meal, every day.<br />Set once, enjoy always.
           </h1>
           <p className="font-body text-[14px] md:text-[15px] text-white/80 leading-relaxed max-w-sm">
-            Fresh yoghurt bowls crafted daily, delivered to your door every week.
+            Subscribe and get fresh probiotic yoghurt bowls delivered on a schedule that works for you. No thinking, no planning — just good food at your doorstep.
           </p>
         </div>
       </div>

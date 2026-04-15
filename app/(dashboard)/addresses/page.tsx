@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, FormEvent } from "react";
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const MapPicker = dynamic(() => import("@/components/MapPicker"), { ssr: false });
@@ -16,6 +17,8 @@ interface Address {
   is_default: boolean;
   lat: number | null;
   lng: number | null;
+  distance_km?: number | null;
+  delivery_fee?: number | null;
 }
 
 type FormData = { label: string; line1: string; line2: string; city: string; state: string; pincode: string };
@@ -131,6 +134,7 @@ function AddressFields({
 
 export default function AddressesPage() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -153,6 +157,29 @@ export default function AddressesPage() {
   const [editMapCenter, setEditMapCenter] = useState<{ lat: number; lng: number } | undefined>();
 
   useEffect(() => { loadAddresses(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      setIsAdding(true);
+    }
+  }, [searchParams]);
+
+  async function resolveDistanceCacheFields(lat: number | null, lng: number | null) {
+    if (typeof lat !== "number" || typeof lng !== "number") return {};
+    try {
+      const res = await fetch(
+        `/api/delivery-distance?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`,
+      );
+      if (!res.ok) return {};
+      const data = (await res.json()) as { distanceKm?: number; deliveryFee?: number };
+      if (typeof data.distanceKm !== "number" || typeof data.deliveryFee !== "number") {
+        return {};
+      }
+      return { distance_km: data.distanceKm, delivery_fee: data.deliveryFee };
+    } catch {
+      return {};
+    }
+  }
 
   // Geocode pincode for ADD form
   useEffect(() => {
@@ -177,7 +204,7 @@ export default function AddressesPage() {
     if (!user) { setLoading(false); return; }
     const { data } = await supabase
       .from("addresses")
-      .select("id, label, line1, line2, city, state, pincode, is_default, lat, lng")
+      .select("id, label, line1, line2, city, state, pincode, is_default, lat, lng, distance_km, delivery_fee")
       .eq("user_id", user.id)
       .order("is_default", { ascending: false })
       .order("created_at", { ascending: true });
@@ -236,6 +263,11 @@ export default function AddressesPage() {
     e.preventDefault();
     if (!editingId) return;
     setEditSaving(true);
+    const coords =
+      typeof editPinLat === "number" && typeof editPinLng === "number"
+        ? { lat: editPinLat, lng: editPinLng }
+        : null;
+    const cacheFields = await resolveDistanceCacheFields(coords?.lat ?? null, coords?.lng ?? null);
     const { data, error } = await supabase
       .from("addresses")
       .update({
@@ -246,9 +278,10 @@ export default function AddressesPage() {
         state: editForm.state,
         pincode: editForm.pincode,
         ...(editPinLat && editPinLng ? { lat: editPinLat, lng: editPinLng } : {}),
+        ...cacheFields,
       })
       .eq("id", editingId)
-      .select("id, label, line1, line2, city, state, pincode, is_default, lat, lng")
+      .select("id, label, line1, line2, city, state, pincode, is_default, lat, lng, distance_km, delivery_fee")
       .single();
     if (!error && data) {
       const updated = addresses.map(a => a.id === editingId ? (data as Address) : a);
@@ -265,6 +298,11 @@ export default function AddressesPage() {
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
+    const coords =
+      showMap && typeof pinLat === "number" && typeof pinLng === "number"
+        ? { lat: pinLat, lng: pinLng }
+        : null;
+    const cacheFields = await resolveDistanceCacheFields(coords?.lat ?? null, coords?.lng ?? null);
     const { data, error } = await supabase
       .from("addresses")
       .insert({
@@ -277,8 +315,9 @@ export default function AddressesPage() {
         pincode: formData.pincode,
         is_default: addresses.length === 0,
         ...(showMap && pinLat && pinLng ? { lat: pinLat, lng: pinLng } : {}),
+        ...cacheFields,
       })
-      .select("id, label, line1, line2, city, state, pincode, is_default, lat, lng")
+      .select("id, label, line1, line2, city, state, pincode, is_default, lat, lng, distance_km, delivery_fee")
       .single();
     if (!error && data) {
       const updated = [...addresses, data as Address];

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { adminSupabase } from "@/lib/supabase/admin";
+import { geocodeIndianPincode } from "@/lib/ola-maps";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -50,6 +51,13 @@ export async function POST(req: NextRequest) {
     if (!line1 || !city || !state || !/^\d{6}$/.test(pincode)) {
       return NextResponse.json({ error: "Valid address required" }, { status: 400 });
     }
+    if (lat === null || lng === null) {
+      return NextResponse.json({ error: "Pin drop is required for this address" }, { status: 400 });
+    }
+    const geocoded = await geocodeIndianPincode(pincode);
+    if (!geocoded) {
+      return NextResponse.json({ error: "Enter a valid PIN code in India." }, { status: 400 });
+    }
 
     const { error: unsetDefaultError } = await adminSupabase
       .from("addresses")
@@ -72,7 +80,8 @@ export async function POST(req: NextRequest) {
         state,
         pincode,
         is_default: true,
-        ...(lat !== null && lng !== null ? { lat, lng } : {}),
+        lat,
+        lng,
       });
 
     if (addressError) {
