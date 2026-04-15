@@ -37,10 +37,7 @@ export default function Footer() {
               { href: "/", label: "Home" },
               { href: "/menu", label: "Menu" },
               { href: "/about", label: "About" },
-              { href: "/order", label: "Order" },
-              { href: "/b2b", label: "B2B Partnerships" },
-              { href: "/privacy", label: "Privacy Notice" },
-              { href: "/terms", label: "Conditions of Use" },
+              { href: "/b2b", label: "Partnerships" },
             ].map(({ href, label }) => (
               <li key={href}>
                 <Link
@@ -87,6 +84,22 @@ export default function Footer() {
               >
                 Instagram
               </a>
+            </li>
+            <li>
+              <Link
+                href="/privacy"
+                className="font-body text-sm text-[#9A9590] transition-colors duration-300 hover:text-sage-light"
+              >
+                Privacy Notice
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/terms"
+                className="font-body text-sm text-[#9A9590] transition-colors duration-300 hover:text-sage-light"
+              >
+                Terms & Conditions
+              </Link>
             </li>
           </ul>
         </div>
