@@ -51,7 +51,6 @@ export default async function HomePage() {
               <em className="text-sage-light">that show up for you.</em>
             </h1>
             <p className="font-body text-[15px] font-light text-white/90 leading-relaxed mb-8 max-w-md">
-              Freshly made in small batches every day for steady energy and everyday ease.
               High protein, high fibre, gut-friendly, no added sugar — a complete meal delivered
               to your doorstep whenever you need one.
             </p>
