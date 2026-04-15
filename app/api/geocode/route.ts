@@ -2,6 +2,55 @@ import { NextRequest, NextResponse } from "next/server";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { geocodeIndianPincode, requestOriginReferrer } from "@/lib/ola-maps";
 
+const INDIAN_STATES_AND_UTS = new Set([
+  "andhra pradesh",
+  "arunachal pradesh",
+  "assam",
+  "bihar",
+  "chhattisgarh",
+  "goa",
+  "gujarat",
+  "haryana",
+  "himachal pradesh",
+  "jharkhand",
+  "karnataka",
+  "kerala",
+  "madhya pradesh",
+  "maharashtra",
+  "manipur",
+  "meghalaya",
+  "mizoram",
+  "nagaland",
+  "odisha",
+  "punjab",
+  "rajasthan",
+  "sikkim",
+  "tamil nadu",
+  "telangana",
+  "tripura",
+  "uttar pradesh",
+  "uttarakhand",
+  "west bengal",
+  "andaman and nicobar islands",
+  "chandigarh",
+  "dadra and nagar haveli and daman and diu",
+  "delhi",
+  "jammu and kashmir",
+  "ladakh",
+  "lakshadweep",
+  "puducherry",
+]);
+
+function normalizeToken(value: string): string {
+  return value.toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim();
+}
+
+function canonicalizeCity(city: string): string {
+  const normalized = normalizeToken(city);
+  if (/^(bengaluru|bangalore)( urban)?$/.test(normalized)) return "Bengaluru";
+  return city;
+}
+
 function parseCityState(displayName?: string): { city?: string; state?: string } {
   if (!displayName) return {};
   const parts = displayName
@@ -12,12 +61,26 @@ function parseCityState(displayName?: string): { city?: string; state?: string }
 
   const indiaIdx = parts.findIndex((p) => /^india$/i.test(p));
   const withoutCountry = indiaIdx >= 0 ? parts.slice(0, indiaIdx) : parts;
-  const cleaned = withoutCountry.filter((p) => !/^\d{6}$/.test(p));
+  const cleaned = withoutCountry.filter((p) => !/^\d{6}$/.test(p.trim()));
   if (!cleaned.length) return {};
 
-  const state = cleaned[cleaned.length - 1];
-  const city = cleaned.length >= 2 ? cleaned[cleaned.length - 2] : cleaned[0];
-  return { city, state };
+  const normalizedParts = cleaned.map((part) => normalizeToken(part));
+  const stateIdx = normalizedParts.findLastIndex((part) => INDIAN_STATES_AND_UTS.has(part));
+
+  const state = stateIdx >= 0 ? cleaned[stateIdx] : cleaned[cleaned.length - 1];
+  const cityCandidates =
+    stateIdx > 0 ? cleaned.slice(0, stateIdx) : cleaned.slice(0, cleaned.length - 1);
+  const normalizedCityCandidates = cityCandidates.map((part) => normalizeToken(part));
+
+  const bengaluruMatchIdx = normalizedCityCandidates.findIndex((part) =>
+    /^(bengaluru|bangalore)( urban)?$/.test(part),
+  );
+  const pickedCity =
+    bengaluruMatchIdx >= 0
+      ? cityCandidates[bengaluruMatchIdx]
+      : cityCandidates[cityCandidates.length - 1] ?? cleaned[0];
+
+  return { city: canonicalizeCity(pickedCity), state };
 }
 
 export async function GET(req: NextRequest) {
