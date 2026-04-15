@@ -4,7 +4,8 @@
  * called once per unique pincode per device.
  */
 
-const CACHE_KEY = 'nutravoe_geocache';
+// Bump cache namespace when geocoding rules change, to avoid stale/wrong coordinates.
+const CACHE_KEY = 'nutravoe_geocache_v2';
 const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 interface CacheEntry {

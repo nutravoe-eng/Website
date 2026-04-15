@@ -210,6 +210,18 @@ export interface GeocodeHit {
   display_name: string;
 }
 
+function normalizeDigits(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function displayNameMatchesPincode(displayName: string | undefined, pincode: string): boolean {
+  if (!displayName) return false;
+  const normalizedPin = normalizeDigits(pincode);
+  if (normalizedPin.length !== 6) return false;
+  const digits = normalizeDigits(displayName);
+  return digits.includes(normalizedPin);
+}
+
 export function geocodeHitsFromResults(results: unknown[], limit: number): GeocodeHit[] {
   const out: GeocodeHit[] = [];
   for (const r of results) {
@@ -467,14 +479,29 @@ export async function geocodeIndianPincode(
   pincode: string,
   preferredReferrer?: string | null,
 ): Promise<{ lat: number; lng: number; display_name?: string } | null> {
-  const olaAddr = `${pincode} Bengaluru Karnataka India`;
+  const normalizedPin = pincode.trim();
+  if (!/^\d{6}$/.test(normalizedPin)) return null;
+
+  const olaQueries = [`${normalizedPin} India`, normalizedPin];
   if (getOlaMapsApiKey()) {
-    const hits = geocodeHitsFromResults(await olaGeocodeResults(olaAddr, preferredReferrer), 1);
-    if (hits.length) return { lat: hits[0].lat, lng: hits[0].lng, display_name: hits[0].display_name };
+    for (const query of olaQueries) {
+      const hits = geocodeHitsFromResults(await olaGeocodeResults(query, preferredReferrer), 5);
+      const strictMatch = hits.find((hit) => displayNameMatchesPincode(hit.display_name, normalizedPin));
+      if (strictMatch) {
+        return {
+          lat: strictMatch.lat,
+          lng: strictMatch.lng,
+          display_name: strictMatch.display_name,
+        };
+      }
+    }
   }
-  const fb = await nominatimPincode(pincode);
-  if (!fb) return null;
-  return { lat: fb.lat, lng: fb.lng, display_name: fb.display_name };
+
+  const fb = await nominatimPincode(normalizedPin);
+  if (fb && displayNameMatchesPincode(fb.display_name, normalizedPin)) {
+    return { lat: fb.lat, lng: fb.lng, display_name: fb.display_name };
+  }
+  return null;
 }
 
 function olaPredictionLabel(p: unknown): string | null {
