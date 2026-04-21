@@ -59,11 +59,8 @@ export default async function HomePage() {
               <Link href="/menu" className="btn-sage shadow-[0_4px_20px_rgba(196,165,116,0.35)] hover:shadow-[0_4px_25px_rgba(196,165,116,0.55)] transition-all duration-300">
                 Order Now
               </Link>
-              <Link
-                href="/about"
-                className="font-body text-[14px] font-medium tracking-wider text-white hover:text-sage-light transition-colors duration-300 flex items-center gap-2 drop-shadow-md"
-              >
-                Our Story →
+              <Link href="/subscribe" className="btn-sage shadow-[0_4px_20px_rgba(196,165,116,0.35)] hover:shadow-[0_4px_25px_rgba(196,165,116,0.55)] transition-all duration-300">
+                Subscribe Now
               </Link>
             </div>
             </div>
