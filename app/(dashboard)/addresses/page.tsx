@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, useRef, FormEvent } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -27,18 +27,48 @@ const BLANK_FORM: FormData = { label: "Home", line1: "", line2: "", city: "Benga
 // ── Shared form fields renderer ───────────────────────────────────────
 // DEFINED OUTSIDE common component to prevent unmounting on every keystroke
 function AddressFields({
-  form, setForm, mapOpen, setMapOpen, pLat, setPLat, pLng, setPLng, center,
+  form, setForm, pLat, pLng, onCoordsChange, onPinValid,
 }: {
   form: FormData;
   setForm: (f: FormData) => void;
-  mapOpen: boolean;
-  setMapOpen: (v: boolean) => void;
   pLat: number | null;
-  setPLat: (v: number | null) => void;
   pLng: number | null;
-  setPLng: (v: number | null) => void;
-  center: { lat: number; lng: number } | undefined;
+  onCoordsChange: (lat: number, lng: number) => void;
+  onPinValid: (valid: boolean) => void;
 }) {
+  const [isIndianPincode, setIsIndianPincode] = useState<boolean | null>(null);
+  const [pincodeLookupLoading, setPincodeLookupLoading] = useState(false);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>();
+  const formRef = useRef(form);
+  formRef.current = form;
+
+  useEffect(() => {
+    if (form.pincode.length !== 6) {
+      setIsIndianPincode(null);
+      return;
+    }
+    setPincodeLookupLoading(true);
+    fetch(`/api/geocode?pincode=${form.pincode}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.lat && d.lng) {
+          setMapCenter({ lat: d.lat, lng: d.lng });
+          setForm({ ...formRef.current, city: typeof d.city === "string" ? d.city : formRef.current.city, state: typeof d.state === "string" ? d.state : formRef.current.state });
+          onCoordsChange(d.lat, d.lng);
+          setIsIndianPincode(true);
+          onPinValid(true);
+        } else {
+          setIsIndianPincode(false);
+          onPinValid(false);
+        }
+      })
+      .catch(() => {
+        setIsIndianPincode(false);
+        onPinValid(false);
+      })
+      .finally(() => setPincodeLookupLoading(false));
+  }, [form.pincode]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
       <div>
@@ -61,6 +91,9 @@ function AddressFields({
           onChange={e => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "") })}
           className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
         />
+        {form.pincode.length === 6 && isIndianPincode === false && (
+          <p className="font-body text-[11px] text-terracotta mt-1">Enter a valid PIN code in India.</p>
+        )}
       </div>
       <div className="md:col-span-2">
         <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Flat, House no., Building</label>
@@ -83,6 +116,7 @@ function AddressFields({
         <input
           required type="text" value={form.city}
           onChange={e => setForm({ ...form, city: e.target.value })}
+          placeholder={pincodeLookupLoading ? "Auto-filling…" : "e.g. Bengaluru"}
           className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
         />
       </div>
@@ -94,39 +128,30 @@ function AddressFields({
           className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
         />
       </div>
-      {/* Map pin picker */}
+      {/* Map pin picker — always visible, required */}
       <div className="md:col-span-2 border border-dashed border-black/15 rounded-lg overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setMapOpen(!mapOpen)}
-          className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-black/[0.02] transition-colors"
-        >
+        <div className="w-full flex items-center gap-2.5 px-4 py-3 text-left">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sage shrink-0">
             <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
           </svg>
           <span className="font-body text-[13px] text-ink font-medium">
             {pLat && pLng ? "Change pin location" : "Pin your exact location"}
           </span>
-          {pLat && pLng && (
-            <span className="font-body text-[11px] text-sage-dark font-bold ml-1">✓ Pinned</span>
-          )}
-          {!pLat && <span className="font-body text-[11px] text-stone ml-1">(optional)</span>}
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`ml-auto text-stone transition-transform ${mapOpen ? "rotate-180" : ""}`}>
-            <path d="m6 9 6 6 6-6"/>
-          </svg>
-        </button>
-        {mapOpen && (
-          <div className="px-4 pb-4">
-            <p className="font-body text-[12px] text-stone mb-3">
-              Drag the pin or tap the map to mark your exact gate or building entrance.
-            </p>
-            <MapPicker
-              centerLat={center?.lat ?? pLat ?? undefined}
-              centerLng={center?.lng ?? pLng ?? undefined}
-              onChange={(lat, lng) => { setPLat(lat); setPLng(lng); }}
-            />
-          </div>
-        )}
+          {pLat && pLng
+            ? <span className="font-body text-[11px] text-sage-dark font-bold ml-1">✓ Pinned</span>
+            : <span className="font-body text-[11px] text-terracotta ml-1">(required)</span>
+          }
+        </div>
+        <div className="px-4 pb-4">
+          <p className="font-body text-[12px] text-stone mb-3">
+            Drag the pin or use the search box to mark your exact gate or building entrance.
+          </p>
+          <MapPicker
+            centerLat={mapCenter?.lat ?? pLat ?? undefined}
+            centerLng={mapCenter?.lng ?? pLng ?? undefined}
+            onChange={(lat, lng) => onCoordsChange(lat, lng)}
+          />
+        </div>
       </div>
     </div>
   );
@@ -141,20 +166,20 @@ export default function AddressesPage() {
   // ── Add mode ──────────────────────────────────────────────────────────
   const [isAdding, setIsAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [addError, setAddError] = useState("");
   const [formData, setFormData] = useState<FormData>(BLANK_FORM);
-  const [showMap, setShowMap] = useState(false);
   const [pinLat, setPinLat] = useState<number | null>(null);
   const [pinLng, setPinLng] = useState<number | null>(null);
-  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>();
+  const [isIndianPincode, setIsIndianPincode] = useState<boolean | null>(null);
 
   // ── Edit mode ─────────────────────────────────────────────────────────
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<FormData>(BLANK_FORM);
   const [editSaving, setEditSaving] = useState(false);
-  const [editShowMap, setEditShowMap] = useState(false);
+  const [editError, setEditError] = useState("");
   const [editPinLat, setEditPinLat] = useState<number | null>(null);
   const [editPinLng, setEditPinLng] = useState<number | null>(null);
-  const [editMapCenter, setEditMapCenter] = useState<{ lat: number; lng: number } | undefined>();
+  const [editIsIndianPincode, setEditIsIndianPincode] = useState<boolean | null>(null);
 
   useEffect(() => { loadAddresses(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -181,23 +206,6 @@ export default function AddressesPage() {
     }
   }
 
-  // Geocode pincode for ADD form
-  useEffect(() => {
-    if (formData.pincode.length !== 6) return;
-    fetch(`/api/geocode?pincode=${formData.pincode}`)
-      .then(r => r.json())
-      .then(d => { if (d.lat && d.lng) { setMapCenter({ lat: d.lat, lng: d.lng }); setPinLat(d.lat); setPinLng(d.lng); } })
-      .catch(() => {});
-  }, [formData.pincode]);
-
-  // Geocode pincode for EDIT form
-  useEffect(() => {
-    if (editForm.pincode.length !== 6) return;
-    fetch(`/api/geocode?pincode=${editForm.pincode}`)
-      .then(r => r.json())
-      .then(d => { if (d.lat && d.lng) { setEditMapCenter({ lat: d.lat, lng: d.lng }); } })
-      .catch(() => {});
-  }, [editForm.pincode]);
 
   async function loadAddresses() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -233,18 +241,18 @@ export default function AddressesPage() {
   // ── Start editing an address ──────────────────────────────────────────
   function openEdit(addr: Address) {
     setEditingId(addr.id);
-    setEditForm({ 
-      label: addr.label, 
-      line1: addr.line1, 
-      line2: addr.line2 ?? "", 
-      city: addr.city || "Bengaluru", 
-      state: addr.state || "Karnataka", 
-      pincode: addr.pincode 
+    setEditForm({
+      label: addr.label,
+      line1: addr.line1,
+      line2: addr.line2 ?? "",
+      city: addr.city || "Bengaluru",
+      state: addr.state || "Karnataka",
+      pincode: addr.pincode
     });
-    setEditShowMap(false);
     setEditPinLat(addr.lat ?? null);
     setEditPinLng(addr.lng ?? null);
-    setEditMapCenter(addr.lat && addr.lng ? { lat: addr.lat, lng: addr.lng } : undefined);
+    setEditIsIndianPincode(true);
+    setEditError("");
     // Close add form if open
     setIsAdding(false);
   }
@@ -252,16 +260,25 @@ export default function AddressesPage() {
   function cancelEdit() {
     setEditingId(null);
     setEditForm(BLANK_FORM);
-    setEditShowMap(false);
     setEditPinLat(null);
     setEditPinLng(null);
-    setEditMapCenter(undefined);
+    setEditIsIndianPincode(null);
+    setEditError("");
   }
 
   // ── Save existing address ─────────────────────────────────────────────
   const handleUpdate = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingId) return;
+    setEditError("");
+    if (editIsIndianPincode === false) {
+      setEditError("Enter a valid PIN code in India.");
+      return;
+    }
+    if (editPinLat === null || editPinLng === null) {
+      setEditError("Pin drop is required to continue.");
+      return;
+    }
     setEditSaving(true);
     const coords =
       typeof editPinLat === "number" && typeof editPinLng === "number"
@@ -295,11 +312,20 @@ export default function AddressesPage() {
   // ── Add new address ───────────────────────────────────────────────────
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
+    setAddError("");
+    if (isIndianPincode === false || isIndianPincode === null) {
+      setAddError("Enter a valid PIN code in India.");
+      return;
+    }
+    if (pinLat === null || pinLng === null) {
+      setAddError("Pin drop is required to continue.");
+      return;
+    }
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
     const coords =
-      showMap && typeof pinLat === "number" && typeof pinLng === "number"
+      typeof pinLat === "number" && typeof pinLng === "number"
         ? { lat: pinLat, lng: pinLng }
         : null;
     const cacheFields = await resolveDistanceCacheFields(coords?.lat ?? null, coords?.lng ?? null);
@@ -314,7 +340,7 @@ export default function AddressesPage() {
         state: formData.state,
         pincode: formData.pincode,
         is_default: addresses.length === 0,
-        ...(showMap && pinLat && pinLng ? { lat: pinLat, lng: pinLng } : {}),
+        ...(pinLat && pinLng ? { lat: pinLat, lng: pinLng } : {}),
         ...cacheFields,
       })
       .select("id, label, line1, line2, city, state, pincode, is_default, lat, lng, distance_km, delivery_fee")
@@ -327,8 +353,7 @@ export default function AddressesPage() {
     setSaving(false);
     setIsAdding(false);
     setFormData(BLANK_FORM);
-    setShowMap(false);
-    setPinLat(null); setPinLng(null); setMapCenter(undefined);
+    setPinLat(null); setPinLng(null); setIsIndianPincode(null);
   };
 
   // ── Remove & set default ──────────────────────────────────────────────
@@ -379,18 +404,18 @@ export default function AddressesPage() {
           <h3 className="font-display text-lg font-medium text-ink mb-4">Add a New Address</h3>
           <AddressFields
             form={formData} setForm={setFormData}
-            mapOpen={showMap} setMapOpen={setShowMap}
-            pLat={pinLat} setPLat={setPinLat}
-            pLng={pinLng} setPLng={setPinLng}
-            center={mapCenter}
+            pLat={pinLat} pLng={pinLng}
+            onCoordsChange={(lat, lng) => { setPinLat(lat); setPinLng(lng); }}
+            onPinValid={(valid) => setIsIndianPincode(valid)}
           />
+          {addError && <p className="font-body text-[12px] text-terracotta mb-3">{addError}</p>}
           <div className="flex gap-3">
             <button type="submit" disabled={saving}
               className="bg-sage hover:bg-sage-dark disabled:opacity-50 text-white font-body text-[13px] font-bold px-6 py-2.5 rounded-md transition-colors shadow-sm">
               {saving ? "Saving…" : "Save Address"}
             </button>
             <button type="button"
-              onClick={() => { setIsAdding(false); setShowMap(false); setPinLat(null); setPinLng(null); setMapCenter(undefined); setFormData(BLANK_FORM); }}
+              onClick={() => { setIsAdding(false); setPinLat(null); setPinLng(null); setIsIndianPincode(null); setFormData(BLANK_FORM); }}
               className="bg-white hover:bg-black/5 border border-black/10 text-ink font-body text-[13px] font-bold px-6 py-2.5 rounded-md transition-colors">
               Cancel
             </button>
@@ -416,11 +441,11 @@ export default function AddressesPage() {
                   <h3 className="font-display text-lg font-medium text-ink mb-4">Edit Address</h3>
                   <AddressFields
                     form={editForm} setForm={setEditForm}
-                    mapOpen={editShowMap} setMapOpen={setEditShowMap}
-                    pLat={editPinLat} setPLat={setEditPinLat}
-                    pLng={editPinLng} setPLng={setEditPinLng}
-                    center={editMapCenter}
+                    pLat={editPinLat} pLng={editPinLng}
+                    onCoordsChange={(lat, lng) => { setEditPinLat(lat); setEditPinLng(lng); }}
+                    onPinValid={(valid) => setEditIsIndianPincode(valid)}
                   />
+                  {editError && <p className="font-body text-[12px] text-terracotta mb-3">{editError}</p>}
                   <div className="flex gap-3">
                     <button type="submit" disabled={editSaving}
                       className="bg-sage hover:bg-sage-dark disabled:opacity-50 text-white font-body text-[13px] font-bold px-6 py-2.5 rounded-md transition-colors shadow-sm">
