@@ -358,7 +358,14 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <PaymentStatusBadge status={order.payment_status} reference={order.payment_reference} />
+                    <PaymentStatusSelect
+                      orderId={order.id}
+                      status={order.payment_status}
+                      reference={order.payment_reference}
+                      patchOrder={patchOrder}
+                      onOrderUpdated={onOrderUpdated}
+                      showToast={showToast}
+                    />
                   </td>
                   <td className="px-4 py-3">
                     <DeliveryStatusBadge status={order.status} />
@@ -636,23 +643,80 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
   );
 }
 
+const PAYMENT_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  pending:          { label: 'Pending',          className: 'bg-amber-50 text-amber-700' },
+  paid:             { label: 'Paid',             className: 'bg-sage/10 text-sage-dark' },
+  not_paid:         { label: 'Not Paid',         className: 'bg-stone/10 text-stone' },
+  failed:           { label: 'Failed',           className: 'bg-red-50 text-red-600' },
+  refunded:         { label: 'Refunded',         className: 'bg-sage/10 text-sage-dark' },
+  pending_refund:   { label: 'Refund Pending',   className: 'bg-amber-50 text-amber-700' },
+  refund_initiated: { label: 'Refund Initiated', className: 'bg-amber-50 text-amber-700' },
+  refund_complete:  { label: 'Refund Complete',  className: 'bg-sage/10 text-sage-dark' },
+};
+
 function PaymentStatusBadge({ status, reference }: { status: string; reference: string | null }) {
-  const config: Record<string, { label: string; className: string }> = {
-    pending: { label: 'Pending', className: 'bg-amber-50 text-amber-700' },
-    paid: { label: 'Paid', className: 'bg-sage/10 text-sage-dark' },
-    failed: { label: 'Failed', className: 'bg-red-50 text-red-600' },
-    refunded: { label: 'Refunded', className: 'bg-sage/10 text-sage-dark' },
-    pending_refund: { label: 'Refund Pending', className: 'bg-amber-50 text-amber-700' },
-    refund_initiated: { label: 'Refund Initiated', className: 'bg-amber-50 text-amber-700' },
-    refund_complete: { label: 'Refund Complete', className: 'bg-sage/10 text-sage-dark' },
-  };
-  const c = config[status] ?? { label: status, className: 'bg-stone/10 text-stone' };
+  const c = PAYMENT_STATUS_CONFIG[status] ?? { label: status, className: 'bg-stone/10 text-stone' };
 
   return (
     <div>
       <span className={`inline-flex items-center font-body text-[11px] font-bold px-2 py-0.5 rounded-full ${c.className}`}>
         {c.label}
       </span>
+      {reference && (
+        <p className="font-body text-[10px] text-stone mt-1">{reference}</p>
+      )}
+    </div>
+  );
+}
+
+function PaymentStatusSelect({
+  orderId,
+  status,
+  reference,
+  patchOrder,
+  onOrderUpdated,
+  showToast,
+}: {
+  orderId: string;
+  status: string;
+  reference: string | null;
+  patchOrder: (id: string, body: Record<string, unknown>) => Promise<unknown>;
+  onOrderUpdated: (updated: Partial<AdminOrder> & { id: string }) => void;
+  showToast: (msg: string) => void;
+}) {
+  const [localStatus, setLocalStatus] = useState(status);
+  const [saving, setSaving] = useState(false);
+
+  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const newStatus = e.target.value;
+    const prev = localStatus;
+    setLocalStatus(newStatus);
+    setSaving(true);
+    try {
+      await patchOrder(orderId, { payment_status: newStatus });
+      onOrderUpdated({ id: orderId, payment_status: newStatus });
+    } catch {
+      setLocalStatus(prev);
+      showToast('Failed to update payment status');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const config = PAYMENT_STATUS_CONFIG[localStatus] ?? { label: localStatus, className: 'bg-stone/10 text-stone' };
+
+  return (
+    <div>
+      <select
+        value={localStatus}
+        onChange={handleChange}
+        disabled={saving}
+        className={`font-body text-[11px] font-bold px-2 py-0.5 rounded-full cursor-pointer transition-opacity disabled:opacity-50 border-0 ${config.className}`}
+      >
+        {Object.entries(PAYMENT_STATUS_CONFIG).map(([val, cfg]) => (
+          <option key={val} value={val}>{cfg.label}</option>
+        ))}
+      </select>
       {reference && (
         <p className="font-body text-[10px] text-stone mt-1">{reference}</p>
       )}
