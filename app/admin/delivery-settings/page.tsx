@@ -71,7 +71,9 @@ export default function AdminDeliverySettingsPage() {
       const [dateIso] = key.split("|");
       if (dateIso !== blackoutFilterDate) continue;
       const row = blockedMap.get(key) ?? { key, label: formatSlotLabelFromKey(key), reasons: [] };
-      row.reasons = [...new Set([...row.reasons, "disabledSlot"])];
+      if (!row.reasons.includes("disabledSlot")) {
+        row.reasons.push("disabledSlot");
+      }
       blockedMap.set(key, row);
     }
 
@@ -89,7 +91,9 @@ export default function AdminDeliverySettingsPage() {
         const slotStartMs = new Date(`${blackoutFilterDate}T${String(hour).padStart(2, "0")}:00:00+05:30`).getTime();
         if (slotStartMs >= blackoutStartMs && slotStartMs < blackoutEndMs) {
           const row = blockedMap.get(slotKey) ?? { key: slotKey, label: formatSlotLabelFromKey(slotKey), reasons: [] };
-          row.reasons = [...new Set([...row.reasons, "blackoutWindow"])];
+          if (!row.reasons.includes("blackoutWindow")) {
+            row.reasons.push("blackoutWindow");
+          }
           blockedMap.set(slotKey, row);
         }
       }
