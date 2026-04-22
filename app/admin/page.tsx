@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import AdminTopNav from './components/AdminTopNav';
 import OrdersTable, { type AdminOrder } from './components/OrdersTable';
 
 export default function AdminTodayPage() {
@@ -41,12 +42,7 @@ export default function AdminTodayPage() {
           <h1 className="font-display text-2xl text-ink">Today's Deliveries</h1>
           <p className="font-body text-[13px] text-stone mt-0.5">{today}</p>
         </div>
-        <button
-          onClick={fetchOrders}
-          className="font-body text-[12px] font-bold uppercase tracking-wider text-stone hover:text-ink border border-black/10 rounded-lg px-3 py-2 hover:bg-black/5 transition-colors"
-        >
-          Refresh
-        </button>
+        <AdminTopNav current="deliveries" onRefresh={fetchOrders} />
       </div>
 
       {/* Stats */}

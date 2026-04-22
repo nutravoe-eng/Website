@@ -15,49 +15,14 @@ import { getWhatsAppNumber } from "@/lib/contact";
 import { isPaidFlexibleWalletEligible } from "@/lib/flexible-subscription";
 import DeliveryMarquee from "@/components/DeliveryMarquee";
 import { GUEST_DELIVERY_CONTEXT_EVENT, readGuestDeliveryContext } from "@/lib/guest-delivery";
-
-// Delivery slot generation rules:
-// - Midnight to 7:59 AM  → floor: earliest same-day = 10:00 AM
-// - 8:00 AM to 8:59 AM   → earliest same-day = 11:00 AM (kitchen not yet running full prep)
-// - 9:00 AM onwards      → 2-hour prep buffer from current time
-// - Same-day closes at 7 PM
-// - After 11 PM          → tomorrow morning (7–9 AM) slots are hidden; earliest tomorrow = 10 AM
-const getDeliverySlots = () => {
-  const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const currentHour = nowIST.getHours();
-  const slots: string[] = [];
-
-  // --- 1. SAME-DAY SLOTS ---
-  if (currentHour < 19) { // same-day closes at 7 PM
-    let todayStartHour: number;
-    if (currentHour < 8) {
-      todayStartHour = 10;       // midnight–7:59 AM: floor at 10 AM
-    } else if (currentHour < 9) {
-      todayStartHour = 11;       // 8:00–8:59 AM: kitchen not at full prep yet
-    } else {
-      todayStartHour = currentHour + 2; // 9 AM+: 2-hour buffer
-    }
-
-    for (let i = Math.max(10, todayStartHour); i < 21; i++) {
-      const start = i > 12 ? `${i - 12}:00 PM` : i === 12 ? '12:00 PM' : `${String(i).padStart(2, '0')}:00 AM`;
-      const e = i + 1;
-      const end = e > 12 ? `${e - 12}:00 PM` : e === 12 ? '12:00 PM' : `${String(e).padStart(2, '0')}:00 AM`;
-      slots.push(`Today, ${start} - ${end}`);
-    }
-  }
-
-  // --- 2. TOMORROW SLOTS ---
-  // After 11 PM, 7–9 AM tomorrow slots are hidden (too late to notify kitchen for early morning).
-  const tomorrowStartHour = currentHour >= 23 ? 10 : 7;
-  for (let i = tomorrowStartHour; i < 21; i++) {
-    const start = i > 12 ? `${i - 12}:00 PM` : i === 12 ? '12:00 PM' : `${String(i).padStart(2, '0')}:00 AM`;
-    const e = i + 1;
-    const end = e > 12 ? `${e - 12}:00 PM` : e === 12 ? '12:00 PM' : `${String(e).padStart(2, '0')}:00 AM`;
-    slots.push(`Tomorrow, ${start} - ${end}`);
-  }
-
-  return slots;
-};
+import {
+  DEFAULT_DELIVERY_POLICY,
+  type DeliveryMode,
+  type DeliveryPolicy,
+  generateScheduledSlots,
+  getAsapSlot,
+  getNowIst,
+} from "@/lib/delivery-policy";
 
 
 interface StoredUser {
@@ -88,6 +53,8 @@ export default function CartPage() {
   const [user, setUser] = useState<StoredUser | null>(null);
 
   // Delivery Slots State
+  const [deliveryPolicy, setDeliveryPolicy] = useState<DeliveryPolicy>(DEFAULT_DELIVERY_POLICY);
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("scheduled");
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [showSlotPicker, setShowSlotPicker] = useState(false);
   const slotDialogRef = useRef<HTMLDivElement>(null);
@@ -95,7 +62,9 @@ export default function CartPage() {
   const [showAddressPicker, setShowAddressPicker] = useState(false);
   const addressDialogRef = useRef<HTMLDivElement>(null);
   useDialogAccessibility(addressDialogRef, () => setShowAddressPicker(false));
-  const deliverySlots = getDeliverySlots();
+  const nowIst = getNowIst();
+  const asapSlot = getAsapSlot(deliveryPolicy, nowIst);
+  const deliverySlots = generateScheduledSlots(deliveryPolicy, nowIst).map((slot) => slot.label);
 
   // Subscriber discount
   const [subscriberPricePerBowl, setSubscriberPricePerBowl] = useState<number | null>(null);
@@ -161,6 +130,20 @@ export default function CartPage() {
 
   useEffect(() => {
     const hydrateDeliveryFee = async () => {
+      const policyRes = await fetch("/api/delivery-policy", { cache: "no-store" }).catch(() => null);
+      if (policyRes?.ok) {
+        const policyData = await policyRes.json().catch(() => null);
+        const nextPolicy = (policyData?.policy ?? DEFAULT_DELIVERY_POLICY) as DeliveryPolicy;
+        setDeliveryPolicy(nextPolicy);
+        const asapAvailable = Boolean(policyData?.availability?.asapAvailable);
+        if (asapAvailable) {
+          setDeliveryMode("asap");
+          setSelectedSlot("");
+        } else {
+          setDeliveryMode("scheduled");
+        }
+      }
+
       const supabase = createClient();
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
@@ -287,6 +270,7 @@ export default function CartPage() {
   const effectiveTotal = total - subscriberDiscount;
   const grandTotal = effectiveTotal + deliveryFee;
   const canPayFromWallet = hasActivePaidSub && !deliveryFeeLoading && walletBalanceRs >= grandTotal;
+  const activeDeliverySlot = deliveryMode === "asap" ? (asapSlot?.label ?? "") : selectedSlot;
 
   // Record order in Supabase — returns short order ref on success
   const recordOrder = async (): Promise<string | null> => {
@@ -294,11 +278,13 @@ export default function CartPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        selectedSlot,
+        deliveryMode,
+        selectedSlot: deliveryMode === "scheduled" ? selectedSlot : undefined,
         items: items.map((item) => ({
           bowlSlug: item.bowl.slug,
           quantity: item.quantity,
           customizations: item.customizations,
+          presetOptions: item.presetOptions,
         })),
       }),
     });
@@ -315,7 +301,8 @@ export default function CartPage() {
       return;
     }
     if (items.length === 0) { setError("Your cart is empty. Add some bowls first."); return; }
-    if (!selectedSlot) { setError("Please select a delivery slot before placing an order."); return; }
+    if (deliveryMode === "scheduled" && !selectedSlot) { setError("Please select a delivery slot before placing an order."); return; }
+    if (deliveryMode === "asap" && !asapSlot) { setError("Delivery in 60 min is not available right now."); return; }
     if (!user) { router.push("/signin?next=/cart"); return; }
     if (!selectedAddress) { setError("Please select a delivery address before placing an order."); return; }
 
@@ -327,11 +314,13 @@ export default function CartPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          selectedSlot,
+          deliveryMode,
+          selectedSlot: deliveryMode === "scheduled" ? selectedSlot : undefined,
           items: items.map((item) => ({
             bowlSlug: item.bowl.slug,
             quantity: item.quantity,
             customizations: item.customizations,
+            presetOptions: item.presetOptions,
           })),
         }),
       });
@@ -360,8 +349,12 @@ export default function CartPage() {
       setError("Your cart is empty. Add some bowls first.");
       return;
     }
-    if (!selectedSlot) {
+    if (deliveryMode === "scheduled" && !selectedSlot) {
       setError("Please select a delivery slot before placing an order.");
+      return;
+    }
+    if (deliveryMode === "asap" && !asapSlot) {
+      setError("Delivery in 60 min is not available right now.");
       return;
     }
 
@@ -465,6 +458,9 @@ export default function CartPage() {
           quantity: item.quantity,
           basePrice: subscriberPricePerBowl ?? item.bowl.price,
           customizationCost: item.customizationCost,
+          baseChoice: item.presetOptions.baseChoice,
+          oatsChoice: item.presetOptions.oatsChoice,
+          noSugar: item.presetOptions.noSugar,
           removedIngredients,
           extraIngredients,
         };
@@ -477,7 +473,7 @@ export default function CartPage() {
         customerPhone: user.phone,
         customerEmail: user.email,
         deliveryAddress,
-        deliverySlot: selectedSlot,
+        deliverySlot: activeDeliverySlot,
         items: detailedItems,
         subtotal: total,
         subscriberDiscount,
@@ -563,6 +559,14 @@ export default function CartPage() {
                           {/* Customization summary */}
                           {(removed.length > 0 || extras.length > 0) && (
                             <div className="mt-1.5 space-y-0.5">
+                              <p className="font-body text-[11px] text-stone">
+                                Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} · Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                              </p>
+                              {item.presetOptions.noSugar && (
+                                <p className="font-body text-[11px] text-terracotta">
+                                  No sugar: exclude banana, honey, dates
+                                </p>
+                              )}
                               {removed.map(c => {
                                 const ing = item.bowl.customizableIngredients?.find(i => i.id === c.ingredientId);
                                 if (!ing) return null;
@@ -581,6 +585,18 @@ export default function CartPage() {
                                   </p>
                                 );
                               })}
+                            </div>
+                          )}
+                          {removed.length === 0 && extras.length === 0 && (
+                            <div className="mt-1.5 space-y-0.5">
+                              <p className="font-body text-[11px] text-stone">
+                                Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} · Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                              </p>
+                              {item.presetOptions.noSugar && (
+                                <p className="font-body text-[11px] text-terracotta">
+                                  No sugar: exclude banana, honey, dates
+                                </p>
+                              )}
                             </div>
                           )}
                           {item.bowl.inStock === false && (
@@ -707,20 +723,70 @@ export default function CartPage() {
                   </div>
                 </div>
 
+                <div className="mb-6 space-y-3">
+                  <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone">
+                    Delivery Mode
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!asapSlot) return;
+                        setDeliveryMode("asap");
+                        setError("");
+                      }}
+                      disabled={!asapSlot}
+                      className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                        deliveryMode === "asap"
+                          ? "border-sage bg-sage/10"
+                          : "border-black/10 bg-[#F9F8F6]"
+                      } disabled:opacity-40 disabled:cursor-not-allowed`}
+                    >
+                      <p className="font-body text-[13px] font-bold text-ink">Delivery in 60 min</p>
+                      <p className="font-body text-[11px] text-stone">
+                        {asapSlot ? `Next slot: ${asapSlot.label}` : "Available 9:00 AM-7:00 PM only"}
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeliveryMode("scheduled");
+                        setError("");
+                      }}
+                      className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                        deliveryMode === "scheduled"
+                          ? "border-sage bg-sage/10"
+                          : "border-black/10 bg-[#F9F8F6]"
+                      }`}
+                    >
+                      <p className="font-body text-[13px] font-bold text-ink">Schedule for later</p>
+                      <p className="font-body text-[11px] text-stone">Pick any available slot</p>
+                    </button>
+                  </div>
+                </div>
+
                 <div className="mb-6">
                   <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
-                    Select Delivery Slot
+                    {deliveryMode === "asap" ? "Selected Delivery Slot" : "Select Delivery Slot"}
                   </label>
-                  <button
-                    aria-label={selectedSlot ? `Selected delivery slot ${selectedSlot}` : "Choose an available delivery slot"}
-                    onClick={() => { setShowSlotPicker(true); setError(""); }}
-                    className="w-full flex items-center justify-between border border-black/10 rounded-lg px-4 py-3.5 bg-[#F9F8F6] hover:bg-sage/5 hover:border-sage/30 transition-colors text-left group cursor-pointer shadow-sm"
-                  >
-                    <span className={`font-body text-[13px] ${selectedSlot ? 'text-ink font-bold tracking-wide' : 'text-stone font-medium'}`}>
-                      {selectedSlot || "Choose an available time slot"}
-                    </span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone group-hover:text-sage transition-colors"><path d="m6 9 6 6 6-6"/></svg>
-                  </button>
+                  {deliveryMode === "asap" ? (
+                    <div className="w-full border border-black/10 rounded-lg px-4 py-3.5 bg-[#F9F8F6]">
+                      <span className="font-body text-[13px] text-ink font-bold tracking-wide">
+                        {asapSlot?.label ?? "Delivery in 60 min unavailable right now"}
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      aria-label={selectedSlot ? `Selected delivery slot ${selectedSlot}` : "Choose an available delivery slot"}
+                      onClick={() => { setShowSlotPicker(true); setError(""); }}
+                      className="w-full flex items-center justify-between border border-black/10 rounded-lg px-4 py-3.5 bg-[#F9F8F6] hover:bg-sage/5 hover:border-sage/30 transition-colors text-left group cursor-pointer shadow-sm"
+                    >
+                      <span className={`font-body text-[13px] ${selectedSlot ? 'text-ink font-bold tracking-wide' : 'text-stone font-medium'}`}>
+                        {selectedSlot || "Choose an available time slot"}
+                      </span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone group-hover:text-sage transition-colors"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                  )}
                 </div>
 
                 {hasOutOfStockItems && (
@@ -919,7 +985,7 @@ export default function CartPage() {
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
                 </span>
                 <p className="font-body text-[12px] text-amber-800 leading-relaxed">
-                  <strong>7:00–10:00 AM deliveries</strong> require ordering by <strong>11:00 PM</strong> the night before. Same-day delivery is available with <strong>2 hours&apos; notice</strong> after 9:00 AM.
+                  <strong>7:00–10:00 AM deliveries</strong> require ordering by <strong>11:00 PM</strong> the night before. Same-day orders close at <strong>7:00 PM</strong>, and the last delivery slot is <strong>7:00–8:00 PM</strong>.
                 </p>
               </div>
               <div className="flex flex-col gap-3">

@@ -22,7 +22,7 @@ export default function MenuClient({ bowls }: { bowls: Bowl[] }) {
   return (
     <>
       {/* Header */}
-      <section className="pt-24 pb-16 px-6 lg:px-16 border-b border-ink/8">
+      <section className="pt-20 pb-12 px-6 lg:px-16 border-b border-ink/8">
         <div className="max-w-7xl mx-auto">
           <p className="section-eyebrow mb-4">The Menu</p>
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
@@ -31,10 +31,10 @@ export default function MenuClient({ bowls }: { bowls: Bowl[] }) {
               style={{ fontSize: "clamp(48px, 5vw, 72px)" }}
             >
               Our menu.<br />
-              <em className="text-sage">Nothing here by accident.</em>
+              <em className="text-sage">Curated with intention.</em>
             </h1>
             <p className="font-body text-sm text-stone max-w-xs leading-relaxed">
-              Made fresh daily. No added sugar. Probiotic yogurt base.
+              Made fresh daily. No added sugar. Yogurt or milk base.
               Best consumed within 24 hours.
             </p>
           </div>
@@ -128,7 +128,7 @@ export default function MenuClient({ bowls }: { bowls: Bowl[] }) {
             </table>
           </div>
           <p className="font-body text-xs tracking-[0.2em] uppercase text-stone/60 text-center mt-8">
-            No added sugar · Probiotic yoghurt base · Made fresh daily
+            No added sugar · Yogurt or milk base · Made fresh daily
           </p>
         </div>
       </section>

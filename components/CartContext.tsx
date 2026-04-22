@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
-import { Bowl, CartItem, IngredientCustomization } from "@/types";
+import { Bowl, BowlPresetOptions, CartItem, IngredientCustomization } from "@/types";
 
 const CART_STORAGE_KEY = "nutravoe_cart";
 
@@ -9,7 +9,16 @@ function loadCartFromStorage(): CartItem[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(CART_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as CartItem[]) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as CartItem[];
+    return parsed.map((item) => ({
+      ...item,
+      presetOptions: {
+        baseChoice: item.presetOptions?.baseChoice ?? "yogurt",
+        oatsChoice: item.presetOptions?.oatsChoice ?? "roasted",
+        noSugar: item.presetOptions?.noSugar ?? false,
+      },
+    }));
   } catch {
     return [];
   }
@@ -25,16 +34,31 @@ function saveCartToStorage(items: CartItem[]) {
 
 interface CartContextValue {
   items: CartItem[];
-  addItem: (bowl: Bowl, customizations?: IngredientCustomization[], customizationCost?: number) => void;
+  addItem: (
+    bowl: Bowl,
+    customizations?: IngredientCustomization[],
+    presetOptions?: BowlPresetOptions,
+    customizationCost?: number
+  ) => void;
   removeItem: (instanceId: string) => void;
   updateQuantity: (instanceId: string, quantity: number) => void;
-  updateCustomizations: (instanceId: string, customizations: IngredientCustomization[], customizationCost: number) => void;
+  updateCustomizations: (
+    instanceId: string,
+    customizations: IngredientCustomization[],
+    presetOptions: BowlPresetOptions,
+    customizationCost: number
+  ) => void;
   clearCart: () => void;
   total: number;
   itemCount: number;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
+const DEFAULT_PRESET_OPTIONS: BowlPresetOptions = {
+  baseChoice: "yogurt",
+  oatsChoice: "roasted",
+  noSugar: false,
+};
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -51,10 +75,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [items]);
 
   const addItem = useCallback(
-    (bowl: Bowl, customizations?: IngredientCustomization[], customizationCost?: number) => {
+    (
+      bowl: Bowl,
+      customizations?: IngredientCustomization[],
+      presetOptions?: BowlPresetOptions,
+      customizationCost?: number
+    ) => {
       setItems((prev) => {
         const sortedCustomizations = [...(customizations || [])].sort((a,b) => a.ingredientId.localeCompare(b.ingredientId));
-        const instanceId = `${bowl._id}-${sortedCustomizations.map(c => c.ingredientId + c.option).join('-')}`;
+        const resolvedPresetOptions = { ...DEFAULT_PRESET_OPTIONS, ...(presetOptions ?? {}) };
+        const instanceId = `${bowl._id}-${sortedCustomizations.map(c => c.ingredientId + c.option).join('-')}-${resolvedPresetOptions.baseChoice}-${resolvedPresetOptions.oatsChoice}-${resolvedPresetOptions.noSugar ? "nosugar" : "natural"}`;
         
         const existing = prev.find((i) => i.instanceId === instanceId);
         if (existing) {
@@ -70,6 +100,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             bowl,
             quantity: 1,
             customizations: customizations ?? [],
+            presetOptions: resolvedPresetOptions,
             customizationCost: customizationCost ?? 0,
           },
         ];
@@ -93,10 +124,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateCustomizations = useCallback(
-    (instanceId: string, customizations: IngredientCustomization[], customizationCost: number) => {
+    (
+      instanceId: string,
+      customizations: IngredientCustomization[],
+      presetOptions: BowlPresetOptions,
+      customizationCost: number
+    ) => {
       setItems((prev) =>
         prev.map((i) =>
-          i.instanceId === instanceId ? { ...i, customizations, customizationCost } : i
+          i.instanceId === instanceId
+            ? { ...i, customizations, presetOptions, customizationCost }
+            : i
         )
       );
     },

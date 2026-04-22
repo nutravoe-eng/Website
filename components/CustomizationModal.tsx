@@ -1,17 +1,34 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { Bowl, BowlIngredient, IngredientCustomization, IngredientOption } from "@/types";
+import type {
+  Bowl,
+  BowlIngredient,
+  BowlPresetOptions,
+  IngredientCustomization,
+  IngredientOption,
+} from "@/types";
 import { formatCurrency } from "@/lib/utils";
 import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
 
 interface Props {
   bowl: Bowl;
   initialCustomizations?: IngredientCustomization[];
+  initialPresetOptions?: BowlPresetOptions;
   mode: "cart" | "subscription";
-  onConfirm: (customizations: IngredientCustomization[], extraCost: number) => void;
+  onConfirm: (
+    customizations: IngredientCustomization[],
+    presetOptions: BowlPresetOptions,
+    extraCost: number
+  ) => void;
   onClose: () => void;
 }
+
+const DEFAULT_PRESET_OPTIONS: BowlPresetOptions = {
+  baseChoice: "yogurt",
+  oatsChoice: "roasted",
+  noSugar: false,
+};
 
 function buildInitialMap(
   ingredients: BowlIngredient[],
@@ -40,13 +57,23 @@ function calcCost(
   return total;
 }
 
-export default function CustomizationModal({ bowl, initialCustomizations, mode, onConfirm, onClose }: Props) {
+export default function CustomizationModal({
+  bowl,
+  initialCustomizations,
+  initialPresetOptions,
+  mode,
+  onConfirm,
+  onClose,
+}: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const ingredients = (bowl.customizableIngredients ?? []).filter(i => !i.isBase);
   useDialogAccessibility(dialogRef, onClose);
 
   const [optionMap, setOptionMap] = useState<Record<string, IngredientOption>>(
     () => buildInitialMap(ingredients, initialCustomizations)
+  );
+  const [presetOptions, setPresetOptions] = useState<BowlPresetOptions>(
+    () => ({ ...DEFAULT_PRESET_OPTIONS, ...(initialPresetOptions ?? {}) })
   );
 
   function setOption(ingredientId: string, option: IngredientOption) {
@@ -60,7 +87,7 @@ export default function CustomizationModal({ bowl, initialCustomizations, mode, 
       ingredientId: ing.id,
       option: optionMap[ing.id] ?? "default",
     }));
-    onConfirm(customizations, extraCost);
+    onConfirm(customizations, presetOptions, extraCost);
   }
 
   const ctaLabel = mode === "cart" ? "Add to Cart" : "Save Customisation";
@@ -96,69 +123,148 @@ export default function CustomizationModal({ bowl, initialCustomizations, mode, 
           </button>
         </div>
 
-        {/* Yogurt base note */}
-        <div className="px-6 pt-4 shrink-0">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sage/10 border border-sage/20">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#7D9B76" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            <span className="font-body text-[11px] font-semibold text-sage-dark">Yogurt base always included</span>
-          </span>
-        </div>
+        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+          <div className="space-y-3">
+            <div>
+              <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
+                Base
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPresetOptions(prev => ({ ...prev, baseChoice: "yogurt" }))}
+                  className={`px-3 py-2 rounded-lg text-[12px] font-body font-semibold border transition-colors ${
+                    presetOptions.baseChoice === "yogurt"
+                      ? "bg-sage/10 border-sage/30 text-sage-dark"
+                      : "bg-white border-black/10 text-stone hover:bg-black/5"
+                  }`}
+                >
+                  Protein yogurt base
+                </button>
+                <button
+                  onClick={() => setPresetOptions(prev => ({ ...prev, baseChoice: "milk" }))}
+                  className={`px-3 py-2 rounded-lg text-[12px] font-body font-semibold border transition-colors ${
+                    presetOptions.baseChoice === "milk"
+                      ? "bg-sage/10 border-sage/30 text-sage-dark"
+                      : "bg-white border-black/10 text-stone hover:bg-black/5"
+                  }`}
+                >
+                  Protein milk base
+                </button>
+              </div>
+            </div>
 
-        {/* Ingredient list */}
-        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-3">
-          {ingredients.length === 0 ? (
-            <p className="font-body text-[13px] text-stone text-center py-6 italic">
-              Standard recipe — no customisations available
-            </p>
-          ) : (
-            ingredients.map((ing) => {
-              const current = optionMap[ing.id] ?? "default";
-              return (
-                <div key={ing.id} className="flex items-center justify-between gap-3">
-                  <span className="font-body text-[13px] font-medium text-ink flex-1 min-w-0 truncate">
-                    {ing.name}
-                  </span>
-                  <div className="flex items-center border border-black/10 rounded-lg overflow-hidden shrink-0">
-                    {/* Remove */}
-                    <button
-                      onClick={() => setOption(ing.id, "remove")}
-                      className={`text-[11px] font-body font-bold px-2.5 py-1.5 border-r border-black/10 transition-colors ${
-                        current === "remove"
-                          ? "bg-terracotta/10 border-r-terracotta/20 text-terracotta"
-                          : "bg-white text-stone hover:bg-black/5"
-                      }`}
-                    >
-                      Remove
-                    </button>
-                    {/* Default */}
-                    <button
-                      onClick={() => setOption(ing.id, "default")}
-                      className={`text-[11px] font-body font-bold px-2.5 py-1.5 border-r border-black/10 transition-colors ${
-                        current === "default"
-                          ? "bg-sage/10 border-r-sage/20 text-sage-dark"
-                          : "bg-white text-stone hover:bg-black/5"
-                      }`}
-                    >
-                      Default
-                    </button>
-                    {/* Extra */}
-                    <button
-                      onClick={() => setOption(ing.id, "extra")}
-                      className={`text-[11px] font-body font-bold px-2.5 py-1.5 transition-colors ${
-                        current === "extra"
-                          ? "bg-ink text-white"
-                          : "bg-white text-stone hover:bg-black/5"
-                      }`}
-                    >
-                      Extra +{formatCurrency(ing.extraCost)}
-                    </button>
-                  </div>
+            <div>
+              <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
+                Oats
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPresetOptions(prev => ({ ...prev, oatsChoice: "soaked" }))}
+                  className={`px-3 py-2 rounded-lg text-[12px] font-body font-semibold border transition-colors ${
+                    presetOptions.oatsChoice === "soaked"
+                      ? "bg-sage/10 border-sage/30 text-sage-dark"
+                      : "bg-white border-black/10 text-stone hover:bg-black/5"
+                  }`}
+                >
+                  Soaked oats
+                </button>
+                <button
+                  onClick={() => setPresetOptions(prev => ({ ...prev, oatsChoice: "roasted" }))}
+                  className={`px-3 py-2 rounded-lg text-[12px] font-body font-semibold border transition-colors ${
+                    presetOptions.oatsChoice === "roasted"
+                      ? "bg-sage/10 border-sage/30 text-sage-dark"
+                      : "bg-white border-black/10 text-stone hover:bg-black/5"
+                  }`}
+                >
+                  Roasted oats
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-black/10 p-3 bg-[#F9F8F6]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-body text-[12px] font-semibold text-ink">No sugar</p>
+                  <p className="font-body text-[11px] text-stone mt-0.5">
+                    Default is natural sweetness (banana, honey, dates).
+                  </p>
                 </div>
-              );
-            })
-          )}
+                <button
+                  onClick={() => setPresetOptions(prev => ({ ...prev, noSugar: !prev.noSugar }))}
+                  className={`w-11 h-6 rounded-full p-0.5 transition-colors ${
+                    presetOptions.noSugar ? "bg-sage" : "bg-black/15"
+                  }`}
+                  aria-pressed={presetOptions.noSugar}
+                  aria-label="Toggle no sugar"
+                >
+                  <span
+                    className={`block w-5 h-5 rounded-full bg-white transition-transform ${
+                      presetOptions.noSugar ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+              {presetOptions.noSugar && (
+                <p className="font-body text-[11px] text-terracotta mt-2">
+                  No sugar means banana, honey, and dates will not be added.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="border-t border-black/5 pt-4 space-y-3">
+            {ingredients.length === 0 ? (
+              <p className="font-body text-[13px] text-stone text-center py-6 italic">
+                Standard recipe — no customisations available
+              </p>
+            ) : (
+              ingredients.map((ing) => {
+                const current = optionMap[ing.id] ?? "default";
+                return (
+                  <div key={ing.id} className="flex items-center justify-between gap-3">
+                    <span className="font-body text-[13px] font-medium text-ink flex-1 min-w-0 truncate">
+                      {ing.name}
+                    </span>
+                    <div className="flex items-center border border-black/10 rounded-lg overflow-hidden shrink-0">
+                      {/* Remove */}
+                      <button
+                        onClick={() => setOption(ing.id, "remove")}
+                        className={`text-[11px] font-body font-bold px-2.5 py-1.5 border-r border-black/10 transition-colors ${
+                          current === "remove"
+                            ? "bg-terracotta/10 border-r-terracotta/20 text-terracotta"
+                            : "bg-white text-stone hover:bg-black/5"
+                        }`}
+                      >
+                        Remove
+                      </button>
+                      {/* Default */}
+                      <button
+                        onClick={() => setOption(ing.id, "default")}
+                        className={`text-[11px] font-body font-bold px-2.5 py-1.5 border-r border-black/10 transition-colors ${
+                          current === "default"
+                            ? "bg-sage/10 border-r-sage/20 text-sage-dark"
+                            : "bg-white text-stone hover:bg-black/5"
+                        }`}
+                      >
+                        Default
+                      </button>
+                      {/* Extra */}
+                      <button
+                        onClick={() => setOption(ing.id, "extra")}
+                        className={`text-[11px] font-body font-bold px-2.5 py-1.5 transition-colors ${
+                          current === "extra"
+                            ? "bg-ink text-white"
+                            : "bg-white text-stone hover:bg-black/5"
+                        }`}
+                      >
+                        Extra +{formatCurrency(ing.extraCost)}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
         {/* Footer */}

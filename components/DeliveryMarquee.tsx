@@ -4,8 +4,8 @@
 
 const ITEMS = [
   { icon: "🌅", text: "Want delivery between 7–10 AM? Place your order before 11 PM the night before" },
-  { icon: "⚡", text: "Order after 9 AM and get same-day delivery — we only need 2 hours" },
-  { icon: "🚚", text: "We deliver across Bangalore daily, any time between 7 AM and 9 PM" },
+  { icon: "⚡", text: "Delivery in 60 min is available from 9 AM to 7 PM" },
+  { icon: "🚚", text: "We deliver across Bangalore daily, any time between 7 AM and 8 PM" },
 ];
 
 interface DeliveryMarqueeProps {

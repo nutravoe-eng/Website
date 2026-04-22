@@ -9,7 +9,7 @@ import {
 import { geocodeIndianPincode } from "@/lib/ola-maps";
 import { resolveDeliveryDistanceKm } from "@/lib/road-distance";
 import { getAllBowls, getSubscriptionPlans } from "@/lib/sanity";
-import type { Bowl, IngredientCustomization, SubscriptionPlan } from "@/types";
+import type { Bowl, BowlPresetOptions, IngredientCustomization, SubscriptionPlan } from "@/types";
 
 export interface AddressForPricing {
   id?: string | null;
@@ -27,6 +27,7 @@ export interface CheckoutItemInput {
   bowlSlug: string;
   quantity: number;
   customizations?: IngredientCustomization[];
+  presetOptions?: BowlPresetOptions;
 }
 
 export interface CheckoutLineItem {
@@ -35,7 +36,14 @@ export interface CheckoutLineItem {
   quantity: number;
   unit_price: number;
   total_price: number;
-  customizations: { removed?: string[]; added?: string[] } | null;
+  customizations: {
+    removed?: string[];
+    added?: string[];
+    baseChoice?: "yogurt" | "milk";
+    oatsChoice?: "soaked" | "roasted";
+    noSugar?: boolean;
+    noSugarNote?: string;
+  } | null;
 }
 
 async function resolveAddressCoordinates(address: AddressForPricing): Promise<{ lat: number; lng: number } | null> {
@@ -88,7 +96,15 @@ export async function getAddressDeliveryBreakdown(
 function summarizeCustomizations(
   bowl: Bowl,
   customizations: IngredientCustomization[] | undefined,
-): { removed?: string[]; added?: string[] } | null {
+  presetOptions?: BowlPresetOptions,
+): {
+  removed?: string[];
+  added?: string[];
+  baseChoice?: "yogurt" | "milk";
+  oatsChoice?: "soaked" | "roasted";
+  noSugar?: boolean;
+  noSugarNote?: string;
+} | null {
   const list = customizations ?? [];
   const removed = list
     .filter((item) => item.option === "remove")
@@ -99,10 +115,17 @@ function summarizeCustomizations(
     .map((item) => bowl.customizableIngredients?.find((ingredient) => ingredient.id === item.ingredientId)?.name)
     .filter((value): value is string => Boolean(value));
 
-  if (!removed.length && !added.length) return null;
+  const hasPresetOptions = Boolean(presetOptions);
+  if (!removed.length && !added.length && !hasPresetOptions) return null;
   return {
     ...(removed.length ? { removed } : {}),
     ...(added.length ? { added } : {}),
+    ...(presetOptions ? { baseChoice: presetOptions.baseChoice } : {}),
+    ...(presetOptions ? { oatsChoice: presetOptions.oatsChoice } : {}),
+    ...(presetOptions ? { noSugar: presetOptions.noSugar } : {}),
+    ...(presetOptions?.noSugar
+      ? { noSugarNote: "Exclude banana, honey, dates" }
+      : {}),
   };
 }
 
@@ -166,7 +189,7 @@ export async function buildAuthoritativeOrder(
       quantity,
       unit_price: baseUnitPrice,                                    // base price only
       total_price: (baseUnitPrice + customizationUpcharge) * quantity, // includes customization
-      customizations: summarizeCustomizations(bowl, item.customizations),
+      customizations: summarizeCustomizations(bowl, item.customizations, item.presetOptions),
     };
   });
 

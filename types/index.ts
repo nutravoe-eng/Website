@@ -12,6 +12,12 @@ export interface IngredientCustomization {
   option: IngredientOption;
 }
 
+export interface BowlPresetOptions {
+  baseChoice: "yogurt" | "milk";
+  oatsChoice: "soaked" | "roasted";
+  noSugar: boolean;
+}
+
 export interface Bowl {
   _id: string;
   name: string;
@@ -72,6 +78,7 @@ export interface CartItem {
   bowl: Bowl;
   quantity: number;
   customizations: IngredientCustomization[];
+  presetOptions: BowlPresetOptions;
   customizationCost: number;
 }
 
@@ -124,6 +131,7 @@ export interface DayBowlConfig {
   bowlName: string;
   quantity: number;
   customizations?: IngredientCustomization[];
+  presetOptions?: BowlPresetOptions;
   customizationCost?: number;
   deliveryTimeSlot?: string;
 }

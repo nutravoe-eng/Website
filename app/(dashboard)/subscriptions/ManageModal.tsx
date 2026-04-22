@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import type { Bowl, Subscription, IngredientCustomization } from '@/types';
+import type { Bowl, BowlPresetOptions, Subscription, IngredientCustomization } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { STUB_PLANS as PLANS } from '../../subscribe/PlanCard';
 import BowlPicker from '../../subscribe/BowlPicker';
@@ -20,8 +20,15 @@ interface EditState {
   selectedDays: string[];
   dayBowlMap: Record<string, string>;
   dayCustomMap: Record<string, IngredientCustomization[]>;
+  dayPresetMap: Record<string, BowlPresetOptions>;
   dayCustomCostMap: Record<string, number>;
 }
+
+const DEFAULT_PRESET_OPTIONS: BowlPresetOptions = {
+  baseChoice: "yogurt",
+  oatsChoice: "roasted",
+  noSugar: false,
+};
 
 interface Props {
   sub: Subscription;
@@ -44,6 +51,9 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
       : {},
     dayCustomMap: sub.deliveryStyle === 'spread'
       ? Object.fromEntries(sub.dayConfigs.map(d => [d.day, d.customizations ?? []]))
+      : {},
+    dayPresetMap: sub.deliveryStyle === 'spread'
+      ? Object.fromEntries(sub.dayConfigs.map(d => [d.day, d.presetOptions ?? DEFAULT_PRESET_OPTIONS]))
       : {},
     dayCustomCostMap: sub.deliveryStyle === 'spread'
       ? Object.fromEntries(sub.dayConfigs.map(d => [d.day, d.customizationCost ?? 0]))
@@ -96,6 +106,7 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
             bowlName: bowls.find(b => b._id === edit.dayBowlMap[day])?.name ?? '',
             quantity: 1,
             customizations: edit.dayCustomMap[day] ?? [],
+            presetOptions: edit.dayPresetMap[day] ?? DEFAULT_PRESET_OPTIONS,
             customizationCost: edit.dayCustomCostMap[day] ?? 0,
           }))
         : [],
@@ -221,6 +232,11 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
                 <div className="space-y-3">
                   {DAYS.filter(d => edit.selectedDays.includes(d)).map(day => {
                     const hasCust = (edit.dayCustomMap[day] ?? []).some(c => c.option !== 'default');
+                    const dayPreset = edit.dayPresetMap[day] ?? DEFAULT_PRESET_OPTIONS;
+                    const hasPresetChange =
+                      dayPreset.baseChoice !== DEFAULT_PRESET_OPTIONS.baseChoice ||
+                      dayPreset.oatsChoice !== DEFAULT_PRESET_OPTIONS.oatsChoice ||
+                      dayPreset.noSugar !== DEFAULT_PRESET_OPTIONS.noSugar;
                     const selectedBowl = bowls.find(b => b._id === edit.dayBowlMap[day]);
                     return (
                       <div key={day} className="bg-[#F9F8F6] rounded-xl p-4">
@@ -243,7 +259,7 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
                                   <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
                                 </svg>
                                 Customise
-                                {hasCust && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-terracotta border border-white" />}
+                                {(hasCust || hasPresetChange) && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-terracotta border border-white" />}
                               </button>
                               <div className="w-5 h-5 rounded-full bg-sage/15 flex items-center justify-center">
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#7D9B76" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -262,6 +278,7 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
                             setEdit(e => ({
                               ...e,
                               dayCustomMap: { ...e.dayCustomMap, [day]: [] },
+                              dayPresetMap: { ...e.dayPresetMap, [day]: DEFAULT_PRESET_OPTIONS },
                               dayCustomCostMap: { ...e.dayCustomCostMap, [day]: 0 },
                             }));
                           }}
@@ -330,11 +347,13 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
           <CustomizationModal
             bowl={bowl}
             initialCustomizations={edit.dayCustomMap[customizingDay] ?? []}
+            initialPresetOptions={edit.dayPresetMap[customizingDay] ?? DEFAULT_PRESET_OPTIONS}
             mode="subscription"
-            onConfirm={(customizations, cost) => {
+            onConfirm={(customizations, presetOptions, cost) => {
               setEdit(e => ({
                 ...e,
                 dayCustomMap: { ...e.dayCustomMap, [customizingDay]: customizations },
+                dayPresetMap: { ...e.dayPresetMap, [customizingDay]: presetOptions },
                 dayCustomCostMap: { ...e.dayCustomCostMap, [customizingDay]: cost },
               }));
               setCustomizingDay(null);

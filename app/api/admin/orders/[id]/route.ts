@@ -60,8 +60,18 @@ export async function PATCH(
       }
     } else {
       const row = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+
+      // Apply payment_status update if requested alongside the cancellation.
+      // The RPC only sets order status — it does not touch payment_status.
+      if (payment_status !== undefined) {
+        await adminSupabase
+          .from('orders')
+          .update({ payment_status })
+          .eq('id', id);
+      }
+
       return NextResponse.json({
-        order: { id, status: 'cancelled' },
+        order: { id, status: 'cancelled', ...(payment_status !== undefined ? { payment_status } : {}) },
         refunded_amount_rs: row?.refunded_amount_rs ?? 0,
       });
     }

@@ -167,14 +167,15 @@ export default function BowlCard({ bowl }: BowlCardProps) {
         <CustomizationModal
           bowl={bowl}
           initialCustomizations={customModalMode === "add-new" ? undefined : cartItem?.customizations}
+          initialPresetOptions={customModalMode === "add-new" ? undefined : cartItem?.presetOptions}
           mode="cart"
-          onConfirm={(customizations, cost) => {
+          onConfirm={(customizations, presetOptions, cost) => {
             if (customModalMode === "add-new") {
-              addItem(bowl, customizations, cost);
+              addItem(bowl, customizations, presetOptions, cost);
             } else if (cartItem) {
-              updateCustomizations(cartItem.instanceId, customizations, cost);
+              updateCustomizations(cartItem.instanceId, customizations, presetOptions, cost);
             } else {
-              addItem(bowl, customizations, cost);
+              addItem(bowl, customizations, presetOptions, cost);
             }
             setShowCustomModal(false);
             setCustomModalMode("edit");

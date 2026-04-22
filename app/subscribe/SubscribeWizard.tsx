@@ -5,7 +5,15 @@ import { useState, useEffect, useRef } from "react";
 const WIZARD_SESSION_KEY = "nutravoe_subscribe_wizard";
 import Link from "next/link";
 import Image from "next/image";
-import type { Bowl, PlanId, DeliveryStyle, DayBowlConfig, IngredientCustomization, SubscriptionPlan } from "@/types";
+import type {
+  Bowl,
+  BowlPresetOptions,
+  PlanId,
+  DeliveryStyle,
+  DayBowlConfig,
+  IngredientCustomization,
+  SubscriptionPlan,
+} from "@/types";
 import { buildSubscriptionWhatsAppMessage, formatCurrency, getWhatsAppUrl } from "@/lib/utils";
 import PlanCard, { STUB_PLANS } from "./PlanCard";
 import type { PlanConfig } from "./PlanCard";
@@ -31,15 +39,24 @@ interface WizardState {
   // Scenario C (daily) — one bowl per day
   dayBowlMap: Record<string, string>;
   dayCustomMap: Record<string, IngredientCustomization[]>;
+  dayPresetMap: Record<string, BowlPresetOptions>;
   // Scenario A (spread) — multiple bowls + quantities per day
   dayBowlCounts: Record<string, Record<string, number>>;
   // Per-instance customizations: [day][bowlId][instanceIndex] = IngredientCustomization[]
   dayBowlCustomMap: Record<string, Record<string, IngredientCustomization[][]>>;
+  // Per-instance preset options: [day][bowlId][instanceIndex] = BowlPresetOptions
+  dayBowlPresetMap: Record<string, Record<string, BowlPresetOptions[]>>;
   // Shared
   timeSlotMode: TimeSlotMode;
   deliveryTimeSlot: string;     // used if same time
   dayTimeSlotMap: Record<string, string>; // used if different times
 }
+
+const DEFAULT_PRESET_OPTIONS: BowlPresetOptions = {
+  baseChoice: "yogurt",
+  oatsChoice: "roasted",
+  noSugar: false,
+};
 
 interface Props {
   bowls: Bowl[];
@@ -57,6 +74,27 @@ function calcCustomCost(customizations: IngredientCustomization[], bowl?: Bowl |
     }, 0);
 }
 
+function encodePresetIntoCustomizations(
+  customizations: IngredientCustomization[],
+  preset: BowlPresetOptions,
+): IngredientCustomization[] {
+  const filtered = customizations.filter((c) => !c.ingredientId.startsWith("__preset_"));
+  const presetEntries: IngredientCustomization[] = [
+    {
+      ingredientId: `__preset_base_${preset.baseChoice}`,
+      option: "default",
+    },
+    {
+      ingredientId: `__preset_oats_${preset.oatsChoice}`,
+      option: "default",
+    },
+  ];
+  if (preset.noSugar) {
+    presetEntries.push({ ingredientId: "__preset_no_sugar", option: "default" });
+  }
+  return [...filtered, ...presetEntries];
+}
+
 export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPlans }: Props) {
   const [state, setState] = useState<WizardState>(() => {
     if (typeof window !== "undefined") {
@@ -72,8 +110,10 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
       selectedDays: [],
       dayBowlMap: {},
       dayCustomMap: {},
+      dayPresetMap: {},
       dayBowlCounts: {},
       dayBowlCustomMap: {},
+      dayBowlPresetMap: {},
       timeSlotMode: 'same',
       deliveryTimeSlot: '',
       dayTimeSlotMap: {},
@@ -286,12 +326,16 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         delete newDayBowlCounts[day];
         const newDayBowlCustomMap = { ...s.dayBowlCustomMap };
         delete newDayBowlCustomMap[day];
+        const newDayBowlPresetMap = { ...s.dayBowlPresetMap };
+        delete newDayBowlPresetMap[day];
         return {
           ...s,
           selectedDays: s.selectedDays.filter(d => d !== day),
           dayBowlMap: { ...s.dayBowlMap, [day]: '' },
+          dayPresetMap: { ...s.dayPresetMap, [day]: DEFAULT_PRESET_OPTIONS },
           dayBowlCounts: newDayBowlCounts,
           dayBowlCustomMap: newDayBowlCustomMap,
+          dayBowlPresetMap: newDayBowlPresetMap,
         };
       });
     } else {
@@ -322,9 +366,13 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     const next = Math.max(0, current + delta);
     setState(s => {
       const currentInstances = s.dayBowlCustomMap[day]?.[bowlId] ?? [];
+      const currentPresetInstances = s.dayBowlPresetMap[day]?.[bowlId] ?? [];
       const newInstances = delta > 0
         ? [...currentInstances, [] as IngredientCustomization[]]
         : currentInstances.slice(0, -1);
+      const newPresetInstances = delta > 0
+        ? [...currentPresetInstances, { ...DEFAULT_PRESET_OPTIONS }]
+        : currentPresetInstances.slice(0, -1);
       return {
         ...s,
         dayBowlCounts: {
@@ -335,15 +383,25 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           ...s.dayBowlCustomMap,
           [day]: { ...(s.dayBowlCustomMap[day] ?? {}), [bowlId]: newInstances },
         },
+        dayBowlPresetMap: {
+          ...s.dayBowlPresetMap,
+          [day]: { ...(s.dayBowlPresetMap[day] ?? {}), [bowlId]: newPresetInstances },
+        },
       };
     });
   }
 
   // Applies the confirmed repeat-choice: increments count and pushes the given customizations as a new instance
-  function doIncrementBowl(day: string, bowlId: string, customizations: IngredientCustomization[]) {
+  function doIncrementBowl(
+    day: string,
+    bowlId: string,
+    customizations: IngredientCustomization[],
+    presetOptions: BowlPresetOptions,
+  ) {
     setState(s => {
       const currentCount = s.dayBowlCounts[day]?.[bowlId] ?? 0;
       const currentInstances = s.dayBowlCustomMap[day]?.[bowlId] ?? [];
+      const currentPresetInstances = s.dayBowlPresetMap[day]?.[bowlId] ?? [];
       return {
         ...s,
         dayBowlCounts: {
@@ -354,13 +412,18 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           ...s.dayBowlCustomMap,
           [day]: { ...(s.dayBowlCustomMap[day] ?? {}), [bowlId]: [...currentInstances, customizations] },
         },
+        dayBowlPresetMap: {
+          ...s.dayBowlPresetMap,
+          [day]: { ...(s.dayBowlPresetMap[day] ?? {}), [bowlId]: [...currentPresetInstances, presetOptions] },
+        },
       };
     });
   }
 
   const describeCustomizations = (
     customizations: IngredientCustomization[] | undefined,
-    bowl: Bowl | undefined
+    bowl: Bowl | undefined,
+    presetOptions?: BowlPresetOptions,
   ) => {
     const list = customizations ?? [];
     const removed = list
@@ -372,6 +435,15 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
       .map(c => bowl?.customizableIngredients?.find(i => i.id === c.ingredientId)?.name)
       .filter(Boolean) as string[];
     const lines: string[] = [];
+    if (presetOptions) {
+      lines.push(`base: ${presetOptions.baseChoice}`);
+      lines.push(`oats: ${presetOptions.oatsChoice}`);
+      lines.push(
+        presetOptions.noSugar
+          ? "sweetness: no sugar (exclude banana, honey, dates)"
+          : "sweetness: natural (banana, honey, dates)",
+      );
+    }
     if (removed.length > 0) lines.push(`remove: ${removed.join(", ")}`);
     if (extras.length > 0) lines.push(`extra: ${extras.join(", ")}`);
     return lines.length > 0 ? ` (${lines.join(" | ")})` : "";
@@ -394,19 +466,23 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           .flatMap(([bowlId, qty]) => {
             const bowl = bowls.find(b => b._id === bowlId);
             const instances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
+            const presetInstances = state.dayBowlPresetMap[day]?.[bowlId] ?? [];
             const slot = state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot;
             const s = slot ? ` [${slot}]` : "";
             // If all instances share the same customizations, collapse into one line
             const allSame = instances.length <= 1 || instances.every((inst, i) =>
               i === 0 || JSON.stringify(inst) === JSON.stringify(instances[0])
             );
-            if (qty === 1 || allSame) {
-              const c = describeCustomizations(instances[0] ?? [], bowl);
+            const allPresetSame = presetInstances.length <= 1 || presetInstances.every((inst, i) =>
+              i === 0 || JSON.stringify(inst) === JSON.stringify(presetInstances[0])
+            );
+            if (qty === 1 || (allSame && allPresetSame)) {
+              const c = describeCustomizations(instances[0] ?? [], bowl, presetInstances[0] ?? DEFAULT_PRESET_OPTIONS);
               return [`- ${day}: ${qty} x ${bowl?.name ?? bowlId}${c}${s}`];
             }
             // Different customizations per instance — list each bowl separately
             return instances.map((inst, i) => {
-              const c = describeCustomizations(inst, bowl);
+              const c = describeCustomizations(inst, bowl, presetInstances[i] ?? DEFAULT_PRESET_OPTIONS);
               return `- ${day}: 1 x ${bowl?.name ?? bowlId} [Bowl ${i + 1}]${c}${s}`;
             });
           });
@@ -416,7 +492,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     return state.selectedDays.map(day => {
       const bowlId = state.dayBowlMap[day];
       const bowl = bowls.find(b => b._id === bowlId);
-      const c = describeCustomizations(state.dayCustomMap[day], bowl);
+      const c = describeCustomizations(state.dayCustomMap[day], bowl, state.dayPresetMap[day] ?? DEFAULT_PRESET_OPTIONS);
       const slot = state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot;
       const s = slot ? ` [${slot}]` : "";
       return `- ${day}: ${bowl?.name ?? "Not selected"}${c}${s}`;
@@ -475,15 +551,23 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             .map(([bowlId, quantity]) => {
               const bowl = bowls.find(b => b._id === bowlId);
               const instances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
+              const presetInstances = state.dayBowlPresetMap[day]?.[bowlId] ?? [];
               // Pad to match quantity in case instances array is shorter
               const paddedInstances = Array.from({ length: quantity }, (_, i) => instances[i] ?? []);
+              const paddedPresetInstances = Array.from(
+                { length: quantity },
+                (_, i) => presetInstances[i] ?? DEFAULT_PRESET_OPTIONS
+              );
               return {
                 day: day as DayBowlConfig['day'],
                 bowlId,
                 bowlName: bowl?.name ?? '',
                 quantity,
                 // Send per-instance array; API and checkout-security handle [][] format
-                customizations: paddedInstances as unknown as IngredientCustomization[],
+                customizations: paddedInstances.map((inst, idx) =>
+                  encodePresetIntoCustomizations(inst, paddedPresetInstances[idx] ?? DEFAULT_PRESET_OPTIONS)
+                ) as unknown as IngredientCustomization[],
+                presetOptions: paddedPresetInstances[0] ?? DEFAULT_PRESET_OPTIONS,
                 customizationCost: paddedInstances.reduce((sum, inst) => sum + calcCustomCost(inst, bowl), 0),
                 deliveryTimeSlot: state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot,
               };
@@ -495,7 +579,11 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           bowlId: state.dayBowlMap[day],
           bowlName: bowls.find(b => b._id === state.dayBowlMap[day])?.name ?? '',
           quantity: 1,
-          customizations: state.dayCustomMap[day] ?? [],
+          customizations: encodePresetIntoCustomizations(
+            state.dayCustomMap[day] ?? [],
+            state.dayPresetMap[day] ?? DEFAULT_PRESET_OPTIONS
+          ),
+          presetOptions: state.dayPresetMap[day] ?? DEFAULT_PRESET_OPTIONS,
           customizationCost: calcCustomCost(
             state.dayCustomMap[day] ?? [],
             bowls.find(b => b._id === state.dayBowlMap[day])
@@ -516,6 +604,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           bowlId: config.bowlId,
           quantity: config.quantity,
           customizations: config.customizations ?? [],
+          presetOptions: config.presetOptions ?? DEFAULT_PRESET_OPTIONS,
           deliveryTimeSlot: config.deliveryTimeSlot,
         })),
         startDate: activeSubEndDate ? new Date(new Date(activeSubEndDate).getTime() + 86400000).toISOString().split('T')[0] : null,
@@ -755,8 +844,10 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                 selectedDays: [],
                 dayBowlMap: {},
                 dayCustomMap: {},
+                dayPresetMap: {},
                 dayBowlCounts: {},
                 dayBowlCustomMap: {},
+                dayBowlPresetMap: {},
               }))}
               onDeliveryStyle={(style) => setState(s => ({ ...s, deliveryStyle: style }))}
             />
@@ -887,7 +978,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                           {bowls.map(bowl => {
                             const count = dayCounts[bowl._id] ?? 0;
                             const instances = state.dayBowlCustomMap[day]?.[bowl._id] ?? [];
-                            const hasAnyCustom = instances.some(inst => inst.some(c => c.option !== 'default'));
+                            const presetInstances = state.dayBowlPresetMap[day]?.[bowl._id] ?? [];
 
                             return (
                               <div key={bowl._id} className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${count > 0 ? 'border-sage/40 bg-sage/5' : 'border-black/6 bg-[#F9F8F6]'}`}>
@@ -900,7 +991,12 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                                     <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
                                       {Array.from({ length: count }).map((_, idx) => {
                                         const instCustoms = instances[idx] ?? [];
-                                        const instHasCustom = instCustoms.some(c => c.option !== 'default');
+                                        const instPreset = presetInstances[idx] ?? DEFAULT_PRESET_OPTIONS;
+                                        const instHasCustom =
+                                          instCustoms.some(c => c.option !== 'default') ||
+                                          instPreset.baseChoice !== DEFAULT_PRESET_OPTIONS.baseChoice ||
+                                          instPreset.oatsChoice !== DEFAULT_PRESET_OPTIONS.oatsChoice ||
+                                          instPreset.noSugar !== DEFAULT_PRESET_OPTIONS.noSugar;
                                         return (
                                           <button
                                             key={idx}
@@ -981,7 +1077,12 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                   {DAYS.filter(d => state.selectedDays.includes(d)).map(day => {
                     const selectedBowl = bowls.find(b => b._id === state.dayBowlMap[day]);
                     const dayCustoms = state.dayCustomMap[day] ?? [];
-                    const hasCustoms = dayCustoms.some(c => c.option !== 'default');
+                    const dayPresetOptions = state.dayPresetMap[day] ?? DEFAULT_PRESET_OPTIONS;
+                    const hasCustoms =
+                      dayCustoms.some(c => c.option !== 'default') ||
+                      dayPresetOptions.baseChoice !== DEFAULT_PRESET_OPTIONS.baseChoice ||
+                      dayPresetOptions.oatsChoice !== DEFAULT_PRESET_OPTIONS.oatsChoice ||
+                      dayPresetOptions.noSugar !== DEFAULT_PRESET_OPTIONS.noSugar;
                     return (
                       <div key={day} className="bg-white rounded-xl border border-black/8 p-4">
                         <div className="flex items-center gap-2 mb-3">
@@ -1197,11 +1298,13 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           <CustomizationModal
             bowl={customizingDayBowl}
             initialCustomizations={state.dayCustomMap[customizingDay]}
+            initialPresetOptions={state.dayPresetMap[customizingDay] ?? DEFAULT_PRESET_OPTIONS}
             mode="subscription"
-            onConfirm={(customizations) => {
+            onConfirm={(customizations, presetOptions) => {
               setState(s => ({
                 ...s,
                 dayCustomMap: { ...s.dayCustomMap, [customizingDay]: customizations },
+                dayPresetMap: { ...s.dayPresetMap, [customizingDay]: presetOptions },
               }));
               setCustomizingDay(null);
             }}
@@ -1215,20 +1318,28 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           const bowl = bowls.find(b => b._id === bowlId) ?? null;
           if (!bowl) return null;
           const instances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
+          const presetInstances = state.dayBowlPresetMap[day]?.[bowlId] ?? [];
           return (
             <CustomizationModal
               bowl={bowl}
               initialCustomizations={instances[instanceIndex] ?? []}
+              initialPresetOptions={presetInstances[instanceIndex] ?? DEFAULT_PRESET_OPTIONS}
               mode="subscription"
-              onConfirm={(customizations) => {
+              onConfirm={(customizations, presetOptions) => {
                 setState(s => {
                   const current = [...(s.dayBowlCustomMap[day]?.[bowlId] ?? [])];
+                  const currentPresets = [...(s.dayBowlPresetMap[day]?.[bowlId] ?? [])];
                   current[instanceIndex] = customizations;
+                  currentPresets[instanceIndex] = presetOptions;
                   return {
                     ...s,
                     dayBowlCustomMap: {
                       ...s.dayBowlCustomMap,
                       [day]: { ...(s.dayBowlCustomMap[day] ?? {}), [bowlId]: current },
+                    },
+                    dayBowlPresetMap: {
+                      ...s.dayBowlPresetMap,
+                      [day]: { ...(s.dayBowlPresetMap[day] ?? {}), [bowlId]: currentPresets },
                     },
                   };
                 });
@@ -1244,9 +1355,11 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           const bowl = bowls.find(b => b._id === repeatChoiceKey.bowlId);
           const { day, bowlId } = repeatChoiceKey;
           const existingInstances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
+          const existingPresetInstances = state.dayBowlPresetMap[day]?.[bowlId] ?? [];
           const lastCustomizations = existingInstances[existingInstances.length - 1] ?? [];
+          const lastPresetOptions = existingPresetInstances[existingPresetInstances.length - 1] ?? DEFAULT_PRESET_OPTIONS;
           const existingCount = state.dayBowlCounts[day]?.[bowlId] ?? 0;
-          const lastSummary = describeCustomizations(lastCustomizations, bowl).replace(/^\s*\(|\)$/g, '');
+          const lastSummary = describeCustomizations(lastCustomizations, bowl, lastPresetOptions).replace(/^\s*\(|\)$/g, '');
           return (
             <div
               className="fixed inset-0 z-[120] flex items-end md:items-center justify-center p-0 md:p-4 bg-ink/60 backdrop-blur-sm animate-in fade-in duration-200"
@@ -1275,7 +1388,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                 <div className="p-4 flex flex-col gap-3 pb-8 md:pb-4">
                   <button
                     onClick={() => {
-                      doIncrementBowl(day, bowlId, [...lastCustomizations]);
+                      doIncrementBowl(day, bowlId, [...lastCustomizations], { ...lastPresetOptions });
                       setRepeatChoiceKey(null);
                     }}
                     className="flex items-center gap-4 p-4 border border-black/10 hover:border-sage/40 rounded-xl hover:bg-sage/5 transition-all text-left group"
@@ -1296,7 +1409,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                   <button
                     onClick={() => {
                       const newInstanceIndex = existingCount;
-                      doIncrementBowl(day, bowlId, []);
+                      doIncrementBowl(day, bowlId, [], { ...DEFAULT_PRESET_OPTIONS });
                       setRepeatChoiceKey(null);
                       setCustomizingSpreadKey({ day, bowlId, instanceIndex: newInstanceIndex });
                     }}

@@ -40,6 +40,9 @@ export function buildCartOrderWhatsAppMessage(input: {
     quantity: number;
     basePrice: number;
     customizationCost: number;
+    baseChoice: "yogurt" | "milk";
+    oatsChoice: "soaked" | "roasted";
+    noSugar: boolean;
     removedIngredients: string[];
     extraIngredients: string[];
   }[];
@@ -54,6 +57,11 @@ export function buildCartOrderWhatsAppMessage(input: {
     const lines = [
       `${index + 1}. ${item.bowlName} x${item.quantity}`,
       `   Base: ₹${item.basePrice} each`,
+      `   Bowl base: ${item.baseChoice === "milk" ? "Milk" : "Yogurt"}`,
+      `   Oats: ${item.oatsChoice === "roasted" ? "Roasted" : "Soaked"}`,
+      item.noSugar
+        ? "   No sugar: exclude banana, honey, dates"
+        : "   Sweetness: natural (banana, honey, dates)",
     ];
     if (item.removedIngredients.length > 0) {
       lines.push(`   Remove: ${item.removedIngredients.join(", ")}`);

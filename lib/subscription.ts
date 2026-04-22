@@ -141,7 +141,7 @@ export async function getActivePlanConfig(): Promise<PlanConfig | null> {
 const MORNING_WINDOW_END_HOUR = 10;
 
 // Hours of prep needed for same-day non-morning delivery slots.
-const SAME_DAY_PREP_HOURS = 2;
+const SAME_DAY_PREP_HOURS = 1;
 
 /**
  * Parse the start hour from a time slot string like "2:00 PM - 3:00 PM" → 14.
@@ -188,7 +188,7 @@ function canDeliverTodayForSlot(currentHour: number, slotHour: number | null): b
  *
  * Edge case handled: admin approves Monday at 11 AM for a Monday 2 PM slot →
  * Monday is correctly scheduled for today (not next Monday) because the slot
- * is still 3 hours away with a 2-hour buffer.
+ * is still 3 hours away with a 1-hour buffer.
  */
 export function scheduleDeliveryDates(
   dayConfigs: Array<{ day: string; timeSlot?: string | null }>,

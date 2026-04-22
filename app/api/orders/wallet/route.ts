@@ -9,18 +9,7 @@ import {
   planSlugForCheckoutPricing,
   preferActiveSubscription,
 } from "@/lib/flexible-subscription";
-
-function getDeliveryDateFromSlot(slot: string): string {
-  const normalized = slot.trim();
-  const nowIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  if (/^tomorrow\b/i.test(normalized)) {
-    nowIST.setDate(nowIST.getDate() + 1);
-  }
-  const y = nowIST.getFullYear();
-  const m = String(nowIST.getMonth() + 1).padStart(2, "0");
-  const d = String(nowIST.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+import { resolveRequestedDelivery } from "@/lib/order-delivery";
 
 export async function POST(req: NextRequest) {
   const limited = await enforceRateLimit(req, "wallet-order-create", 10, 60);
@@ -37,14 +26,9 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const selectedSlot = typeof body?.selectedSlot === "string" ? body.selectedSlot.trim() : "";
+  const deliveryMode = body?.deliveryMode;
   const incomingItems: unknown[] = Array.isArray(body?.items) ? body.items : [];
 
-  if (!selectedSlot) {
-    return NextResponse.json({ error: "Delivery slot is required" }, { status: 400, headers: limited.headers });
-  }
-  if (selectedSlot.length > 64 || !/^[\w\s\-–:.,]+$/.test(selectedSlot)) {
-    return NextResponse.json({ error: "Invalid delivery slot" }, { status: 400, headers: limited.headers });
-  }
   if (!incomingItems.length) {
     return NextResponse.json({ error: "At least one item is required" }, { status: 400, headers: limited.headers });
   }
@@ -57,6 +41,10 @@ export async function POST(req: NextRequest) {
       customizations: Array.isArray(item?.customizations)
         ? (item.customizations as CheckoutItemInput["customizations"])
         : [],
+      presetOptions:
+        item?.presetOptions && typeof item.presetOptions === "object"
+          ? (item.presetOptions as CheckoutItemInput["presetOptions"])
+          : undefined,
     };
   });
 
@@ -131,7 +119,14 @@ export async function POST(req: NextRequest) {
   // Balance check is done inside consume_wallet_balance (refreshes from credit lots first).
 
   // Create order (confirmed + paid immediately)
-  const deliveryDate = getDeliveryDateFromSlot(selectedSlot);
+  let resolvedDelivery;
+  try {
+    resolvedDelivery = await resolveRequestedDelivery(deliveryMode, selectedSlot);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invalid delivery selection";
+    return NextResponse.json({ error: message }, { status: 400, headers: limited.headers });
+  }
+
   const { data: order, error: orderError } = await adminSupabase
     .from("orders")
     .insert({
@@ -139,8 +134,8 @@ export async function POST(req: NextRequest) {
       subscription_id: subscription.id,
       order_type: "subscription",
       status: "confirmed",
-      delivery_date: deliveryDate,
-      delivery_time_slot: selectedSlot,
+      delivery_date: resolvedDelivery.deliveryDate,
+      delivery_time_slot: resolvedDelivery.selectedSlot,
       delivery_address_id: address.id,
       delivery_fee: quote.deliveryFee,
       subtotal: quote.subtotal,
@@ -178,7 +173,7 @@ export async function POST(req: NextRequest) {
     p_amount_rs: quote.total,
     p_reason: "order_payment",
     p_reference_id: order.id,
-    p_note: `Self-served order on ${deliveryDate}, ${selectedSlot}`,
+    p_note: `Self-served order on ${resolvedDelivery.deliveryDate}, ${resolvedDelivery.selectedSlot}`,
   });
 
   if (walletError) {

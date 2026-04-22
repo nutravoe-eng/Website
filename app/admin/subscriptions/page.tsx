@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import AdminTopNav from '../components/AdminTopNav';
 
 interface DayConfig {
   id: string;
@@ -10,6 +11,13 @@ interface DayConfig {
   delivery_time_slot: string | null;
   customizations: { ingredientId: string; option: "default" | "remove" | "extra" }[];
   customization_cost_rs: number;
+}
+
+function readPresetChoices(customizations: { ingredientId: string; option: "default" | "remove" | "extra" }[]) {
+  const baseChoice = customizations.some(c => c.ingredientId === "__preset_base_milk") ? "milk" : "yogurt";
+  const oatsChoice = customizations.some(c => c.ingredientId === "__preset_oats_roasted") ? "roasted" : "soaked";
+  const noSugar = customizations.some(c => c.ingredientId === "__preset_no_sugar");
+  return { baseChoice, oatsChoice, noSugar };
 }
 
 interface AdminSubscription {
@@ -263,12 +271,7 @@ export default function AdminSubscriptionsPage() {
 
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-display text-2xl text-ink">Subscriptions</h1>
-        <button
-          onClick={fetchSubs}
-          className="font-body text-[12px] font-bold uppercase tracking-wider text-stone hover:text-ink border border-black/10 rounded-lg px-3 py-2 hover:bg-black/5 transition-colors"
-        >
-          Refresh
-        </button>
+        <AdminTopNav current="subscriptions" onRefresh={fetchSubs} />
       </div>
 
       {/* Filter tabs */}
@@ -408,9 +411,20 @@ export default function AdminSubscriptionsPage() {
                   {sub.subscription_day_configs.map(dc => (
                     <span key={dc.id} className="bg-[#F9F8F6] border border-black/5 rounded-md px-2 py-1 font-body text-[11px] text-stone capitalize flex flex-col leading-tight">
                       <span className="font-semibold text-ink">{dc.day_of_week} — {dc.bowl_slug} ×{dc.quantity}</span>
-                      {dc.customizations && dc.customizations.length > 0 && (
+                      {dc.customizations && (() => {
+                        const choices = readPresetChoices(dc.customizations);
+                        return (
+                          <span className="text-[10px] text-stone/80 font-medium">
+                            base: {choices.baseChoice} · oats: {choices.oatsChoice}{choices.noSugar ? " · no sugar" : ""}
+                          </span>
+                        );
+                      })()}
+                      {dc.customizations && dc.customizations.some(c => c.option !== 'default' && !c.ingredientId.startsWith("__preset_")) && (
                         <span className="text-[10px] text-terracotta/80 font-medium">
-                          {dc.customizations.filter(c => c.option !== 'default').map(c => `${c.option === 'remove' ? '-' : '+'}${c.ingredientId}`).join(', ')}
+                          {dc.customizations
+                            .filter(c => c.option !== 'default' && !c.ingredientId.startsWith("__preset_"))
+                            .map(c => `${c.option === 'remove' ? '-' : '+'}${c.ingredientId}`)
+                            .join(', ')}
                         </span>
                       )}
                       {dc.delivery_time_slot && (

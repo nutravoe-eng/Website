@@ -39,19 +39,18 @@ export default async function HomePage() {
         </div>
 
         {/* Copy fills space above strip; strip is in-flow so it never overlaps CTAs */}
-        <div className="relative z-10 flex min-h-0 flex-1 flex-col justify-end px-6 pb-6 pt-10 lg:px-16">
-          <div className="max-w-7xl mx-auto w-full -mt-4">
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col justify-end px-6 pb-10 pt-10 lg:px-16">
+          <div className="max-w-7xl mx-auto w-full">
             <div className="max-w-2xl">
-            <p className="font-body text-[11px] font-medium tracking-[0.25em] mb-4 text-sage-light" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}>
-              Bangalore · Fresh Daily · Delivered 7 AM–9 PM
+            <p className="font-body text-[11px] font-medium tracking-[0.25em] mb-5 text-sage-light" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}>
+              Bangalore · Fresh Daily · Delivered 7 AM–8 PM
             </p>
-            <h1 className="font-display text-white mb-5"
+            <h1 className="font-display text-white mb-7"
               style={{ fontSize: "clamp(46px, 6vw, 76px)", lineHeight: "1.05" }}>
               Wholesome, nourishin&apos;<br />
-              yoghurt bowls<br />
-              <em className="text-sage-light">that show up for you.</em>
+              <em className="text-sage-light">yoghurt bowls</em>
             </h1>
-            <p className="font-body text-[15px] font-light text-white/90 leading-relaxed mb-8 max-w-md">
+            <p className="font-body text-[15px] font-light text-white/90 leading-relaxed mb-10 max-w-md">
               High protein, high fibre, gut-friendly, no added sugar — a complete meal delivered
               to your doorstep whenever you need one.
             </p>
@@ -89,7 +88,7 @@ export default async function HomePage() {
             },
             {
               icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-              title: "Delivered 7 AM–9 PM", sub: "Order anytime, same day"
+              title: "Delivered 7 AM–8 PM", sub: "Last same-day order by 7 PM"
             },
           ].map(({ icon, title, sub }) => (
             <div key={title} className="px-4 lg:px-8 py-2.5 text-center flex flex-col justify-center items-center text-inherit">
@@ -123,7 +122,7 @@ export default async function HomePage() {
               <h2 className="section-heading"
                 style={{ fontSize: "clamp(40px, 4.5vw, 60px)" }}>
                 Our menu.<br />
-                <em className="text-sage">Nothing here by accident.</em>
+                <em className="text-sage">Curated with intention.</em>
               </h2>
             </div>
             <p className="font-body text-sm text-stone max-w-xs mt-4 md:mt-0 md:text-right leading-relaxed">
@@ -149,47 +148,12 @@ export default async function HomePage() {
       {/* ── Testimonials ────────────────────────────────── */}
       <TestimonialsCarousel />
 
-      {/* ── About Strip ─────────────────────────────────── */}
-      <section className="grid grid-cols-1 md:grid-cols-2" style={{ background: "#F0EDE8" }}>
-        <div className="px-8 lg:px-20 py-24">
-          <p className="section-eyebrow text-stone mb-6">About Nutravoe</p>
-          <h2 className="font-display text-ink mb-7"
-            style={{ fontSize: "clamp(36px, 3.5vw, 52px)", lineHeight: "1.15" }}>
-            Inspired by Austria.<br />
-            <em className="text-sage-dark">Made for India.</em>
-          </h2>
-          <p className="font-body text-[14px] font-light leading-loose text-stone max-w-md mb-10">
-            On a trip to Austria, Harshita noticed something simple and brilliant —
-            grab-and-go yoghurt bowls. Fresh, wholesome, and just there. Nothing like it
-            existed in India. Nutravoe is her answer: a premium daily ritual, made by hand
-            and at your doorstep whenever you need it.
-          </p>
-          <p className="font-display text-[20px] italic text-stone">
-            — Harshita, founder
-          </p>
-        </div>
-        <div
-          className="relative flex items-center justify-center min-h-[320px]"
-          style={{ background: "linear-gradient(135deg, #C4A574 0%, #9A7B4A 100%)" }}
-        >
-          <div className="px-12 py-16 text-center">
-            <blockquote className="font-display text-[22px] font-light italic text-white/95 leading-relaxed">
-              "Healthy food doesn't have to be<br />
-              bland or inconvenient.<br />
-              I built Nutravoe to prove that."
-            </blockquote>
-            <cite className="block mt-6 font-body text-xs tracking-[0.18em] uppercase text-white/70 not-italic">
-              Harshita · Nutravoe · Bangalore
-            </cite>
-          </div>
-        </div>
-      </section>
 
       {/* ── CTA Section ─────────────────────────────────── */}
       <section className="py-28 px-6 lg:px-16 text-center bg-cream">
         <div className="max-w-3xl mx-auto">
           <p className="font-body text-xs font-medium tracking-[0.22em] uppercase text-stone mb-8">
-            Delivered 7 AM–9 PM · Bangalore
+            Delivered 7 AM–8 PM · Bangalore
           </p>
           <h2 className="font-display text-ink mb-10"
             style={{ fontSize: "clamp(36px, 4vw, 60px)", lineHeight: "1.2" }}>

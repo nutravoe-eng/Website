@@ -19,7 +19,21 @@ export interface AdminOrder {
   created_at: string;
   users: { id: string; full_name: string; phone: string; email: string };
   addresses: { line1: string; line2: string | null; city: string; pincode: string; lat?: number | null; lng?: number | null } | null;
-  order_items: { id: string; bowl_name: string; quantity: number; unit_price: number; total_price: number; customizations: { removed?: string[]; added?: string[] } | null }[];
+  order_items: {
+    id: string;
+    bowl_name: string;
+    quantity: number;
+    unit_price: number;
+    total_price: number;
+    customizations: {
+      removed?: string[];
+      added?: string[];
+      baseChoice?: "yogurt" | "milk";
+      oatsChoice?: "soaked" | "roasted";
+      noSugar?: boolean;
+      noSugarNote?: string;
+    } | null
+  }[];
 }
 
 interface Props {
@@ -371,6 +385,21 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                         {item.customizations?.added && item.customizations.added.length > 0 && (
                           <p className="font-body text-[10px] text-sage-dark">+{item.customizations.added.join(', ')}</p>
                         )}
+                        {item.customizations?.baseChoice && (
+                          <p className="font-body text-[10px] text-stone">
+                            Base: {item.customizations.baseChoice === "milk" ? "Milk" : "Yogurt"}
+                          </p>
+                        )}
+                        {item.customizations?.oatsChoice && (
+                          <p className="font-body text-[10px] text-stone">
+                            Oats: {item.customizations.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                          </p>
+                        )}
+                        {item.customizations?.noSugar && (
+                          <p className="font-body text-[10px] text-terracotta">
+                            No sugar ({item.customizations.noSugarNote ?? "Exclude banana, honey, dates"})
+                          </p>
+                        )}
                       </div>
                     ))}
                     {order.notes && (
@@ -684,7 +713,7 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                 className="w-full border border-black/10 rounded-lg px-4 py-3 font-body text-sm text-ink bg-[#F9F8F6] focus:outline-none focus:ring-2 focus:ring-sage/40"
               >
                 <option value="">— Keep existing —</option>
-                {['7:00 AM - 8:00 AM','8:00 AM - 9:00 AM','9:00 AM - 10:00 AM','10:00 AM - 11:00 AM','11:00 AM - 12:00 PM','12:00 PM - 1:00 PM','1:00 PM - 2:00 PM','2:00 PM - 3:00 PM','3:00 PM - 4:00 PM','4:00 PM - 5:00 PM','5:00 PM - 6:00 PM','6:00 PM - 7:00 PM','7:00 PM - 8:00 PM','8:00 PM - 9:00 PM'].map(slot => (
+                {['7:00 AM - 8:00 AM','8:00 AM - 9:00 AM','9:00 AM - 10:00 AM','10:00 AM - 11:00 AM','11:00 AM - 12:00 PM','12:00 PM - 1:00 PM','1:00 PM - 2:00 PM','2:00 PM - 3:00 PM','3:00 PM - 4:00 PM','4:00 PM - 5:00 PM','5:00 PM - 6:00 PM','6:00 PM - 7:00 PM','7:00 PM - 8:00 PM'].map(slot => (
                   <option key={slot} value={slot}>{slot}</option>
                 ))}
               </select>

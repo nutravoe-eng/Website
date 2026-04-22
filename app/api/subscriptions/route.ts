@@ -15,6 +15,7 @@ type DayConfigInput = {
   quantity: number;
   // Either a flat array (legacy) or a per-instance array-of-arrays (new multi-instance format)
   customizations?: SingleCustomization[] | SingleCustomization[][];
+  presetOptions?: { baseChoice: "yogurt" | "milk"; oatsChoice: "soaked" | "roasted"; noSugar: boolean };
   deliveryTimeSlot?: string;
 };
 
