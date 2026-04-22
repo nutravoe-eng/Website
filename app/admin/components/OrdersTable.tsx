@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 export interface AdminOrder {
   id: string;
@@ -654,21 +654,6 @@ const PAYMENT_STATUS_CONFIG: Record<string, { label: string; className: string }
   refund_complete:  { label: 'Refund Complete',  className: 'bg-sage/10 text-sage-dark' },
 };
 
-function PaymentStatusBadge({ status, reference }: { status: string; reference: string | null }) {
-  const c = PAYMENT_STATUS_CONFIG[status] ?? { label: status, className: 'bg-stone/10 text-stone' };
-
-  return (
-    <div>
-      <span className={`inline-flex items-center font-body text-[11px] font-bold px-2 py-0.5 rounded-full ${c.className}`}>
-        {c.label}
-      </span>
-      {reference && (
-        <p className="font-body text-[10px] text-stone mt-1">{reference}</p>
-      )}
-    </div>
-  );
-}
-
 function PaymentStatusSelect({
   orderId,
   status,
@@ -686,6 +671,10 @@ function PaymentStatusSelect({
 }) {
   const [localStatus, setLocalStatus] = useState(status);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setLocalStatus(status);
+  }, [status]);
 
   async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const newStatus = e.target.value;
