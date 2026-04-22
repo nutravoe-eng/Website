@@ -136,6 +136,7 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
     }
     // order has a terminal payment status (failed, refunded, etc.) — cancel without changing payment_status
     if (!confirm(`Cancel order for ${order.users.full_name}? This cannot be undone.`)) return;
+    setSaving(true);
     patchOrder(order.id, { status: 'cancelled' })
       .then(() => {
         onOrderUpdated({ id: order.id, status: 'cancelled' });
@@ -143,7 +144,8 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
       })
       .catch(() => {
         showToast('Failed to cancel. Try again.');
-      });
+      })
+      .finally(() => setSaving(false));
   }
 
   async function handleConfirmCancelWithRefund() {
