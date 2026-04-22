@@ -40,6 +40,8 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
   const [noteText, setNoteText]     = useState('');
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleSlot, setRescheduleSlot] = useState('');
+  const [cancelPendingModal, setCancelPendingModal] = useState<AdminOrder | null>(null);
+  const [cancelPendingPaymentStatus, setCancelPendingPaymentStatus] = useState<string>('not_paid');
   const [saving, setSaving]         = useState(false);
   const [toast, setToast]           = useState('');
   const [sortByTime, setSortByTime] = useState(false);
@@ -127,14 +129,8 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
       setCancelRefundModal(order);
       return;
     }
-    if (!confirm(`Cancel order for ${order.users.full_name}? This cannot be undone.`)) return;
-    try {
-      await patchOrder(order.id, { status: 'cancelled' });
-      onOrderUpdated({ id: order.id, status: 'cancelled' });
-      showToast('Order cancelled');
-    } catch {
-      showToast('Failed to cancel. Try again.');
-    }
+    setCancelPendingPaymentStatus('not_paid');
+    setCancelPendingModal(order);
   }
 
   async function handleConfirmCancelWithRefund() {
@@ -145,6 +141,21 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
       onOrderUpdated({ id: cancelRefundModal.id, status: 'cancelled', payment_status: refundStatus });
       showToast('Order cancelled');
       setCancelRefundModal(null);
+    } catch {
+      showToast('Failed to cancel. Try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleConfirmCancelPending() {
+    if (!cancelPendingModal) return;
+    setSaving(true);
+    try {
+      await patchOrder(cancelPendingModal.id, { status: 'cancelled', payment_status: cancelPendingPaymentStatus });
+      onOrderUpdated({ id: cancelPendingModal.id, status: 'cancelled', payment_status: cancelPendingPaymentStatus });
+      showToast('Order cancelled');
+      setCancelPendingModal(null);
     } catch {
       showToast('Failed to cancel. Try again.');
     } finally {
@@ -380,7 +391,7 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                           Mark Paid
                         </ActionBtn>
                       )}
-                      {order.status === 'cancelled' && order.payment_status !== 'pending' && (
+                      {order.status === 'cancelled' && order.payment_status !== 'pending' && order.payment_status !== 'not_paid' && (
                         <ActionBtn
                           onClick={() => { setManageRefundModal(order); setRefundStatus(order.payment_status); }}
                           color="terracotta"
@@ -542,6 +553,48 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                 className="flex-1 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white rounded-lg py-3 font-body text-sm font-bold transition-colors"
               >
                 {saving ? 'Cancelling…' : 'Confirm Cancellation'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Cancel with Payment Status Modal (pending-payment orders) */}
+      {cancelPendingModal && (
+        <Modal onClose={() => setCancelPendingModal(null)} title="Cancel Order">
+          <div className="space-y-4">
+            <div className="bg-[#F9F8F6] rounded-lg p-4">
+              <p className="font-body text-[12px] text-stone">Customer</p>
+              <p className="font-body text-sm font-semibold text-ink">{cancelPendingModal.users.full_name}</p>
+              <p className="font-body text-[12px] text-stone mt-2">Amount</p>
+              <p className="font-display text-2xl text-ink">₹{Number(cancelPendingModal.total).toLocaleString('en-IN')}</p>
+            </div>
+            <div>
+              <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
+                Payment Status After Cancellation
+              </label>
+              <select
+                value={cancelPendingPaymentStatus}
+                onChange={e => setCancelPendingPaymentStatus(e.target.value)}
+                className="w-full border border-black/10 rounded-lg px-4 py-3 font-body text-sm text-ink bg-[#F9F8F6] focus:outline-none focus:ring-2 focus:ring-sage/40"
+              >
+                <option value="not_paid">Not Paid</option>
+                <option value="pending">Pending Payment</option>
+              </select>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setCancelPendingModal(null)}
+                className="flex-1 border border-black/10 rounded-lg py-3 font-body text-sm font-bold text-stone hover:bg-black/5 transition-colors"
+              >
+                Go Back
+              </button>
+              <button
+                onClick={handleConfirmCancelPending}
+                disabled={saving}
+                className="flex-1 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white rounded-lg py-3 font-body text-sm font-bold transition-colors"
+              >
+                {saving ? 'Cancelling…' : 'Cancel Order'}
               </button>
             </div>
           </div>
