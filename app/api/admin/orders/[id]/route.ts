@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 
-const ALLOWED_PAYMENT_STATUSES = new Set(['pending', 'paid', 'failed', 'refunded', 'pending_refund', 'refund_initiated', 'refund_complete']);
+const ALLOWED_PAYMENT_STATUSES = new Set(['pending', 'paid', 'not_paid', 'failed', 'refunded', 'pending_refund', 'refund_initiated', 'refund_complete']);
 const ALLOWED_ORDER_STATUSES = new Set(['pending', 'confirmed', 'out_for_delivery', 'delivered', 'cancelled']);
 
 export async function PATCH(
