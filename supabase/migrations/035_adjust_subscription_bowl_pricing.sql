@@ -52,6 +52,15 @@ begin
       );
     elsif v_delta < 0 then
       -- Bowl is cheaper — debit the surplus from the wallet.
+      -- Check available balance before attempting debit
+      select coalesce(balance_rs, 0) into v_balance
+      from public.wallet_accounts
+      where user_id = v_sub.user_id;
+
+      if coalesce(v_balance, 0) < abs(v_delta) then
+        raise exception 'Wallet balance (₹%) is less than the pricing reduction (₹%). Collect refund manually and retry after topping up.', coalesce(v_balance, 0), abs(v_delta);
+      end if;
+
       v_balance := public.consume_wallet_balance(
         v_sub.user_id,
         abs(v_delta),
@@ -71,6 +80,12 @@ begin
         wallet_balance_rs = v_balance
     where id = p_subscription_id;
   else
+    -- Only allow silent total update for subscriptions not yet paid.
+    -- Refunded/reversed states are not supported — admin must handle manually.
+    if v_sub.payment_status not in ('pending', 'failed') then
+      raise exception 'Cannot adjust pricing for a subscription with payment status "%". Handle manually.', v_sub.payment_status;
+    end if;
+
     -- Pending subscription: no wallet credit yet, update total only.
     v_balance := null;
 
