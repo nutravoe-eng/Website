@@ -13,6 +13,19 @@ interface DayConfig {
   customization_cost_rs: number;
 }
 
+function normalizeCustomizations(
+  customizations: unknown,
+): { ingredientId: string; option: "default" | "remove" | "extra" }[] {
+  if (!Array.isArray(customizations)) return [];
+  return customizations.filter(
+    (item): item is { ingredientId: string; option: "default" | "remove" | "extra" } =>
+      Boolean(item) &&
+      typeof item === "object" &&
+      typeof (item as { ingredientId?: unknown }).ingredientId === "string" &&
+      ["default", "remove", "extra"].includes(String((item as { option?: unknown }).option)),
+  );
+}
+
 function readPresetChoices(customizations: { ingredientId: string; option: "default" | "remove" | "extra" }[]) {
   const baseChoice = customizations.some(c => c.ingredientId === "__preset_base_milk") ? "milk" : "yogurt";
   const oatsChoice = customizations.some(c => c.ingredientId === "__preset_oats_roasted") ? "roasted" : "soaked";
@@ -85,7 +98,14 @@ export default function AdminSubscriptionsPage() {
       const res = await fetch(`/api/admin/subscriptions?${params}`);
       if (!res.ok) throw new Error('Failed');
       const data = await res.json();
-      setSubs(data.subscriptions ?? []);
+      const normalized: AdminSubscription[] = (data.subscriptions ?? []).map((sub: AdminSubscription) => ({
+        ...sub,
+        subscription_day_configs: (sub.subscription_day_configs ?? []).map((dc) => ({
+          ...dc,
+          customizations: normalizeCustomizations(dc.customizations),
+        })),
+      }));
+      setSubs(normalized);
     } catch {
       setError('Could not load subscriptions.');
     } finally {
@@ -419,10 +439,18 @@ export default function AdminSubscriptionsPage() {
                           </span>
                         );
                       })()}
-                      {dc.customizations && dc.customizations.some(c => c.option !== 'default' && !c.ingredientId.startsWith("__preset_")) && (
+                      {dc.customizations && dc.customizations.some(c =>
+                        c.option !== 'default' &&
+                        typeof c.ingredientId === 'string' &&
+                        !c.ingredientId.startsWith("__preset_")
+                      ) && (
                         <span className="text-[10px] text-terracotta/80 font-medium">
                           {dc.customizations
-                            .filter(c => c.option !== 'default' && !c.ingredientId.startsWith("__preset_"))
+                            .filter(c =>
+                              c.option !== 'default' &&
+                              typeof c.ingredientId === 'string' &&
+                              !c.ingredientId.startsWith("__preset_")
+                            )
                             .map(c => `${c.option === 'remove' ? '-' : '+'}${c.ingredientId}`)
                             .join(', ')}
                         </span>
