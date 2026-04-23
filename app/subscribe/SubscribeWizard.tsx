@@ -114,6 +114,17 @@ function encodePresetIntoCustomizations(
 
 export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPlans }: Props) {
   const [state, setState] = useState<WizardState>(INITIAL_WIZARD_STATE);
+  const step2TopRef = useRef<HTMLDivElement | null>(null);
+  const spreadDaysRef = useRef<HTMLDivElement | null>(null);
+  const flexibleIntroRef = useRef<HTMLDivElement | null>(null);
+  const step3TopRef = useRef<HTMLDivElement | null>(null);
+
+  function smoothScrollTo(element: HTMLElement | null | undefined) {
+    if (!element) return;
+    requestAnimationFrame(() => {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 
   // Persist wizard state so it survives the sign-in redirect
   const isFirstRender = useRef(true);
@@ -310,6 +321,27 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     setState(s => ({ ...s, step: (s.step - 1) as 1 | 2 }));
     setError('');
   }
+
+  useEffect(() => {
+    if (state.step === 2) {
+      smoothScrollTo(step2TopRef.current);
+      if (state.deliveryStyle === "flexible") {
+        smoothScrollTo(flexibleIntroRef.current);
+      } else {
+        smoothScrollTo(spreadDaysRef.current);
+      }
+      return;
+    }
+    if (state.step === 3) {
+      smoothScrollTo(step3TopRef.current);
+    }
+  }, [state.step, state.deliveryStyle]);
+
+  useEffect(() => {
+    if (state.step !== 1 || !state.planId || state.deliveryStyle) return;
+    const el = document.getElementById(`delivery-style-${state.planId}`);
+    smoothScrollTo(el);
+  }, [state.step, state.planId, state.deliveryStyle]);
 
   // ─── Day toggle (Step 2A & 2C) ───────────────────────────────────────────────
 
@@ -820,7 +852,9 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                 dayBowlCustomMap: {},
                 dayBowlPresetMap: {},
               }))}
-              onDeliveryStyle={(style) => setState(s => ({ ...s, deliveryStyle: style }))}
+              onDeliveryStyle={(style) => {
+                setState(s => ({ ...s, deliveryStyle: style, step: 2 }));
+              }}
             />
           ))}
         </div>
@@ -845,7 +879,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
     return (
       <>
-        <div className="max-w-2xl mx-auto">
+        <div ref={step2TopRef} className="max-w-2xl mx-auto">
           <div className="text-center mb-8">
             <h1 className="font-display text-4xl font-medium text-ink mb-3">Subscribe & Save</h1>
             <p className="font-body text-[14px] text-stone">
@@ -885,7 +919,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           {scenario === 'A' && (
             <div className="space-y-6">
               {/* Day pills */}
-              <div className="bg-white rounded-xl border border-black/8 p-5">
+              <div ref={spreadDaysRef} className="bg-white rounded-xl border border-black/8 p-5">
                 <div className="flex items-center justify-between mb-3">
                   <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">
                     Select delivery days
@@ -1023,7 +1057,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
           {/* Scenario D — Flexible / Wallet */}
           {scenario === 'D' && (
-            <div className="space-y-4">
+            <div ref={flexibleIntroRef} className="space-y-4">
               {/* Wallet balance card */}
               <div className="bg-white rounded-xl border border-black/8 p-6">
                 <div className="flex items-center gap-3 mb-5">
@@ -1351,7 +1385,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     })();
 
     return (
-      <div className="max-w-lg mx-auto">
+      <div ref={step3TopRef} className="max-w-lg mx-auto">
         <div className="text-center mb-8">
           <h1 className="font-display text-4xl font-medium text-ink mb-3">Subscribe & Save</h1>
         </div>

@@ -80,7 +80,11 @@ export default function PlanCard({
       )}
 
       {selected && (
-        <div className="mt-5 pt-5 border-t border-black/5" onClick={e => e.stopPropagation()}>
+        <div
+          id={`delivery-style-${plan.id}`}
+          className="mt-5 pt-5 border-t border-black/5"
+          onClick={e => e.stopPropagation()}
+        >
           <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-3">Delivery Style</p>
           <div className="flex flex-col gap-2">
             {/* Spread option */}
