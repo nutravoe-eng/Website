@@ -91,6 +91,16 @@ function calcCustomCost(customizations: IngredientCustomization[], bowl?: Bowl |
     }, 0);
 }
 
+function findBowlByIdentifier(bowls: Bowl[], identifier: string | undefined): Bowl | undefined {
+  if (!identifier) return undefined;
+  return bowls.find(
+    (bowl) =>
+      bowl.slug === identifier ||
+      bowl._id === identifier ||
+      `bowl-${bowl.slug}` === identifier,
+  );
+}
+
 function encodePresetIntoCustomizations(
   customizations: IngredientCustomization[],
   preset: BowlPresetOptions,
@@ -380,7 +390,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     const current = state.dayBowlCounts[day]?.[bowlId] ?? 0;
 
     if (delta > 0 && current >= 1) {
-      const bowl = bowls.find(b => b._id === bowlId);
+      const bowl = findBowlByIdentifier(bowls, bowlId);
       if (bowl?.customizableIngredients?.length) {
         setRepeatChoiceKey({ day, bowlId });
         return; // increment happens via the choice sheet
@@ -488,7 +498,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         const lines = Object.entries(dayCounts)
           .filter(([, qty]) => qty > 0)
           .flatMap(([bowlId, qty]) => {
-            const bowl = bowls.find(b => b._id === bowlId);
+            const bowl = findBowlByIdentifier(bowls, bowlId);
             const instances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
             const presetInstances = state.dayBowlPresetMap[day]?.[bowlId] ?? [];
             const slot = state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot;
@@ -566,7 +576,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           Object.entries(bowlCounts)
             .filter(([, count]) => count > 0)
             .map(([bowlId, quantity]) => {
-              const bowl = bowls.find(b => b._id === bowlId);
+              const bowl = findBowlByIdentifier(bowls, bowlId);
               const instances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
               const presetInstances = state.dayBowlPresetMap[day]?.[bowlId] ?? [];
               // Pad to match quantity in case instances array is shorter
@@ -601,7 +611,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         deliveryTimeSlot: scenario !== 'D' ? state.deliveryTimeSlot : null,
         dayConfigs: dayConfigs.map((config) => ({
           day: config.day,
-          bowlId: config.bowlId,
+          bowlId: findBowlByIdentifier(bowls, config.bowlId)?.slug ?? config.bowlId.replace(/^bowl-/, ''),
           quantity: config.quantity,
           customizations: config.customizations ?? [],
           presetOptions: config.presetOptions ?? DEFAULT_PRESET_OPTIONS,
@@ -635,7 +645,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     if (scenario === 'D') return 0; // flexible — charged at wallet debit time
     return Object.entries(state.dayBowlCustomMap).reduce((total, [day, bowlMap]) => {
       return total + Object.entries(bowlMap).reduce((dayTotal, [bowlId, instances]) => {
-        const bowl = bowls.find(b => b._id === bowlId);
+        const bowl = findBowlByIdentifier(bowls, bowlId);
         // Sum cost across each individual instance
         return dayTotal + instances.reduce((instTotal, inst) => instTotal + calcCustomCost(inst, bowl), 0);
       }, 0);
@@ -658,7 +668,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
       const counts = state.dayBowlCounts[day] ?? {};
       for (const [bowlId, qty] of Object.entries(counts)) {
         if (qty <= 0) continue;
-        const bowl = bowls.find((b) => b._id === bowlId);
+        const bowl = findBowlByIdentifier(bowls, bowlId);
         if (!bowl) continue;
         s += getSubscriberBaseFromPlanConfig(bowl, currentPlan) * qty;
       }
@@ -1241,7 +1251,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         {/* Customization modal — scenario A (spread, per-instance) */}
         {customizingSpreadKey && (() => {
           const { day, bowlId, instanceIndex } = customizingSpreadKey;
-          const bowl = bowls.find(b => b._id === bowlId) ?? null;
+          const bowl = findBowlByIdentifier(bowls, bowlId) ?? null;
           if (!bowl) return null;
           const instances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
           const presetInstances = state.dayBowlPresetMap[day]?.[bowlId] ?? [];
@@ -1278,7 +1288,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
         {/* Repeat-or-customise choice sheet — scenario A */}
         {repeatChoiceKey && (() => {
-          const bowl = bowls.find(b => b._id === repeatChoiceKey.bowlId);
+          const bowl = findBowlByIdentifier(bowls, repeatChoiceKey.bowlId);
           const { day, bowlId } = repeatChoiceKey;
           const existingInstances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
           const existingPresetInstances = state.dayBowlPresetMap[day]?.[bowlId] ?? [];
@@ -1375,7 +1385,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           .map(d => {
             const parts = Object.entries(state.dayBowlCounts[d] ?? {})
               .filter(([, c]) => c > 0)
-              .map(([id, c]) => `${c}× ${bowls.find(b => b._id === id)?.name ?? id}`);
+              .map(([id, c]) => `${c}× ${findBowlByIdentifier(bowls, id)?.name ?? id}`);
             return parts.length > 0 ? `${d}: ${parts.join(' + ')}` : null;
           })
           .filter(Boolean)

@@ -30,6 +30,16 @@ const DEFAULT_PRESET_OPTIONS: BowlPresetOptions = {
   noSugar: false,
 };
 
+function findBowlByIdentifier(bowls: Bowl[], identifier: string | undefined): Bowl | undefined {
+  if (!identifier) return undefined;
+  return bowls.find(
+    (bowl) =>
+      bowl.slug === identifier ||
+      bowl._id === identifier ||
+      `bowl-${bowl.slug}` === identifier,
+  );
+}
+
 interface Props {
   sub: Subscription;
   bowls: Bowl[];
@@ -103,7 +113,7 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
         ? edit.selectedDays.map(day => ({
             day: day as Day,
             bowlId: edit.dayBowlMap[day],
-            bowlName: bowls.find(b => b._id === edit.dayBowlMap[day])?.name ?? '',
+            bowlName: findBowlByIdentifier(bowls, edit.dayBowlMap[day])?.name ?? '',
             quantity: 1,
             customizations: edit.dayCustomMap[day] ?? [],
             presetOptions: edit.dayPresetMap[day] ?? DEFAULT_PRESET_OPTIONS,
@@ -237,7 +247,7 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
                       dayPreset.baseChoice !== DEFAULT_PRESET_OPTIONS.baseChoice ||
                       dayPreset.oatsChoice !== DEFAULT_PRESET_OPTIONS.oatsChoice ||
                       dayPreset.noSugar !== DEFAULT_PRESET_OPTIONS.noSugar;
-                    const selectedBowl = bowls.find(b => b._id === edit.dayBowlMap[day]);
+                    const selectedBowl = findBowlByIdentifier(bowls, edit.dayBowlMap[day]);
                     return (
                       <div key={day} className="bg-[#F9F8F6] rounded-xl p-4">
                         <div className="flex items-center gap-2 mb-3">
@@ -341,7 +351,7 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
       {/* Customization modal — spread day */}
       {customizingDay && (() => {
         const bowlId = edit.dayBowlMap[customizingDay];
-        const bowl = bowls.find(b => b._id === bowlId);
+        const bowl = findBowlByIdentifier(bowls, bowlId);
         if (!bowl) return null;
         return (
           <CustomizationModal

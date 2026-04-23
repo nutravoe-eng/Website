@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { adminSupabase } from "@/lib/supabase/admin";
 import { scheduleDeliveryDates } from "@/lib/subscription";
+import { getAllBowls } from "@/lib/sanity";
 
 type DayConfigInput = {
   day: string;
@@ -26,6 +27,10 @@ function daySlugFromDate(dateISO: string): string {
   const d = new Date(`${dateISO}T12:00:00`);
   const map = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   return map[d.getDay()] ?? "mon";
+}
+
+function resolveCanonicalBowlSlug(rawBowlId: string, bowlMap: Map<string, string>): string | null {
+  return bowlMap.get(rawBowlId) ?? null;
 }
 
 function isOrderEditableByCustomer(order: { delivery_date: string; delivery_time_slot: string | null }): boolean {
@@ -100,6 +105,14 @@ export async function PATCH(
       return NextResponse.json({ error: `Invalid day "${invalidDay.day}". Must be one of: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.` }, { status: 400 });
     }
 
+    const allBowls = await getAllBowls();
+    const bowlIdentifierToSlug = new Map<string, string>();
+    for (const bowl of allBowls) {
+      bowlIdentifierToSlug.set(bowl.slug, bowl.slug);
+      bowlIdentifierToSlug.set(bowl._id, bowl.slug);
+      bowlIdentifierToSlug.set(`bowl-${bowl.slug}`, bowl.slug);
+    }
+
     const { error: deleteError } = await adminSupabase
       .from("subscription_day_configs")
       .delete()
@@ -113,9 +126,10 @@ export async function PATCH(
       const { error: insertError } = await adminSupabase
         .from("subscription_day_configs")
         .insert(dayConfigs.map((config) => ({
+          // Always persist canonical slug regardless of what the client sends.
+          bowl_slug: resolveCanonicalBowlSlug(config.bowlId, bowlIdentifierToSlug) ?? config.bowlId,
           subscription_id: id,
           day_of_week: config.day.toLowerCase(),
-          bowl_slug: config.bowlId,
           quantity: Math.max(1, Math.trunc(config.quantity)),
         })));
 

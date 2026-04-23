@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "normalize:subscription-bowl-slugs": "node scripts/normalize-subscription-bowl-slugs.mjs",
+    "normalize:subscription-bowl-slugs:apply": "node scripts/normalize-subscription-bowl-slugs.mjs --apply"
   },
   "dependencies": {
     "@sanity/client": "^6.15.7",

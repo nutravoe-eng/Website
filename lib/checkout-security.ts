@@ -144,6 +144,16 @@ function getPlanBySlug(plans: SubscriptionPlan[], slug: string): SubscriptionPla
   return plans.find((plan) => plan.slug === slug) ?? null;
 }
 
+function buildBowlLookupMap(bowls: Bowl[]): Map<string, Bowl> {
+  const map = new Map<string, Bowl>();
+  for (const bowl of bowls) {
+    map.set(bowl.slug, bowl);
+    map.set(bowl._id, bowl);
+    map.set(`bowl-${bowl.slug}`, bowl);
+  }
+  return map;
+}
+
 /**
  * Standard-tier subscription ₹ per bowl (299-class), global.
  * Use for flexible wallet **load** amounts; per-line debits use {@link getSubscriptionBaseUnitPriceForBowl}.
@@ -177,7 +187,7 @@ export async function buildAuthoritativeOrder(
     throw new Error(`Unknown subscription plan: ${subscriptionPlanSlug}`);
   }
 
-  const bowlMap = new Map(bowls.map((bowl) => [bowl.slug, bowl]));
+  const bowlMap = buildBowlLookupMap(bowls);
 
   const lineItems = items.map((item) => {
     const bowl = bowlMap.get(item.bowlSlug);
@@ -250,7 +260,7 @@ export async function buildSubscriptionQuote(
     const resolved = await resolveDeliveryDistanceKm(coords.lat, coords.lng, { httpReferrer: options?.httpReferrer });
     distanceKmForPricing = resolved.distanceKm;
   }
-  const bowlMap = new Map(bowls.map((b) => [b.slug, b]));
+  const bowlMap = buildBowlLookupMap(bowls);
   const perBowl = plan.pricePerBowl || plan.price_per_bowl || 0;
 
   let totalIngredientExtrasRs = 0;

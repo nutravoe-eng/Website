@@ -40,6 +40,10 @@ function normalizeDayConfigDay(day: string): string | null {
   return DAY_NAME_TO_ENUM[day] ?? null;
 }
 
+function resolveCanonicalBowlSlug(rawBowlId: string, bowlMap: Map<string, string>): string | null {
+  return bowlMap.get(rawBowlId) ?? null;
+}
+
 
 
 export async function POST(req: NextRequest) {
@@ -150,9 +154,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid subscription plan" }, { status: 400, headers: limited.headers });
   }
 
+  const allBowls = await getAllBowls();
+  const bowlIdentifierToSlug = new Map<string, string>();
+  for (const bowl of allBowls) {
+    bowlIdentifierToSlug.set(bowl.slug, bowl.slug);
+    bowlIdentifierToSlug.set(bowl._id, bowl.slug);
+    bowlIdentifierToSlug.set(`bowl-${bowl.slug}`, bowl.slug);
+  }
+  const normalizedDayConfigs = dayConfigs.map((config) => ({
+    ...config,
+    bowlId: resolveCanonicalBowlSlug(config.bowlId, bowlIdentifierToSlug) ?? config.bowlId,
+  }));
+
   let quote;
   try {
-    quote = await buildSubscriptionQuote(planId, address, dayConfigs, {
+    quote = await buildSubscriptionQuote(planId, address, normalizedDayConfigs, {
       httpReferrer: requestOriginReferrer(req),
     });
   } catch (err) {
@@ -201,17 +217,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to create subscription" }, { status: 500, headers: limited.headers });
   }
 
-  if (dayConfigs.length > 0) {
-    const allBowls = await getAllBowls();
-    const bowlMap = new Map(allBowls.map(b => [b.slug, b]));
+  if (normalizedDayConfigs.length > 0) {
+    const bowlMap = new Map(allBowls.map((b) => [b.slug, b]));
 
-    const configRows = dayConfigs.map((config) => {
+    const configRows = normalizedDayConfigs.map((config) => {
       const normalizedDay = normalizeDayConfigDay(config.day);
       if (!normalizedDay) {
         throw new Error(`Invalid delivery day: ${config.day}`);
       }
 
-      const bowl = bowlMap.get(config.bowlId);
+      const canonicalSlug = resolveCanonicalBowlSlug(config.bowlId, bowlIdentifierToSlug) ?? config.bowlId;
+      const bowl = bowlMap.get(canonicalSlug);
       const customsRaw = config.customizations;
       const isPerInstance = Array.isArray(customsRaw?.[0]);
       const extraCost = bowl
@@ -225,7 +241,7 @@ export async function POST(req: NextRequest) {
       return {
         subscription_id: subscription.id,
         day_of_week: normalizedDay,
-        bowl_slug: config.bowlId,
+        bowl_slug: canonicalSlug,
         quantity: Math.max(1, Math.trunc(config.quantity)),
         delivery_time_slot: config.deliveryTimeSlot ?? null,
         customizations: customsRaw ?? [],
