@@ -6,8 +6,12 @@ export interface PlanConfig {
   id: PlanId;
   name: string;
   bowlsPerWeek: number;
+  /** Standard (299-class) near-zone weekly total — used for flexible wallet load. */
   weeklyPrice: number;
+  /** Standard (299-class) near zone — display “starts from” + cart zone helper. */
   perBowl: number;
+  /** Premium per bowl, global; omit if unused. */
+  ratePremium?: number;
   billingCycle?: 'weekly' | 'monthly';
   savingsBadge: string;
   customisationChargePerBowl?: number;
@@ -15,9 +19,9 @@ export interface PlanConfig {
 }
 
 export const STUB_PLANS: PlanConfig[] = [
-  { id: 'three-bowl', name: '3-Bowl / Week', bowlsPerWeek: 3, weeklyPrice: 852, perBowl: 284, billingCycle: 'weekly', savingsBadge: 'Save 5%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'flexible'] },
-  { id: 'five-bowl', name: '5-Bowl / Week', bowlsPerWeek: 5, weeklyPrice: 1346, perBowl: 269, billingCycle: 'weekly', savingsBadge: 'Save 10%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'flexible'] },
-  { id: 'daily', name: 'Daily Plan', bowlsPerWeek: 7, weeklyPrice: 1800, perBowl: 257, billingCycle: 'weekly', savingsBadge: 'Best Value', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'flexible'] },
+  { id: 'three-bowl', name: '3-Bowl / Week', bowlsPerWeek: 3, weeklyPrice: 852, perBowl: 284, ratePremium: 370, billingCycle: 'weekly', savingsBadge: 'Save 5%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'flexible'] },
+  { id: 'five-bowl', name: '5-Bowl / Week', bowlsPerWeek: 5, weeklyPrice: 1350, perBowl: 270, ratePremium: 370, billingCycle: 'weekly', savingsBadge: 'Save 10%', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'flexible'] },
+  { id: 'daily', name: 'Daily Plan', bowlsPerWeek: 7, weeklyPrice: 1820, perBowl: 260, ratePremium: 360, billingCycle: 'weekly', savingsBadge: 'Best Value', customisationChargePerBowl: 30, deliveryStyles: ['spread', 'flexible'] },
 ];
 
 interface Props {
@@ -50,10 +54,18 @@ export default function PlanCard({
       </div>
 
       <div className="flex items-baseline gap-1 mb-1">
+        <span className="font-body text-[12px] uppercase tracking-wider text-stone/80 mr-1">Starts at</span>
         <span className="font-display text-3xl font-medium text-ink">₹{plan.weeklyPrice.toLocaleString('en-IN')}</span>
         <span className="font-body text-[13px] text-stone">/week</span>
       </div>
-      <p className="font-body text-[12px] text-stone">Starts from ₹{plan.perBowl} per bowl</p>
+      <p className="font-body text-[12px] text-stone/90 mt-0.5">
+        {plan.ratePremium != null && plan.ratePremium > 0
+          ? (
+            <>Standard bowls: ₹{plan.perBowl} each · Premium bowls: ₹{plan.ratePremium} each</>
+          ) : (
+            <>Per-bowl price: ₹{plan.perBowl} each</>
+          )}
+      </p>
       <p className="font-body text-[11px] text-stone/80 mt-1">Delivery is free within 10 km; extra delivery charges apply beyond 10 km.</p>
 
       {selected && (

@@ -25,6 +25,8 @@ export interface Bowl {
   tagline: string;
   description: string;
   price: number;
+  /** Omitted or "standard" = use plan standard per-bowl; "premium" = use plan premium per-bowl. */
+  subscriptionPriceTier?: SubscriptionPriceTier;
   image: string; // URL string (resolved from Sanity or local path)
   tags: BowlTag[];
   available: boolean;
@@ -40,6 +42,9 @@ export interface Bowl {
 }
 
 export type BowlTag = "bestseller" | "high-protein" | "seasonal";
+
+/** Which subscription per-bowl rate row applies; default is standard (299-class menu). */
+export type SubscriptionPriceTier = "standard" | "premium";
 
 export interface OrderItem {
   bowl_name: string;
@@ -115,8 +120,10 @@ export interface SubscriptionPlan {
   slug: string; // used as plan_id in DB
   bowlsPerCycle: number;
   billingCycle: 'weekly' | 'monthly';
-  priceNearPerBowl: number; // ≤10 km zone
-  priceFarPerBowl: number;  // >10 km zone
+  /** Global standard subscriber price per bowl (299-class bowls). */
+  pricePerBowl: number;
+  /** Global premium subscriber price per bowl (399-class bowls), optional with standard fallback. */
+  pricePerBowlPremium?: number;
   price_per_bowl?: number;  // Fallback from DB
   customisationChargePerBowl: number;
   deliveryStyles: DeliveryStyle[];

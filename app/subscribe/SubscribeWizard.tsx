@@ -22,6 +22,7 @@ import CustomizationModal from "@/components/CustomizationModal";
 import { createClient } from "@/lib/supabase/client";
 import { resolveDeliveryCoords } from "@/lib/geocodeCache";
 import { FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
+import { getSubscriberBaseFromPlanConfig } from "@/lib/subscription-pricing";
 import { DELIVERY_TIME_SLOTS } from "@/lib/delivery-slots";
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -64,6 +65,22 @@ interface Props {
   plans?: SubscriptionPlan[];
 }
 
+const INITIAL_WIZARD_STATE: WizardState = {
+  step: 1,
+  planId: null,
+  deliveryStyle: null,
+  selectedDays: [],
+  dayBowlMap: {},
+  dayCustomMap: {},
+  dayPresetMap: {},
+  dayBowlCounts: {},
+  dayBowlCustomMap: {},
+  dayBowlPresetMap: {},
+  timeSlotMode: 'same',
+  deliveryTimeSlot: '',
+  dayTimeSlotMap: {},
+};
+
 function calcCustomCost(customizations: IngredientCustomization[], bowl?: Bowl | null): number {
   if (!bowl?.customizableIngredients) return 0;
   return customizations
@@ -96,32 +113,24 @@ function encodePresetIntoCustomizations(
 }
 
 export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPlans }: Props) {
-  const [state, setState] = useState<WizardState>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const raw = sessionStorage.getItem(WIZARD_SESSION_KEY);
-        if (raw) return JSON.parse(raw) as WizardState;
-      } catch { /* ignore */ }
-    }
-    return {
-      step: 1,
-      planId: null,
-      deliveryStyle: null,
-      selectedDays: [],
-      dayBowlMap: {},
-      dayCustomMap: {},
-      dayPresetMap: {},
-      dayBowlCounts: {},
-      dayBowlCustomMap: {},
-      dayBowlPresetMap: {},
-      timeSlotMode: 'same',
-      deliveryTimeSlot: '',
-      dayTimeSlotMap: {},
-    };
-  });
+  const [state, setState] = useState<WizardState>(INITIAL_WIZARD_STATE);
 
   // Persist wizard state so it survives the sign-in redirect
   const isFirstRender = useRef(true);
+  const didHydrateSessionState = useRef(false);
+  useEffect(() => {
+    if (didHydrateSessionState.current) return;
+    didHydrateSessionState.current = true;
+    try {
+      const raw = sessionStorage.getItem(WIZARD_SESSION_KEY);
+      if (raw) {
+        setState(JSON.parse(raw) as WizardState);
+      }
+    } catch {
+      // ignore malformed session state
+    }
+  }, []);
+
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
     try { sessionStorage.setItem(WIZARD_SESSION_KEY, JSON.stringify(state)); } catch { /* ignore */ }
@@ -130,7 +139,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   const [user, setUser] = useState<{ name: string; phone: string; email: string; id: string } | null>(null);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryPincode, setDeliveryPincode] = useState('');
-  const [isNearZone, setIsNearZone] = useState(true); // default near; updated after geocode
   const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -141,16 +149,17 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   const [activeSubEndDate, setActiveSubEndDate] = useState<string | null>(null);
   const [isRenewalFlow, setIsRenewalFlow] = useState(false);
 
-  // Convert Sanity plans to PlanConfig using distance-based pricing
+  // Convert Sanity plans to PlanConfig (global standard/premium pricing; delivery is separate)
   const plans: PlanConfig[] = sanityPlans
     ? sanityPlans.map(p => {
-        const pricePerBowl = isNearZone ? p.priceNearPerBowl : p.priceFarPerBowl;
+        const pricePerBowl = p.pricePerBowl ?? p.price_per_bowl ?? 0;
         return {
           id: p.slug as PlanId,
           name: p.name,
           bowlsPerWeek: p.bowlsPerCycle,
           weeklyPrice: pricePerBowl * p.bowlsPerCycle,
           perBowl: pricePerBowl,
+          ratePremium: p.pricePerBowlPremium,
           billingCycle: p.billingCycle,
           savingsBadge: p.savingsBadge ?? '',
           customisationChargePerBowl: p.customisationChargePerBowl,
@@ -160,7 +169,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     : STUB_PLANS;
 
   // Customization modal triggers
-  const [customizingDay, setCustomizingDay] = useState<string | null>(null);  // scenario C
   const [customizingSpreadKey, setCustomizingSpreadKey] = useState<{ day: string; bowlId: string; instanceIndex: number } | null>(null);  // scenario A
   const [repeatChoiceKey, setRepeatChoiceKey] = useState<{ day: string; bowlId: string } | null>(null);  // scenario A — repeat/customise sheet
 
@@ -236,7 +244,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             );
             if (res.ok) {
               const data = (await res.json()) as { distanceKm: number; deliveryFee: number };
-              setIsNearZone(data.deliveryFee === 0);
               setDeliveryDistanceKm(Math.round(data.distanceKm * 10) / 10);
             }
           }
@@ -250,10 +257,10 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
   const currentPlan = plans.find(p => p.id === state.planId);
 
-  function getScenario(): 'A' | 'C' | 'D' {
+  function getScenario(): 'A' | 'D' {
     if (state.deliveryStyle === 'flexible') return 'D';
-    if (state.planId === 'daily' && state.deliveryStyle === 'spread') return 'C';
-    if (state.planId === 'daily' && !state.deliveryStyle) return 'C'; // fallback
+    // All spread plans (3/5/daily) use the same configurable flow:
+    // choose any days and distribute the plan's bowls across those days.
     return 'A';
   }
 
@@ -284,11 +291,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
       return spreadTotal === currentPlan.bowlsPerWeek;
     }
 
-    if (scenario === 'C') {
-      if (state.selectedDays.length !== currentPlan.bowlsPerWeek) return false;
-      return state.selectedDays.every(day => Boolean(state.dayBowlMap[day]));
-    }
-
     return false;
   })();
 
@@ -296,12 +298,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
   function goToStep2() {
     if (!currentPlan) return;
-    // Pre-fill all 7 days for daily + spread scenario (scenario C)
-    if (state.planId === 'daily' && (state.deliveryStyle === 'spread' || !state.deliveryStyle)) {
-      setState(s => ({ ...s, step: 2, selectedDays: [...DAYS] }));
-    } else {
-      setState(s => ({ ...s, step: 2 }));
-    }
+    setState(s => ({ ...s, step: 2 }));
   }
 
   function goToStep3() {
@@ -342,11 +339,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
       if (!currentPlan) return;
       setState(s => ({ ...s, selectedDays: [...s.selectedDays, day] }));
     }
-  }
-
-  // Scenario C only
-  function setDayBowl(day: string, bowlId: string) {
-    setState(s => ({ ...s, dayBowlMap: { ...s.dayBowlMap, [day]: bowlId } }));
   }
 
   // Scenario A: per-day, per-bowl quantity adjustment
@@ -489,14 +481,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         return lines.length > 0 ? lines : [`- ${day}: no bowls assigned`];
       });
     }
-    return state.selectedDays.map(day => {
-      const bowlId = state.dayBowlMap[day];
-      const bowl = bowls.find(b => b._id === bowlId);
-      const c = describeCustomizations(state.dayCustomMap[day], bowl, state.dayPresetMap[day] ?? DEFAULT_PRESET_OPTIONS);
-      const slot = state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot;
-      const s = slot ? ` [${slot}]` : "";
-      return `- ${day}: ${bowl?.name ?? "Not selected"}${c}${s}`;
-    });
+    return [];
   };
 
   // ─── Order request via WhatsApp ──────────────────────────────────────────────
@@ -573,23 +558,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
               };
             })
         )
-      : scenario === 'C'
-      ? state.selectedDays.map(day => ({
-          day,
-          bowlId: state.dayBowlMap[day],
-          bowlName: bowls.find(b => b._id === state.dayBowlMap[day])?.name ?? '',
-          quantity: 1,
-          customizations: encodePresetIntoCustomizations(
-            state.dayCustomMap[day] ?? [],
-            state.dayPresetMap[day] ?? DEFAULT_PRESET_OPTIONS
-          ),
-          presetOptions: state.dayPresetMap[day] ?? DEFAULT_PRESET_OPTIONS,
-          customizationCost: calcCustomCost(
-            state.dayCustomMap[day] ?? [],
-            bowls.find(b => b._id === state.dayBowlMap[day])
-          ),
-          deliveryTimeSlot: state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot,
-        }))
       : [];
 
     const res = await fetch('/api/subscriptions', {
@@ -633,20 +601,12 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   const totalIngredientExtras = (() => {
     const scenario = getScenario();
     if (scenario === 'D') return 0; // flexible — charged at wallet debit time
-    if (scenario === 'A') {
-      return Object.entries(state.dayBowlCustomMap).reduce((total, [day, bowlMap]) => {
-        return total + Object.entries(bowlMap).reduce((dayTotal, [bowlId, instances]) => {
-          const bowl = bowls.find(b => b._id === bowlId);
-          // Sum cost across each individual instance
-          return dayTotal + instances.reduce((instTotal, inst) => instTotal + calcCustomCost(inst, bowl), 0);
-        }, 0);
+    return Object.entries(state.dayBowlCustomMap).reduce((total, [day, bowlMap]) => {
+      return total + Object.entries(bowlMap).reduce((dayTotal, [bowlId, instances]) => {
+        const bowl = bowls.find(b => b._id === bowlId);
+        // Sum cost across each individual instance
+        return dayTotal + instances.reduce((instTotal, inst) => instTotal + calcCustomCost(inst, bowl), 0);
       }, 0);
-    }
-    // Scenario C
-    return Object.entries(state.dayCustomMap).reduce((total, [day, customs]) => {
-      const bowlId = state.dayBowlMap[day];
-      const bowl = bowls.find(b => b._id === bowlId);
-      return total + calcCustomCost(customs, bowl);
     }, 0);
   })();
 
@@ -658,14 +618,25 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     return Math.ceil(deliveryDistanceKm) * 5 * uniqueDeliveryDays;
   })();
 
-  const totalWeeklyPrice = currentPlan
-    ? currentPlan.weeklyPrice + totalIngredientExtras + weeklyDeliveryFeeRs
-    : 0;
+  const tieredBowlSubtotal = (() => {
+    if (!currentPlan) return 0;
+    if (scenario === "D") return currentPlan.weeklyPrice;
+    let s = 0;
+    for (const day of state.selectedDays) {
+      const counts = state.dayBowlCounts[day] ?? {};
+      for (const [bowlId, qty] of Object.entries(counts)) {
+        if (qty <= 0) continue;
+        const bowl = bowls.find((b) => b._id === bowlId);
+        if (!bowl) continue;
+        s += getSubscriberBaseFromPlanConfig(bowl, currentPlan) * qty;
+      }
+    }
+    return s;
+  })();
 
-  // Bowl being customised (for modal)
-  const customizingDayBowl = customizingDay  // scenario C only
-    ? bowls.find(b => b._id === state.dayBowlMap[customizingDay]) ?? null
-    : null;
+  const totalWeeklyPrice = currentPlan
+    ? tieredBowlSubtotal + totalIngredientExtras + weeklyDeliveryFeeRs
+    : 0;
 
   // ─── Active subscription blocker ──────────────────────────────────────────────
 
@@ -878,10 +849,13 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           <div className="text-center mb-8">
             <h1 className="font-display text-4xl font-medium text-ink mb-3">Subscribe & Save</h1>
             <p className="font-body text-[14px] text-stone">
-              {currentPlan.name} — {formatCurrency(currentPlan.weeklyPrice)}/week
+              {currentPlan.name} — {formatCurrency(totalWeeklyPrice)}/week
             </p>
             <p className="font-body text-[12px] text-stone/80 mt-1">
-              Starts from {formatCurrency(currentPlan.perBowl)} per bowl. Delivery is free within 10 km; beyond 10 km, delivery charges are added based on distance.
+              {currentPlan.ratePremium != null && currentPlan.ratePremium > 0
+                ? `Standard bowls ${formatCurrency(currentPlan.perBowl)}/bowl; premium ${formatCurrency(currentPlan.ratePremium)}/bowl. `
+                : `Starts from ${formatCurrency(currentPlan.perBowl)} per bowl. `}
+              Delivery is free within 10 km; beyond 10 km, delivery charges are added based on distance.
             </p>
           </div>
           <StepIndicator />
@@ -1047,77 +1021,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             </div>
           )}
 
-          {/* Scenario C — Daily (one bowl per day, all 7 days) */}
-          {scenario === 'C' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-xl border border-black/8 p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">
-                    Delivery Days (Mon–Sun)
-                  </p>
-                  <span className="font-body text-[12px] text-stone">
-                    {state.selectedDays.length} / {currentPlan.bowlsPerWeek} selected
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {DAYS.map(day => (
-                    <button
-                      key={day}
-                      disabled
-                      className="px-4 py-2 rounded-full font-body text-[13px] font-medium border bg-sage/20 text-sage border-sage/30 cursor-default"
-                    >
-                      {day}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {state.selectedDays.length > 0 && (
-                <div className="space-y-4">
-                  {DAYS.filter(d => state.selectedDays.includes(d)).map(day => {
-                    const selectedBowl = bowls.find(b => b._id === state.dayBowlMap[day]);
-                    const dayCustoms = state.dayCustomMap[day] ?? [];
-                    const dayPresetOptions = state.dayPresetMap[day] ?? DEFAULT_PRESET_OPTIONS;
-                    const hasCustoms =
-                      dayCustoms.some(c => c.option !== 'default') ||
-                      dayPresetOptions.baseChoice !== DEFAULT_PRESET_OPTIONS.baseChoice ||
-                      dayPresetOptions.oatsChoice !== DEFAULT_PRESET_OPTIONS.oatsChoice ||
-                      dayPresetOptions.noSugar !== DEFAULT_PRESET_OPTIONS.noSugar;
-                    return (
-                      <div key={day} className="bg-white rounded-xl border border-black/8 p-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="w-10 h-10 rounded-full bg-sage/10 text-sage font-body text-[12px] font-bold flex items-center justify-center shrink-0">
-                            {day}
-                          </span>
-                          <p className="font-body text-[13px] font-medium text-ink">
-                            {selectedBowl ? selectedBowl.name : <span className="text-stone italic">Select a bowl</span>}
-                          </p>
-                          {selectedBowl && (
-                            <div className="ml-auto flex items-center gap-2">
-                              <button
-                                onClick={() => setCustomizingDay(day)}
-                                className="font-body text-[11px] text-sage cursor-pointer font-semibold hover:underline flex items-center gap-1"
-                              >
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                                {hasCustoms ? 'Edit' : 'Customise'}
-                              </button>
-                              {hasCustoms && <span className="w-2 h-2 rounded-full bg-terracotta" />}
-                            </div>
-                          )}
-                        </div>
-                        <BowlPicker
-                          bowls={bowls}
-                          selectedBowlId={state.dayBowlMap[day] ?? ''}
-                          onSelect={(bowlId) => setDayBowl(day, bowlId)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Scenario D — Flexible / Wallet */}
           {scenario === 'D' && (
             <div className="space-y-4">
@@ -1147,7 +1050,13 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                   <div className="flex items-center gap-3 p-3 bg-sage/5 rounded-lg border border-sage/20">
                     <div className="w-6 h-6 rounded-full bg-sage/20 flex items-center justify-center shrink-0 text-sage font-bold text-[12px]">2</div>
                     <p className="font-body text-[13px] text-ink">
-                      Schedule any bowl, any day through the week — each delivery costs <strong>₹{currentPlan.perBowl}</strong> and is deducted from your wallet.
+                      Schedule any bowl, any day through the week — each delivery deducts the subscriber price
+                      {currentPlan.ratePremium != null && currentPlan.ratePremium > 0 ? (
+                        <> (<strong>₹{currentPlan.perBowl}</strong> standard / <strong>₹{currentPlan.ratePremium}</strong> premium per bowl)</>
+                      ) : (
+                        <><strong>₹{currentPlan.perBowl}</strong> per bowl</>
+                      )}{" "}
+                      from your wallet.
                     </p>
                   </div>
                   <div className="flex items-center gap-3 p-3 bg-sage/5 rounded-lg border border-sage/20">
@@ -1178,7 +1087,9 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
               <div className="bg-white rounded-xl border border-black/8 p-4 flex items-center justify-between">
                 <div>
                   <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">Wallet balance after approval</p>
-                  <p className="font-body text-[12px] text-stone mt-0.5">{currentPlan.bowlsPerWeek} bowls × ₹{currentPlan.perBowl} each, loaded after approval</p>
+                  <p className="font-body text-[12px] text-stone mt-0.5">
+                    {currentPlan.bowlsPerWeek} bowls at standard load rate (₹{currentPlan.perBowl} each), loaded after approval. Premium menu bowls debit more per order.
+                  </p>
                 </div>
                 <p className="font-display text-2xl font-medium text-sage-dark">
                   ₹{currentPlan.weeklyPrice.toLocaleString('en-IN')}
@@ -1292,25 +1203,6 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
             </button>
           </div>
         </div>
-
-        {/* Customization modal — scenario C (daily, one bowl per day) */}
-        {customizingDay && customizingDayBowl && (
-          <CustomizationModal
-            bowl={customizingDayBowl}
-            initialCustomizations={state.dayCustomMap[customizingDay]}
-            initialPresetOptions={state.dayPresetMap[customizingDay] ?? DEFAULT_PRESET_OPTIONS}
-            mode="subscription"
-            onConfirm={(customizations, presetOptions) => {
-              setState(s => ({
-                ...s,
-                dayCustomMap: { ...s.dayCustomMap, [customizingDay]: customizations },
-                dayPresetMap: { ...s.dayPresetMap, [customizingDay]: presetOptions },
-              }));
-              setCustomizingDay(null);
-            }}
-            onClose={() => setCustomizingDay(null)}
-          />
-        )}
 
         {/* Customization modal — scenario A (spread, per-instance) */}
         {customizingSpreadKey && (() => {
@@ -1455,9 +1347,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           .filter(Boolean)
           .join(' · ');
       }
-      return state.selectedDays
-        .map(d => `${d}: ${bowls.find(b => b._id === state.dayBowlMap[d])?.name ?? ''}`)
-        .join(' · ');
+      return '';
     })();
 
     return (
@@ -1545,8 +1435,8 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                 {(totalIngredientExtras > 0 || weeklyDeliveryFeeRs > 0) && currentPlan && (
                   <div className="mb-3 space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-body text-[11px] text-stone">Base plan</span>
-                      <span className="font-body text-[11px] text-stone">{formatCurrency(currentPlan.weeklyPrice)}</span>
+                      <span className="font-body text-[11px] text-stone">Base bowls (selected mix)</span>
+                      <span className="font-body text-[11px] text-stone">{formatCurrency(tieredBowlSubtotal)}</span>
                     </div>
                     {totalIngredientExtras > 0 && (
                       <div className="flex items-center justify-between">

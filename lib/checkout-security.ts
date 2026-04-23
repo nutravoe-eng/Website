@@ -9,6 +9,7 @@ import {
 import { geocodeIndianPincode } from "@/lib/ola-maps";
 import { resolveDeliveryDistanceKm } from "@/lib/road-distance";
 import { getAllBowls, getSubscriptionPlans } from "@/lib/sanity";
+import { getSubscriptionBaseUnitPriceForBowl } from "@/lib/subscription-pricing";
 import type { Bowl, BowlPresetOptions, IngredientCustomization, SubscriptionPlan } from "@/types";
 
 export interface AddressForPricing {
@@ -143,17 +144,19 @@ function getPlanBySlug(plans: SubscriptionPlan[], slug: string): SubscriptionPla
   return plans.find((plan) => plan.slug === slug) ?? null;
 }
 
+/**
+ * Standard-tier subscription ₹ per bowl (299-class), global.
+ * Use for flexible wallet **load** amounts; per-line debits use {@link getSubscriptionBaseUnitPriceForBowl}.
+ */
 export async function getSubscriptionUnitPrice(
   planSlug: string,
-  address: AddressForPricing,
-  options?: PricingContextOptions,
+  _address: AddressForPricing,
+  _options?: PricingContextOptions,
 ): Promise<number | null> {
-  const [plans, nearZone] = await Promise.all([getSubscriptionPlans(), isNearZoneAddress(address, options)]);
+  const plans = await getSubscriptionPlans();
   const plan = getPlanBySlug(plans, planSlug);
   if (!plan) return null;
-  
-  const base = nearZone ? plan.priceNearPerBowl : plan.priceFarPerBowl;
-  return base || plan.price_per_bowl || 0;
+  return plan.pricePerBowl || plan.price_per_bowl || 0;
 }
 
 export async function buildAuthoritativeOrder(
@@ -162,11 +165,17 @@ export async function buildAuthoritativeOrder(
   subscriptionPlanSlug?: string | null,
   options?: PricingContextOptions,
 ): Promise<{ subtotal: number; deliveryFee: number; total: number; lineItems: CheckoutLineItem[] }> {
-  const [bowls, deliveryFee, subscriptionUnitPrice] = await Promise.all([
+  const [bowls, deliveryFee, plans] = await Promise.all([
     getAllBowls(),
     getAddressDeliveryFee(address, options),
-    subscriptionPlanSlug ? getSubscriptionUnitPrice(subscriptionPlanSlug, address, options) : Promise.resolve(null),
+    subscriptionPlanSlug ? getSubscriptionPlans() : Promise.resolve(null),
   ]);
+
+  const subscriptionPlan =
+    subscriptionPlanSlug && plans ? getPlanBySlug(plans, subscriptionPlanSlug) : null;
+  if (subscriptionPlanSlug && !subscriptionPlan) {
+    throw new Error(`Unknown subscription plan: ${subscriptionPlanSlug}`);
+  }
 
   const bowlMap = new Map(bowls.map((bowl) => [bowl.slug, bowl]));
 
@@ -181,7 +190,9 @@ export async function buildAuthoritativeOrder(
 
     const quantity = Math.max(1, Math.trunc(item.quantity));
     const customizationUpcharge = getCustomizationUpcharge(bowl, item.customizations);
-    const baseUnitPrice = subscriptionUnitPrice ?? bowl.price;
+    const baseUnitPrice = subscriptionPlan
+      ? getSubscriptionBaseUnitPriceForBowl(subscriptionPlan, bowl)
+      : bowl.price;
 
     return {
       bowl_slug: bowl.slug,
@@ -205,7 +216,12 @@ export async function buildAuthoritativeOrder(
 export async function buildSubscriptionQuote(
   planSlug: string,
   address: AddressForPricing,
-  dayConfigs: { bowlId: string; day?: string; customizations?: IngredientCustomization[] | IngredientCustomization[][] }[],
+  dayConfigs: {
+    bowlId: string;
+    day?: string;
+    quantity?: number;
+    customizations?: IngredientCustomization[] | IngredientCustomization[][];
+  }[],
   options?: PricingContextOptions,
 ): Promise<{
   billingCycle: "weekly" | "monthly";
@@ -234,19 +250,23 @@ export async function buildSubscriptionQuote(
     const resolved = await resolveDeliveryDistanceKm(coords.lat, coords.lng, { httpReferrer: options?.httpReferrer });
     distanceKmForPricing = resolved.distanceKm;
   }
-  const nearZone = distanceKmForPricing !== null && distanceKmForPricing <= FREE_ZONE_RADIUS_KM;
-
   const bowlMap = new Map(bowls.map((b) => [b.slug, b]));
-  const perBowl = nearZone ? plan.priceNearPerBowl : plan.priceFarPerBowl;
+  const perBowl = plan.pricePerBowl || plan.price_per_bowl || 0;
 
   let totalIngredientExtrasRs = 0;
+  let bowlsBaseFromConfigsRs = 0;
 
   for (const config of dayConfigs) {
     const bowl = bowlMap.get(config.bowlId);
-    if (!bowl) continue;
+    if (!bowl) {
+      throw new Error(`Unknown bowl: ${config.bowlId}`);
+    }
     if (bowl.inStock === false) {
       throw new Error(`'${bowl.name}' is currently out of stock and cannot be used in a subscription`);
     }
+
+    const lineQty = Math.max(1, Math.trunc(config.quantity ?? 1));
+    bowlsBaseFromConfigsRs += getSubscriptionBaseUnitPriceForBowl(plan, bowl) * lineQty;
 
     const customsRaw = config.customizations as unknown;
     const isPerInstance = Array.isArray((customsRaw as unknown[])?.[0]);
@@ -264,7 +284,11 @@ export async function buildSubscriptionQuote(
     }
   }
 
-  const bowlsAmountRs = (perBowl * plan.bowlsPerCycle) + totalIngredientExtrasRs;
+  // Flexible: no day configs — wallet load uses standard tier only. Spread: sum each bowl's tiered price × quantity.
+  const bowlsAmountRs =
+    dayConfigs.length === 0
+      ? (perBowl * plan.bowlsPerCycle) + totalIngredientExtrasRs
+      : bowlsBaseFromConfigsRs + totalIngredientExtrasRs;
 
   // Count unique delivery days to calculate weekly delivery fee
   const uniqueDeliveryDays = new Set(dayConfigs.map((c) => c.day).filter(Boolean)).size;

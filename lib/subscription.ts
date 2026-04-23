@@ -115,13 +115,14 @@ export async function getActivePlanConfig(): Promise<PlanConfig | null> {
     const sanityPlans = await getSubscriptionPlans();
     const matched = sanityPlans.find((p) => p.slug === sub.planId);
     if (matched) {
-      const perBowl = matched.price_per_bowl || matched.priceNearPerBowl || matched.priceFarPerBowl || 0;
+      const perBowl = matched.pricePerBowl || matched.price_per_bowl || 0;
       return {
         id: matched.slug as PlanConfig["id"],
         name: matched.name,
         bowlsPerWeek: matched.bowlsPerCycle,
         weeklyPrice: perBowl * matched.bowlsPerCycle,
         perBowl,
+        ratePremium: matched.pricePerBowlPremium,
         billingCycle: matched.billingCycle,
         savingsBadge: matched.savingsBadge ?? '',
         customisationChargePerBowl: matched.customisationChargePerBowl ?? 0,

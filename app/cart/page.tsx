@@ -15,6 +15,8 @@ import { getWhatsAppNumber } from "@/lib/contact";
 import { isPaidFlexibleWalletEligible } from "@/lib/flexible-subscription";
 import DeliveryMarquee from "@/components/DeliveryMarquee";
 import { GUEST_DELIVERY_CONTEXT_EVENT, readGuestDeliveryContext } from "@/lib/guest-delivery";
+import { getSubscriberBaseFromPlanConfig } from "@/lib/subscription-pricing";
+import type { PlanConfig } from "@/app/subscribe/PlanCard";
 import {
   DEFAULT_DELIVERY_POLICY,
   type DeliveryMode,
@@ -66,8 +68,8 @@ export default function CartPage() {
   const asapSlot = getAsapSlot(deliveryPolicy, nowIst);
   const deliverySlots = generateScheduledSlots(deliveryPolicy, nowIst).map((slot) => slot.label);
 
-  // Subscriber discount
-  const [subscriberPricePerBowl, setSubscriberPricePerBowl] = useState<number | null>(null);
+  // Active subscription plan (tiered standard / premium rates)
+  const [subPlanConfig, setSubPlanConfig] = useState<PlanConfig | null>(null);
 
   // Wallet payment
   const [walletBalanceRs, setWalletBalanceRs] = useState<number>(0);
@@ -152,7 +154,7 @@ export default function CartPage() {
       }
 
       const [planConfig] = await Promise.all([getActivePlanConfig()]);
-      if (planConfig) setSubscriberPricePerBowl(planConfig.perBowl);
+      if (planConfig) setSubPlanConfig(planConfig);
 
       // Wallet checkout: paid flexible, active or completed but still within billing period
       if (authUser) {
@@ -263,10 +265,14 @@ export default function CartPage() {
     };
   }, []);
 
-  // Subscriber discount — applied per bowl (customization extras still at full cost)
-  const subscriberDiscount = subscriberPricePerBowl !== null
-    ? items.reduce((sum, item) => sum + Math.max(0, item.bowl.price - subscriberPricePerBowl) * item.quantity, 0)
-    : 0;
+  // Subscriber discount — per bowl tier (customization extras still at full cost)
+  const subscriberDiscount =
+    subPlanConfig !== null
+      ? items.reduce((sum, item) => {
+          const subBase = getSubscriberBaseFromPlanConfig(item.bowl, subPlanConfig);
+          return sum + Math.max(0, item.bowl.price - subBase) * item.quantity;
+        }, 0)
+      : 0;
   const effectiveTotal = total - subscriberDiscount;
   const grandTotal = effectiveTotal + deliveryFee;
   const canPayFromWallet = hasActivePaidSub && !deliveryFeeLoading && walletBalanceRs >= grandTotal;
@@ -456,7 +462,9 @@ export default function CartPage() {
         return {
           bowlName: item.bowl.name,
           quantity: item.quantity,
-          basePrice: subscriberPricePerBowl ?? item.bowl.price,
+          basePrice: subPlanConfig
+            ? getSubscriberBaseFromPlanConfig(item.bowl, subPlanConfig)
+            : item.bowl.price,
           customizationCost: item.customizationCost,
           baseChoice: item.presetOptions.baseChoice,
           oatsChoice: item.presetOptions.oatsChoice,
@@ -532,9 +540,12 @@ export default function CartPage() {
                   {items.map((item) => {
                     const removed = item.customizations.filter(c => c.option === "remove");
                     const extras = item.customizations.filter(c => c.option === "extra");
-                    const basePrice = subscriberPricePerBowl ?? item.bowl.price;
+                    const subBase = subPlanConfig
+                      ? getSubscriberBaseFromPlanConfig(item.bowl, subPlanConfig)
+                      : null;
+                    const basePrice = subBase ?? item.bowl.price;
                     const effectiveUnitPrice = basePrice + item.customizationCost;
-                    const isDiscounted = subscriberPricePerBowl !== null && item.bowl.price > subscriberPricePerBowl;
+                    const isDiscounted = subBase !== null && item.bowl.price > subBase;
 
                     return (
                       <div

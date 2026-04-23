@@ -11,6 +11,7 @@ export const STUB_BOWLS: Bowl[] = [
     description:
       "Fresh mango, pomegranate, grated coconut, black grapes, yogurt oats, granola, almonds, walnuts, and seed mix.",
     price: 299,
+    subscriptionPriceTier: "standard",
     image: "/tropical-mango.png",
     tags: ["bestseller"],
     available: true,
@@ -39,6 +40,7 @@ export const STUB_BOWLS: Bowl[] = [
     _id: "2",
     name: "Very Fruity Oatmeal",
     slug: "very-fruity-oatmeal",
+    subscriptionPriceTier: "standard",
     tagline: "Vibrant, colorful, nutrient-packed",
     description:
       "Mango, strawberry, banana, blueberry, pomegranate, yogurt oats, granola, nuts and seeds.",
@@ -70,6 +72,7 @@ export const STUB_BOWLS: Bowl[] = [
   {
     _id: "3",
     name: "Very Berry Oatmeal",
+    subscriptionPriceTier: "standard",
     slug: "very-berry-oatmeal",
     tagline: "Fresh, slightly indulgent, antioxidant-rich",
     description:
@@ -101,6 +104,7 @@ export const STUB_BOWLS: Bowl[] = [
   {
     _id: "4",
     name: "Banana Peanut Butter Oatmeal",
+    subscriptionPriceTier: "standard",
     slug: "banana-peanut-butter-oatmeal",
     tagline: "Comforting, filling, protein-rich",
     description:
@@ -132,6 +136,7 @@ export const STUB_BOWLS: Bowl[] = [
   {
     _id: "5",
     name: "Very Nutty Oatmeal",
+    subscriptionPriceTier: "standard",
     slug: "very-nutty-oatmeal",
     tagline: "Rich, crunchy, satisfying",
     description:
@@ -160,6 +165,26 @@ export const STUB_BOWLS: Bowl[] = [
       { id: "cinnamon", name: "Cinnamon Powder", extraCost: 5 },
     ],
   },
+  {
+    _id: "6",
+    name: "Premium Bowl (Stub)",
+    slug: "premium-bowl-stub",
+    tagline: "Example premium-tier menu item for dev",
+    description: "Placeholder for a ₹399-class bowl; mark real bowls as premium in Sanity.",
+    price: 399,
+    subscriptionPriceTier: "premium",
+    image: "/very-berry-bowl.png",
+    tags: ["high-protein"],
+    available: true,
+    inStock: true,
+    displayOrder: 6,
+    nutrition: { calories: 500, protein: 22, fibre: 12 },
+    ingredients: ["Example ingredients"],
+    customizableIngredients: [
+      { id: "oats", name: "Oats", extraCost: 10 },
+      { id: "granola", name: "Granola", extraCost: 20 },
+    ],
+  },
 ];
 
 export const STUB_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
@@ -169,8 +194,8 @@ export const STUB_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     slug: 'three-bowl',
     bowlsPerCycle: 3,
     billingCycle: 'weekly',
-    priceNearPerBowl: 284,
-    priceFarPerBowl: 299,
+    pricePerBowl: 284,
+    pricePerBowlPremium: 370,
     customisationChargePerBowl: 30,
     deliveryStyles: ['spread', 'flexible'],
     savingsBadge: 'Save 5%',
@@ -183,8 +208,8 @@ export const STUB_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     slug: 'five-bowl',
     bowlsPerCycle: 5,
     billingCycle: 'weekly',
-    priceNearPerBowl: 269,
-    priceFarPerBowl: 284,
+    pricePerBowl: 269,
+    pricePerBowlPremium: 360,
     customisationChargePerBowl: 30,
     deliveryStyles: ['spread', 'flexible'],
     savingsBadge: 'Save 10%',
@@ -197,8 +222,8 @@ export const STUB_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     slug: 'daily',
     bowlsPerCycle: 7,
     billingCycle: 'weekly',
-    priceNearPerBowl: 257,
-    priceFarPerBowl: 271,
+    pricePerBowl: 257,
+    pricePerBowlPremium: 350,
     customisationChargePerBowl: 30,
     deliveryStyles: ['spread', 'flexible'],
     savingsBadge: 'Best Value',
@@ -206,6 +231,17 @@ export const STUB_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     displayOrder: 3,
   },
 ];
+
+function normalizeSubscriptionPlan(plan: SubscriptionPlan): SubscriptionPlan {
+  const fallback = STUB_SUBSCRIPTION_PLANS.find((p) => p.slug === plan.slug);
+  const pricePerBowl = plan.pricePerBowl ?? plan.price_per_bowl ?? fallback?.pricePerBowl ?? 0;
+  const pricePerBowlPremium = plan.pricePerBowlPremium ?? fallback?.pricePerBowlPremium;
+  return {
+    ...plan,
+    pricePerBowl,
+    ...(pricePerBowlPremium != null ? { pricePerBowlPremium } : {}),
+  };
+}
 
 export const STUB_SETTINGS: GlobalSettings = {
   whatsappNumber: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "917899858374",
@@ -246,6 +282,7 @@ export async function getAllBowls(): Promise<Bowl[]> {
     tagline,
     description,
     price,
+    subscriptionPriceTier,
     "image": image.asset->url + "?w=800&fm=webp&q=80",
     tags,
     available,
@@ -275,6 +312,7 @@ export async function getBowlBySlug(slug: string): Promise<Bowl | null> {
     tagline,
     description,
     price,
+    subscriptionPriceTier,
     "image": image.asset->url + "?w=800&fm=webp&q=80",
     tags,
     available,
@@ -302,8 +340,8 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
     "slug": slug.current,
     bowlsPerCycle,
     billingCycle,
-    priceNearPerBowl,
-    priceFarPerBowl,
+    pricePerBowl,
+    pricePerBowlPremium,
     customisationChargePerBowl,
     deliveryStyles,
     savingsBadge,
@@ -312,8 +350,8 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
   }`;
 
   try {
-    const result = await client.fetch(query);
-    return result?.length ? result : STUB_SUBSCRIPTION_PLANS;
+    const result = await client.fetch(query) as SubscriptionPlan[] | null;
+    return result?.length ? result.map(normalizeSubscriptionPlan) : STUB_SUBSCRIPTION_PLANS;
   } catch {
     return STUB_SUBSCRIPTION_PLANS;
   }
