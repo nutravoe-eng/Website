@@ -299,7 +299,13 @@ export default function AdminSubscriptionsPage() {
       const res = await fetch('/api/admin/bowls');
       if (res.ok) {
         const data = await res.json();
-        setAvailableBowls(data.bowls ?? []);
+        const bowls: { slug: string; name: string }[] = data.bowls ?? [];
+        setAvailableBowls(bowls);
+        // Update bowl_name for each config using the resolved display name
+        setEditConfigs(prev => prev.map(ec => {
+          const match = bowls.find(b => b.slug === ec.bowl_slug);
+          return match ? { ...ec, bowl_name: match.name } : ec;
+        }));
       }
     } catch {
       // If fetch fails, dropdowns show current bowl slug as fallback

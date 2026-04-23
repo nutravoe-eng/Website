@@ -56,22 +56,6 @@ export async function PATCH(
     return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
   }
 
-  // Update each day config row
-  for (const dc of dayConfigs) {
-    const { error: updateErr } = await adminSupabase
-      .from('subscription_day_configs')
-      .update({ bowl_slug: dc.bowl_slug, bowl_name: dc.bowl_name })
-      .eq('id', dc.id)
-      .eq('subscription_id', id); // safety: ensure config belongs to this subscription
-
-    if (updateErr) {
-      return NextResponse.json(
-        { error: `Failed to update day config ${dc.id}: ${updateErr.message}` },
-        { status: 500 }
-      );
-    }
-  }
-
   // Build updated day configs for repricing (merge edits into existing configs)
   const updateMap = new Map(dayConfigs.map(dc => [dc.id, dc.bowl_slug]));
   const updatedConfigs = (sub.subscription_day_configs as any[]).map((c: any) => ({
@@ -81,8 +65,8 @@ export async function PATCH(
     customizations: Array.isArray(c.customizations) ? c.customizations : [],
   }));
 
-  // Reprice
-  let newTotal = sub.total_amount_rs as number;
+  // Reprice FIRST — fail fast before writing anything to the DB
+  let newTotal: number;
   try {
     const addr = sub.addresses as any;
     const addrRecord = addr
@@ -95,8 +79,24 @@ export async function PATCH(
     });
     newTotal = quote.totalAmountRs;
   } catch (err) {
-    console.error('Repricing failed after bowl update:', err);
-    // Non-fatal: proceed with original total
+    const message = err instanceof Error ? err.message : 'Failed to calculate new price';
+    return NextResponse.json({ error: `Repricing failed: ${message}` }, { status: 500 });
+  }
+
+  // Update each day config row (repricing succeeded — safe to write)
+  for (const dc of dayConfigs) {
+    const { error: updateErr } = await adminSupabase
+      .from('subscription_day_configs')
+      .update({ bowl_slug: dc.bowl_slug, bowl_name: dc.bowl_name })
+      .eq('id', dc.id)
+      .eq('subscription_id', id);
+
+    if (updateErr) {
+      return NextResponse.json(
+        { error: `Failed to update day config ${dc.id}: ${updateErr.message}` },
+        { status: 500 }
+      );
+    }
   }
 
   // Adjust total (and wallet if already paid) via RPC
@@ -109,10 +109,10 @@ export async function PATCH(
     return NextResponse.json({ error: rpcErr.message }, { status: 400 });
   }
 
-  // Re-fetch final state
+  // Re-fetch final state including plan for UI merge
   const { data: updated, error: refetchErr } = await adminSupabase
     .from('subscriptions')
-    .select('*, subscription_day_configs (*)')
+    .select('*, subscription_plans:plan_id (name, slug, price_per_bowl), subscription_day_configs (*)')
     .eq('id', id)
     .single();
 
