@@ -70,6 +70,10 @@ export default function AdminSubscriptionsPage() {
   const [toast, setToast]                 = useState('');
   const [statusFilter, setStatusFilter]   = useState('pending');
   const [generatingOrders, setGeneratingOrders] = useState<string | null>(null);
+  const [editModal, setEditModal]           = useState<AdminSubscription | null>(null);
+  const [editConfigs, setEditConfigs]       = useState<{ id: string; bowl_slug: string; bowl_name: string }[]>([]);
+  const [availableBowls, setAvailableBowls] = useState<{ slug: string; name: string }[]>([]);
+  const [bowlsLoading, setBowlsLoading]     = useState(false);
 
   function estimateDeliveryDebit(sub: AdminSubscription): {
     baseRs: number;
@@ -275,6 +279,61 @@ export default function AdminSubscriptionsPage() {
       setRejectModal(null);
     } catch (e: unknown) {
       showToast(e instanceof Error ? e.message : 'Failed to reject. Try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function openEditModal(sub: AdminSubscription) {
+    setEditModal(sub);
+    setEditConfigs(
+      sub.subscription_day_configs.map(dc => ({
+        id: dc.id,
+        bowl_slug: dc.bowl_slug,
+        bowl_name: dc.bowl_slug,
+      }))
+    );
+    setBowlsLoading(true);
+    try {
+      const res = await fetch('/api/admin/bowls');
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableBowls(data.bowls ?? []);
+      }
+    } catch {
+      // If fetch fails, dropdowns show current bowl slug as fallback
+    } finally {
+      setBowlsLoading(false);
+    }
+  }
+
+  async function handleSaveBowls() {
+    if (!editModal) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/subscriptions/${editModal.id}/bowls`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dayConfigs: editConfigs }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed');
+
+      // Merge updated subscription back into list
+      setSubs(prev => prev.map(s => {
+        if (s.id !== editModal.id) return s;
+        const updatedSub = data.subscription;
+        const updatedDayConfigs = (updatedSub.subscription_day_configs ?? []).map((dc: any) => ({
+          ...dc,
+          customizations: normalizeCustomizations(dc.customizations),
+        }));
+        return { ...s, ...updatedSub, subscription_day_configs: updatedDayConfigs };
+      }));
+
+      showToast('Bowls updated and subscription repriced');
+      setEditModal(null);
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Failed to update bowls.');
     } finally {
       setSaving(false);
     }
@@ -501,6 +560,9 @@ export default function AdminSubscriptionsPage() {
                 <Btn color="stone" onClick={() => { setNoteModal(sub); setNoteText(sub.admin_notes ?? ''); }}>
                   {sub.admin_notes ? 'Edit Note' : 'Add Note'}
                 </Btn>
+                <Btn color="stone" onClick={() => openEditModal(sub)}>
+                  Edit Bowls
+                </Btn>
                 {(sub.status === 'pending' || sub.status === 'active') && (
                   <Btn color="red" onClick={() => setRejectModal(sub)}>
                     Reject
@@ -647,6 +709,114 @@ export default function AdminSubscriptionsPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Edit Bowls Modal */}
+      {editModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-ink/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-display text-xl text-ink">Edit Bowls</h3>
+              <button onClick={() => setEditModal(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 text-stone transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="font-body text-[12px] text-stone">
+                Editing bowls for <strong className="text-ink">{editModal.users.full_name}</strong>.
+                {editModal.payment_status === 'paid' && ' Wallet balance will be adjusted automatically.'}
+              </p>
+
+              {bowlsLoading ? (
+                <p className="font-body text-sm text-stone animate-pulse">Loading bowls…</p>
+              ) : (
+                <div className="space-y-3">
+                  {editConfigs.map((ec, idx) => {
+                    const originalConfig = editModal.subscription_day_configs[idx];
+                    return (
+                      <div key={ec.id} className="flex items-center gap-3">
+                        <span className="font-body text-[11px] font-bold uppercase tracking-wider text-stone w-8 shrink-0 capitalize">
+                          {originalConfig?.day_of_week ?? '—'}
+                        </span>
+                        <span className="font-body text-[11px] text-stone shrink-0">
+                          ×{originalConfig?.quantity ?? 1}
+                        </span>
+                        <select
+                          value={ec.bowl_slug}
+                          onChange={e => {
+                            const chosen = availableBowls.find(b => b.slug === e.target.value);
+                            setEditConfigs(prev => prev.map((c, i) =>
+                              i === idx
+                                ? { ...c, bowl_slug: e.target.value, bowl_name: chosen?.name ?? e.target.value }
+                                : c
+                            ));
+                          }}
+                          className="flex-1 border border-black/10 rounded-lg px-3 py-2 font-body text-sm text-ink bg-[#F9F8F6] focus:outline-none focus:ring-2 focus:ring-sage/40"
+                        >
+                          {availableBowls.length === 0 && (
+                            <option value={ec.bowl_slug}>{ec.bowl_slug}</option>
+                          )}
+                          {availableBowls.map(b => (
+                            <option key={b.slug} value={b.slug}>{b.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Price preview */}
+              {(() => {
+                const currentTotal = editModal.total_amount_rs ?? 0;
+                const estimatedNewTotal = estimateDeliveryDebit({
+                  ...editModal,
+                  subscription_day_configs: editModal.subscription_day_configs.map((dc, idx) => ({
+                    ...dc,
+                    bowl_slug: editConfigs[idx]?.bowl_slug ?? dc.bowl_slug,
+                  })),
+                }).totalRs;
+                const delta = estimatedNewTotal - currentTotal;
+                return (
+                  <div className="bg-[#F9F8F6] rounded-lg p-3 font-body text-[12px]">
+                    <div className="flex justify-between text-stone">
+                      <span>Current total</span>
+                      <span>₹{Number(currentTotal).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between text-ink font-semibold mt-1">
+                      <span>Estimated new total</span>
+                      <span>₹{estimatedNewTotal.toLocaleString('en-IN')}</span>
+                    </div>
+                    {editModal.payment_status === 'paid' && delta !== 0 && (
+                      <p className={`mt-2 text-[11px] font-medium ${delta > 0 ? 'text-sage-dark' : 'text-terracotta'}`}>
+                        {delta > 0
+                          ? `₹${Math.abs(delta).toLocaleString('en-IN')} will be credited to wallet`
+                          : `₹${Math.abs(delta).toLocaleString('en-IN')} will be debited from wallet`}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEditModal(null)}
+                  className="flex-1 border border-black/10 rounded-lg py-3 font-body text-sm font-bold text-stone hover:bg-black/5 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveBowls}
+                  disabled={saving || bowlsLoading}
+                  className="flex-1 bg-ink hover:bg-ink/80 disabled:bg-ink/30 text-white rounded-lg py-3 font-body text-sm font-bold transition-colors"
+                >
+                  {saving ? 'Saving…' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
