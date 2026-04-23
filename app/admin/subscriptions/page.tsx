@@ -285,6 +285,7 @@ export default function AdminSubscriptionsPage() {
   }
 
   async function openEditModal(sub: AdminSubscription) {
+    setAvailableBowls([]);
     setEditModal(sub);
     setEditConfigs(
       sub.subscription_day_configs.map(dc => ({
