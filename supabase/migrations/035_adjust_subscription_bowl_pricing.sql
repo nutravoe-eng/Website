@@ -32,7 +32,7 @@ begin
   end if;
 
   if p_new_total_rs is null or p_new_total_rs <= 0 then
-    raise exception 'new total must be a non-negative number';
+    raise exception 'new total must be greater than zero';
   end if;
 
   v_delta := p_new_total_rs - coalesce(v_sub.total_amount_rs, 0);
@@ -73,7 +73,8 @@ begin
       -- No change — just read current balance.
       select balance_rs into v_balance
       from public.wallet_accounts
-      where user_id = v_sub.user_id;
+      where user_id = v_sub.user_id
+      for update;
     end if;
 
     update public.subscriptions
