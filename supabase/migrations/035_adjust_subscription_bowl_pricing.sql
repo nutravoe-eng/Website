@@ -31,7 +31,7 @@ begin
     raise exception 'subscription not found';
   end if;
 
-  if p_new_total_rs is null or p_new_total_rs < 0 then
+  if p_new_total_rs is null or p_new_total_rs <= 0 then
     raise exception 'new total must be a non-negative number';
   end if;
 
@@ -48,14 +48,15 @@ begin
         p_subscription_id,
         'Bowl change — additional payment collected',
         null,
-        'subscription_payment'
+        'admin_adjustment'
       );
     elsif v_delta < 0 then
       -- Bowl is cheaper — debit the surplus from the wallet.
       -- Check available balance before attempting debit
       select coalesce(balance_rs, 0) into v_balance
       from public.wallet_accounts
-      where user_id = v_sub.user_id;
+      where user_id = v_sub.user_id
+      for update;
 
       if coalesce(v_balance, 0) < abs(v_delta) then
         raise exception 'Wallet balance (₹%) is less than the pricing reduction (₹%). Collect refund manually and retry after topping up.', coalesce(v_balance, 0), abs(v_delta);
@@ -82,7 +83,7 @@ begin
   else
     -- Only allow silent total update for subscriptions not yet paid.
     -- Refunded/reversed states are not supported — admin must handle manually.
-    if v_sub.payment_status not in ('pending', 'failed') then
+    if v_sub.payment_status not in ('pending', 'failed', 'not_paid') then
       raise exception 'Cannot adjust pricing for a subscription with payment status "%". Handle manually.', v_sub.payment_status;
     end if;
 
