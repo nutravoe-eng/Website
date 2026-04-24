@@ -88,6 +88,9 @@ export default function CartPage() {
   const [walletBalanceRs, setWalletBalanceRs] = useState<number>(0);
   const [hasActivePaidSub, setHasActivePaidSub] = useState(false);
 
+  // Customer notes
+  const [notes, setNotes] = useState("");
+
   // Delivery fee
   const [deliveryFee, setDeliveryFee] = useState<number>(0);
   const [deliveryBreakdown, setDeliveryBreakdown] = useState<({ isFree: false } & DeliveryPriceBreakdown) | { isFree: true; distanceKm: number } | null>(null);
@@ -310,6 +313,7 @@ export default function CartPage() {
           customizations: item.customizations,
           presetOptions: item.presetOptions,
         })),
+        notes: notes.trim() || undefined,
       }),
     });
 
@@ -346,6 +350,7 @@ export default function CartPage() {
             customizations: item.customizations,
             presetOptions: item.presetOptions,
           })),
+          notes: notes.trim() || undefined,
         }),
       });
 
@@ -519,6 +524,7 @@ export default function CartPage() {
           : null,
         grandTotal,
         orderRef: orderRef ?? undefined,
+        notes: notes.trim() || undefined,
       });
 
       const whatsappNumber = getWhatsAppNumber();
@@ -828,6 +834,22 @@ export default function CartPage() {
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone group-hover:text-sage transition-colors"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
                   )}
+                </div>
+
+                {/* Customer notes */}
+                <div className="mb-5">
+                  <label htmlFor="order-notes" className="block font-body text-[12px] font-bold uppercase tracking-wider text-stone mb-2">
+                    Any notes for us? <span className="font-normal normal-case tracking-normal">(allergies, preferences…)</span>
+                  </label>
+                  <textarea
+                    id="order-notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value.slice(0, 300))}
+                    placeholder="e.g. I'm allergic to peanuts"
+                    rows={3}
+                    className="w-full border border-black/10 rounded-lg px-4 py-3 font-body text-[13px] text-ink placeholder:text-stone/50 bg-[#F9F8F6] focus:outline-none focus:ring-1 focus:ring-sage/40 resize-none"
+                  />
+                  <p className="font-body text-[11px] text-stone/60 text-right mt-1">{notes.length}/300</p>
                 </div>
 
                 {hasOutOfStockItems && (

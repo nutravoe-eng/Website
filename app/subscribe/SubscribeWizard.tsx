@@ -165,6 +165,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [notes, setNotes] = useState('');
   const [success, setSuccess] = useState(false);
   const [pendingApproval, setPendingApproval] = useState(false);
   const [flexibleWhatsAppUrl, setFlexibleWhatsAppUrl] = useState<string | null>(null);
@@ -559,6 +560,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         deliveryTimeSlot: getScenario() !== "D" ? state.deliveryTimeSlot : undefined,
         configurationLines: buildSubscriptionConfigLines(currentPlan.name),
         subscriptionRef: subRef,
+        notes: notes.trim() || undefined,
       });
       const waUrl = getWhatsAppUrl(whatsappNumber, message);
       try { sessionStorage.removeItem(WIZARD_SESSION_KEY); } catch { /* ignore */ }
@@ -624,6 +626,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           deliveryTimeSlot: config.deliveryTimeSlot,
         })),
         startDate: activeSubEndDate ? new Date(new Date(activeSubEndDate).getTime() + 86400000).toISOString().split('T')[0] : null,
+        notes: notes.trim() || undefined,
       }),
     });
 
@@ -1548,6 +1551,22 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
                 </p>
               </div>
             )}
+
+            {/* Customer notes */}
+            <div className="mb-5">
+              <label htmlFor="sub-notes" className="block font-body text-[12px] font-bold uppercase tracking-wider text-stone mb-2">
+                Any notes for us? <span className="font-normal normal-case tracking-normal">(allergies, preferences…)</span>
+              </label>
+              <textarea
+                id="sub-notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value.slice(0, 300))}
+                placeholder="e.g. I'm allergic to peanuts"
+                rows={3}
+                className="w-full border border-black/10 rounded-lg px-4 py-3 font-body text-[13px] text-ink placeholder:text-stone/50 bg-[#F9F8F6] focus:outline-none focus:ring-1 focus:ring-sage/40 resize-none"
+              />
+              <p className="font-body text-[11px] text-stone/60 text-right mt-1">{notes.length}/300</p>
+            </div>
 
             {error && (
               <div className="mb-4 p-4 bg-terracotta/5 border border-terracotta/20 rounded-md">

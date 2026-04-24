@@ -54,6 +54,7 @@ export function buildCartOrderWhatsAppMessage(input: {
   deliveryBreakdown?: { totalCostRs: number; nutravoeCoverageRs: number } | null;
   grandTotal: number;
   orderRef?: string;
+  notes?: string;
 }): string {
   const itemLines = input.items.flatMap((item, index) => {
     const lines = [
@@ -109,6 +110,7 @@ export function buildCartOrderWhatsAppMessage(input: {
     ...totals,
     "",
     input.orderRef ? `Order Ref: #NV-${input.orderRef}` : "",
+    input.notes ? `Customer notes: ${input.notes}` : null,
     "Please confirm this order on WhatsApp. Thank you!",
   ].filter(line => line !== undefined && line !== null).join("\n");
 }
@@ -128,6 +130,7 @@ export function buildSubscriptionWhatsAppMessage(input: {
   deliveryTimeSlot?: string;
   configurationLines: string[];
   subscriptionRef?: string;
+  notes?: string;
 }): string {
   return [
     "Hi Nutravoe! New subscription request",
@@ -157,6 +160,7 @@ export function buildSubscriptionWhatsAppMessage(input: {
     ...input.configurationLines,
     "",
     input.subscriptionRef ? `Subscription Ref: #NV-SUB-${input.subscriptionRef}` : "",
+    input.notes ? `Customer notes: ${input.notes}` : null,
     "Please confirm and activate this subscription on WhatsApp. Thank you!",
   ].filter(line => line !== undefined && line !== null).join("\n");
 }

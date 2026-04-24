@@ -540,9 +540,14 @@ export default function AdminSubscriptionsPage() {
                 </div>
               )}
 
+              {/* Customer note */}
+              {sub.notes && (
+                <p className="font-body text-[11px] text-terracotta/80 mt-3 italic">💬 Customer: {sub.notes}</p>
+              )}
+
               {/* Admin note */}
               {sub.admin_notes && (
-                <p className="font-body text-[11px] text-stone/70 mt-3 italic">📝 {sub.admin_notes}</p>
+                <p className="font-body text-[11px] text-stone/70 mt-1 italic">📝 {sub.admin_notes}</p>
               )}
 
               {/* Actions */}

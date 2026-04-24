@@ -65,6 +65,11 @@ export async function POST(req: NextRequest) {
   const deliveryTimeSlot = typeof body?.deliveryTimeSlot === "string" ? body.deliveryTimeSlot.trim() : "";
   const dayConfigs = Array.isArray(body?.dayConfigs) ? body.dayConfigs as DayConfigInput[] : [];
   const requestedStartDate = typeof body?.startDate === "string" ? body.startDate : null;
+  const rawNotes = typeof body?.notes === "string" ? body.notes.trim() : null;
+  if (rawNotes && rawNotes.length > 300) {
+    return NextResponse.json({ error: "Notes must be 300 characters or fewer" }, { status: 422, headers: limited.headers });
+  }
+  const customerNotes = rawNotes || null;
 
   if (!planId || !["spread", "flexible"].includes(deliveryStyle)) {
     return NextResponse.json({ error: "Invalid subscription request" }, { status: 400, headers: limited.headers });
@@ -208,7 +213,7 @@ export async function POST(req: NextRequest) {
       delivery_fee: perTripDeliveryFee,
       payment_status: "pending",
       delivery_address_id: address.id,
-      notes: "requested_via_whatsapp",
+      notes: customerNotes,
     })
     .select("id")
     .single();

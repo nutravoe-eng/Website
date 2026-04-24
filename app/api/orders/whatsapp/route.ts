@@ -28,6 +28,11 @@ export async function POST(req: NextRequest) {
   const selectedSlot = typeof body?.selectedSlot === "string" ? body.selectedSlot.trim() : "";
   const deliveryMode = body?.deliveryMode;
   const incomingItems: unknown[] = Array.isArray(body?.items) ? body.items : [];
+  const rawNotes = typeof body?.notes === "string" ? body.notes.trim() : null;
+  if (rawNotes && rawNotes.length > 300) {
+    return NextResponse.json({ error: "Notes must be 300 characters or fewer" }, { status: 422, headers: limited.headers });
+  }
+  const notes = rawNotes || null;
 
   if (!incomingItems.length) {
     return NextResponse.json({ error: "At least one item is required" }, { status: 400, headers: limited.headers });
@@ -117,6 +122,7 @@ export async function POST(req: NextRequest) {
       total: quote.total,
       payment_method: "whatsapp_cod",
       payment_status: "pending",
+      notes,
     })
     .select("id")
     .single();
