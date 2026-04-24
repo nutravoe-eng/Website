@@ -167,3 +167,71 @@ export function parseSlotLabel(slotLabel: string, nowIst: Date = getNowIst()): {
   const dateIso = dayToken === "tomorrow" ? addDays(todayIso, 1) : todayIso;
   return { dateIso, startHour: hour };
 }
+
+/** Parse a slot key of the form "YYYY-MM-DD|HH". */
+export function parseSlotKey(slotKey: string): { dateIso: string; startHour: number } | null {
+  const match = slotKey.match(/^(\d{4}-\d{2}-\d{2})\|(\d{2})$/);
+  if (!match) return null;
+  return { dateIso: match[1], startHour: parseInt(match[2], 10) };
+}
+
+function fmtHour(h: number): string {
+  if (h < 12) return `${h} AM`;
+  if (h === 12) return "12 PM";
+  return `${h - 12} PM`;
+}
+
+/** "Fri, Apr 25" from an ISO date string. */
+export function formatDateLabel(dateIso: string): string {
+  const [y, m, d] = dateIso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${d}`;
+}
+
+/** "Fri, Apr 25 · 10 AM – 11 AM" */
+export function formatCalendarSlotLabel(dateIso: string, startHour: number): string {
+  return `${formatDateLabel(dateIso)} · ${fmtHour(startHour)} – ${fmtHour(startHour + 1)}`;
+}
+
+/** Available hours (7–19) for a given date, respecting policy blackouts and today's cutoff. */
+export function getSlotAvailabilityForDate(
+  policy: DeliveryPolicy,
+  dateIso: string,
+  nowIst: Date = getNowIst(),
+): { hour: number; available: boolean }[] {
+  const todayIso = getIstDateIso(nowIst);
+  const isToday = dateIso === todayIso;
+  const cutoff = isToday ? nowIst.getHours() + 1 : 0;
+  return Array.from({ length: 13 }, (_, i) => i + 7).map((hour) => ({
+    hour,
+    available:
+      hour >= (isToday ? cutoff : 7) &&
+      !isBlockedByBlackout(policy, dateIso, hour) &&
+      !isDisabled(policy, dateIso, hour),
+  }));
+}
+
+/** All valid slots from today through the last day of next calendar month. */
+export function generateCalendarSlots(policy: DeliveryPolicy, nowIst: Date = getNowIst()): GeneratedSlot[] {
+  const slots: GeneratedSlot[] = [];
+  const todayIso = getIstDateIso(nowIst);
+  const nowYear = nowIst.getFullYear();
+  const nowMonth = nowIst.getMonth(); // 0-indexed
+  const nextMonthIdx = nowMonth === 11 ? 0 : nowMonth + 1;
+  const nextMonthYear = nowMonth === 11 ? nowYear + 1 : nowYear;
+  const lastDay = new Date(nextMonthYear, nextMonthIdx + 1, 0).getDate();
+  const endDateIso = `${nextMonthYear}-${String(nextMonthIdx + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  let cur = todayIso;
+  while (cur <= endDateIso) {
+    const availability = getSlotAvailabilityForDate(policy, cur, nowIst);
+    for (const { hour, available } of availability) {
+      if (!available) continue;
+      slots.push({ key: buildSlotKey(cur, hour), label: formatCalendarSlotLabel(cur, hour) });
+    }
+    cur = addDays(cur, 1);
+  }
+  return slots;
+}

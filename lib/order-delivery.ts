@@ -1,5 +1,12 @@
 import type { DeliveryMode } from "@/lib/delivery-policy";
-import { generateScheduledSlots, getAsapSlot, getNowIst, parseSlotLabel } from "@/lib/delivery-policy";
+import {
+  generateCalendarSlots,
+  formatCalendarSlotLabel,
+  getAsapSlot,
+  getNowIst,
+  parseSlotKey,
+  parseSlotLabel,
+} from "@/lib/delivery-policy";
 import { getDeliveryPolicy } from "@/lib/delivery-policy-server";
 
 export async function resolveRequestedDelivery(
@@ -20,14 +27,20 @@ export async function resolveRequestedDelivery(
 
   const selectedSlot = typeof selectedSlotRaw === "string" ? selectedSlotRaw.trim() : "";
   if (!selectedSlot) throw new Error("Delivery slot is required.");
-  if (selectedSlot.length > 64 || !/^[\w\s\-–:.,]+$/.test(selectedSlot)) {
-    throw new Error("Invalid delivery slot.");
+
+  // Accept slot keys "YYYY-MM-DD|HH" (new calendar format)
+  const parsedKey = parseSlotKey(selectedSlot);
+  if (parsedKey) {
+    const allowed = generateCalendarSlots(policy, nowIst);
+    const allowedSet = new Set(allowed.map((s) => s.key));
+    if (!allowedSet.has(selectedSlot)) throw new Error("Selected delivery slot is no longer available.");
+    const label = formatCalendarSlotLabel(parsedKey.dateIso, parsedKey.startHour);
+    return { mode, selectedSlot: label, deliveryDate: parsedKey.dateIso };
   }
 
-  const allowed = generateScheduledSlots(policy, nowIst);
-  const allowedSet = new Set(allowed.map((slot) => slot.label));
-  if (!allowedSet.has(selectedSlot)) {
-    throw new Error("Selected delivery slot is no longer available.");
+  // Legacy label format "Today/Tomorrow, ..." — kept for backward compatibility
+  if (selectedSlot.length > 64 || !/^[\w\s\-–:.,]+$/.test(selectedSlot)) {
+    throw new Error("Invalid delivery slot.");
   }
   const parsed = parseSlotLabel(selectedSlot, nowIst);
   if (!parsed) throw new Error("Invalid delivery slot.");

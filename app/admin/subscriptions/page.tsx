@@ -49,7 +49,7 @@ interface AdminSubscription {
   created_at: string;
   deliveries_completed: number;
   users: { id: string; full_name: string; phone: string; email: string };
-  subscription_plans: { name: string; slug: string; price_per_bowl: number } | null;
+  subscription_plans: { name: string; slug: string; price_per_bowl: number; price_per_bowl_premium: number | null } | null;
   addresses: { line1: string; line2: string | null; city: string; pincode: string; lat: number; lng: number } | null;
   subscription_day_configs: DayConfig[];
 }
@@ -71,8 +71,8 @@ export default function AdminSubscriptionsPage() {
   const [statusFilter, setStatusFilter]   = useState('pending');
   const [generatingOrders, setGeneratingOrders] = useState<string | null>(null);
   const [editModal, setEditModal]           = useState<AdminSubscription | null>(null);
-  const [editConfigs, setEditConfigs]       = useState<{ id: string; bowl_slug: string; bowl_name: string }[]>([]);
-  const [availableBowls, setAvailableBowls] = useState<{ slug: string; name: string }[]>([]);
+  const [editConfigs, setEditConfigs]       = useState<{ id: string; bowl_slug: string; bowl_name: string; isPremium: boolean }[]>([]);
+  const [availableBowls, setAvailableBowls] = useState<{ slug: string; name: string; isPremium: boolean }[]>([]);
   const [bowlsLoading, setBowlsLoading]     = useState(false);
 
   function estimateDeliveryDebit(sub: AdminSubscription): {
@@ -292,6 +292,7 @@ export default function AdminSubscriptionsPage() {
         id: dc.id,
         bowl_slug: dc.bowl_slug,
         bowl_name: dc.bowl_slug,
+        isPremium: false,
       }))
     );
     setBowlsLoading(true);
@@ -299,12 +300,12 @@ export default function AdminSubscriptionsPage() {
       const res = await fetch('/api/admin/bowls');
       if (res.ok) {
         const data = await res.json();
-        const bowls: { slug: string; name: string }[] = data.bowls ?? [];
+        const bowls: { slug: string; name: string; isPremium: boolean }[] = data.bowls ?? [];
         setAvailableBowls(bowls);
-        // Update bowl_name for each config using the resolved display name
+        // Update bowl_name and isPremium for each config using the resolved bowl data
         setEditConfigs(prev => prev.map(ec => {
           const match = bowls.find(b => b.slug === ec.bowl_slug);
-          return match ? { ...ec, bowl_name: match.name } : ec;
+          return match ? { ...ec, bowl_name: match.name, isPremium: match.isPremium } : ec;
         }));
       }
     } catch {
@@ -755,7 +756,7 @@ export default function AdminSubscriptionsPage() {
                             const chosen = availableBowls.find(b => b.slug === e.target.value);
                             setEditConfigs(prev => prev.map((c, i) =>
                               i === idx
-                                ? { ...c, bowl_slug: e.target.value, bowl_name: chosen?.name ?? e.target.value }
+                                ? { ...c, bowl_slug: e.target.value, bowl_name: chosen?.name ?? e.target.value, isPremium: chosen?.isPremium ?? false }
                                 : c
                             ));
                           }}
@@ -777,14 +778,24 @@ export default function AdminSubscriptionsPage() {
               {/* Price preview */}
               {(() => {
                 const currentTotal = editModal.total_amount_rs ?? 0;
-                const estimatedNewTotal = estimateDeliveryDebit({
-                  ...editModal,
-                  subscription_day_configs: editModal.subscription_day_configs.map((dc, idx) => ({
-                    ...dc,
-                    bowl_slug: editConfigs[idx]?.bowl_slug ?? dc.bowl_slug,
-                  })),
-                }).totalRs;
-                const delta = estimatedNewTotal - currentTotal;
+                const standardPrice = editModal.subscription_plans?.price_per_bowl ?? 0;
+                const premiumPrice = editModal.subscription_plans?.price_per_bowl_premium ?? standardPrice;
+
+                // Original bowl amounts from the saved subscription state
+                const originalBowlsAmount = editModal.subscription_day_configs.reduce((sum, dc) => {
+                  const b = availableBowls.find(bowl => bowl.slug === dc.bowl_slug);
+                  return sum + (b?.isPremium ? premiumPrice : standardPrice) * (dc.quantity ?? 1);
+                }, 0);
+
+                // New bowl amounts from editConfigs (isPremium set when admin selects a bowl)
+                const newBowlsAmount = editConfigs.reduce((sum, ec, idx) => {
+                  const qty = editModal.subscription_day_configs[idx]?.quantity ?? 1;
+                  return sum + (ec.isPremium ? premiumPrice : standardPrice) * qty;
+                }, 0);
+
+                // Only bowl prices change — delivery and extras are unchanged
+                const delta = newBowlsAmount - originalBowlsAmount;
+                const estimatedNewTotal = currentTotal + delta;
                 return (
                   <div className="bg-[#F9F8F6] rounded-lg p-3 font-body text-[12px]">
                     <div className="flex justify-between text-stone">

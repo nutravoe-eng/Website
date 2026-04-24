@@ -8,6 +8,10 @@ export async function GET() {
 
   const bowls = await getAllBowls();
   return NextResponse.json({
-    bowls: bowls.map(b => ({ slug: b.slug, name: b.name })),
+    bowls: bowls.map(b => ({
+      slug: b.slug,
+      name: b.name,
+      isPremium: b.subscriptionPriceTier === 'premium',
+    })),
   });
 }
