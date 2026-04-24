@@ -17,6 +17,7 @@ export interface AdminOrder {
   notes: string | null;
   admin_notes: string | null;
   created_at: string;
+  subscriptions?: { style: 'spread' | 'flexible' } | null;
   users: { id: string; full_name: string; phone: string; email: string };
   addresses: { line1: string; line2: string | null; city: string; pincode: string; lat?: number | null; lng?: number | null } | null;
   order_items: {
@@ -67,12 +68,13 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
 
   function parseTimeSlotToMinutes(slot: string | null): number {
     if (!slot) return 9999;
-    // e.g. "7:00 AM - 8:00 AM" → take first part "7:00 AM"
-    const part = slot.split('-')[0].trim();
-    const match = part.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    // New format: "Fri, Apr 25 · 10 AM – 11 AM" — extract time after "·"
+    const afterDot = slot.includes('·') ? slot.split('·')[1].trim() : slot;
+    // Match "10 AM" or "10:00 AM" style
+    const match = afterDot.match(/(\d+)(?::(\d+))?\s*(AM|PM)/i);
     if (!match) return 9999;
     let hours = parseInt(match[1]);
-    const mins = parseInt(match[2]);
+    const mins = parseInt(match[2] ?? '0');
     const meridiem = match[3].toUpperCase();
     if (meridiem === 'PM' && hours !== 12) hours += 12;
     if (meridiem === 'AM' && hours === 12) hours = 0;
@@ -366,11 +368,14 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                   </td>
                   <td className="px-4 py-3">
                     <div className="mb-1.5 flex flex-wrap gap-1">
-                      {order.order_type === 'subscription' && order.payment_method === 'wallet' && (
+                      {order.order_type === 'subscription' && order.subscriptions?.style === 'spread' && (
+                        <span className="font-body text-[9px] font-bold uppercase tracking-wider bg-sage/20 text-sage-dark px-1.5 py-0.5 rounded-sm">Spread Sub</span>
+                      )}
+                      {order.order_type === 'subscription' && order.subscriptions?.style === 'flexible' && (
                         <span className="font-body text-[9px] font-bold uppercase tracking-wider bg-terracotta/10 text-terracotta px-1.5 py-0.5 rounded-sm">Flex Wallet Sub</span>
                       )}
-                      {order.order_type === 'subscription' && order.payment_method !== 'wallet' && (
-                        <span className="font-body text-[9px] font-bold uppercase tracking-wider bg-sage/20 text-sage-dark px-1.5 py-0.5 rounded-sm">Spread Sub</span>
+                      {order.order_type === 'subscription' && !order.subscriptions?.style && (
+                        <span className="font-body text-[9px] font-bold uppercase tracking-wider bg-black/5 text-stone px-1.5 py-0.5 rounded-sm">Subscription</span>
                       )}
                       {order.order_type !== 'subscription' && (
                         <span className="font-body text-[9px] font-bold uppercase tracking-wider bg-black/5 text-stone px-1.5 py-0.5 rounded-sm">One-Off Order</span>

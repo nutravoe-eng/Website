@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
       id, order_type, status, payment_status, payment_method, payment_reference,
       delivery_date, delivery_time_slot, delivery_fee,
       subtotal, total, notes, admin_notes, created_at,
+      subscriptions ( style ),
       users!inner ( id, full_name, phone, email ),
       addresses ( id, line1, line2, city, pincode, lat, lng ),
       order_items ( id, bowl_slug, bowl_name, quantity, unit_price, total_price, customizations )
