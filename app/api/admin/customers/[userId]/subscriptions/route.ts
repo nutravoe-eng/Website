@@ -98,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
     }
   }
 
-  const finalStartDate = requestedStartDate || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const finalStartDate = requestedStartDate || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const { data: address, error: addressError } = await adminSupabase
     .from('addresses')
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
     .from('subscription_plans')
     .select('id')
     .eq('slug', planId)
-    .single();
+    .maybeSingle();
 
   if (planFetchError || !dbPlan) {
     return NextResponse.json({ error: 'Invalid subscription plan' }, { status: 400 });
