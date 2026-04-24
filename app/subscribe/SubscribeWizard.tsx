@@ -159,6 +159,8 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
   const [user, setUser] = useState<{ name: string; phone: string; email: string; id: string } | null>(null);
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryLat, setDeliveryLat] = useState<number | undefined>(undefined);
+  const [deliveryLng, setDeliveryLng] = useState<number | undefined>(undefined);
   const [deliveryPincode, setDeliveryPincode] = useState('');
   const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -256,6 +258,8 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         const def = addresses.find(a => a.is_default) ?? addresses[0];
         if (def) {
           setDeliveryAddress(`${def.line1}, ${def.line2}, Karnataka ${def.pincode}`);
+          setDeliveryLat(typeof def.lat === "number" ? def.lat : undefined);
+          setDeliveryLng(typeof def.lng === "number" ? def.lng : undefined);
           setDeliveryPincode(def.pincode);
           // Determine delivery zone for distance-based pricing (saved pin → hub when lat/lng exist)
           const coords = await resolveDeliveryCoords(def.pincode, def.lat, def.lng);
@@ -546,6 +550,8 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         weeklyPrice: totalWeeklyPrice,
         weeklyDeliveryFeeRs: weeklyDeliveryFeeRs > 0 ? weeklyDeliveryFeeRs : undefined,
         deliveryAddress,
+        lat: deliveryLat,
+        lng: deliveryLng,
         deliveryStyle:
           getScenario() === "D"
             ? "Flexible wallet"
