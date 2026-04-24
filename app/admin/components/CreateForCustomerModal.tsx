@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { DELIVERY_TIME_SLOTS } from '@/lib/delivery-slots';
 import type { Bowl, SubscriptionPlan, IngredientCustomization, BowlPresetOptions } from '@/types';
+
+const MapPicker = dynamic(() => import('@/components/MapPicker'), { ssr: false });
 
 interface FoundUser {
   id: string;
@@ -131,16 +134,52 @@ function Step2CreateAccount({ prefill, onCreated }: {
   const [state, setState] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const [pinLat, setPinLat] = useState<number | null>(null);
+  const [pinLng, setPinLng] = useState<number | null>(null);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>();
+  const [pincodeLookupLoading, setPincodeLookupLoading] = useState(false);
+  const [isIndianPincode, setIsIndianPincode] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (pincode.length !== 6) {
+      setIsIndianPincode(null);
+      setPinLat(null);
+      setPinLng(null);
+      return;
+    }
+    setPincodeLookupLoading(true);
+    fetch(`/api/geocode?pincode=${pincode}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.lat && d.lng) {
+          setMapCenter({ lat: d.lat, lng: d.lng });
+          setPinLat(d.lat);
+          setPinLng(d.lng);
+          if (typeof d.city === 'string') setCity(d.city);
+          if (typeof d.state === 'string') setState(d.state);
+          setIsIndianPincode(true);
+        } else {
+          setIsIndianPincode(false);
+          setPinLat(null);
+          setPinLng(null);
+        }
+      })
+      .catch(() => { setIsIndianPincode(false); setPinLat(null); setPinLng(null); })
+      .finally(() => setPincodeLookupLoading(false));
+  }, [pincode]);
 
   async function create() {
-    if (!fullName.trim() || !email.trim() || !phone.trim() || !line1.trim() || !city.trim() || !state || !pincode.trim()) {
+    if (!fullName.trim() || !email.trim() || !phone.trim() || !line1.trim() || !city.trim() || !state || !/^\d{6}$/.test(pincode)) {
       setErr('All fields except Landmark are required'); return;
+    }
+    if (pinLat === null || pinLng === null) {
+      setErr('Pin drop on map is required'); return;
     }
     setLoading(true); setErr('');
     try {
       const res = await fetch('/api/admin/customers', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName, email, phone, line1, line2, city, pincode, state }),
+        body: JSON.stringify({ fullName, email, phone, line1, line2, city, pincode, state, lat: pinLat, lng: pinLng }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error ?? 'Failed to create account'); return; }
@@ -165,6 +204,35 @@ function Step2CreateAccount({ prefill, onCreated }: {
           <option value="">Select state</option>
           {STATES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+      </div>
+      <div className="border border-dashed border-black/15 rounded-lg overflow-hidden">
+        <div className="w-full flex items-center gap-2.5 px-4 py-3">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone shrink-0">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+          <span className="font-body text-[13px] text-ink font-medium">Pin exact location</span>
+          <span className="font-body text-[11px] text-red-500 ml-1">(required)</span>
+        </div>
+        <div className="px-4 pb-4">
+          <p className="font-body text-[12px] text-stone mb-3">
+            {pincode.length !== 6
+              ? 'Enter PIN code above to load the map.'
+              : pincodeLookupLoading
+                ? 'Loading map\u2026'
+                : 'Drag the pin or tap to mark the exact delivery location.'}
+          </p>
+          {pincode.length === 6 && !pincodeLookupLoading && isIndianPincode !== false && (
+            <MapPicker
+              centerLat={mapCenter?.lat}
+              centerLng={mapCenter?.lng}
+              onChange={(lat, lng) => { setPinLat(lat); setPinLng(lng); }}
+            />
+          )}
+          {pincode.length === 6 && isIndianPincode === false && (
+            <p className="font-body text-[11px] text-red-500">Enter a valid Indian PIN code to load the map.</p>
+          )}
+        </div>
       </div>
       <button onClick={create} disabled={loading}
         className="w-full bg-ink text-white font-body text-[13px] font-bold rounded-lg py-2.5 hover:bg-black transition-colors disabled:opacity-50">

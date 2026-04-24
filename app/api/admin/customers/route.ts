@@ -32,9 +32,15 @@ export async function POST(req: NextRequest) {
   const city = typeof body?.city === 'string' ? body.city.trim() : '';
   const state = typeof body?.state === 'string' ? body.state.trim() : '';
   const pincode = typeof body?.pincode === 'string' ? body.pincode.trim() : '';
+  const lat = typeof body?.lat === 'number' ? body.lat : null;
+  const lng = typeof body?.lng === 'number' ? body.lng : null;
 
   if (!fullName || !email || phone.length !== 10 || !line1 || !city || !state || !/^\d{6}$/.test(pincode)) {
     return NextResponse.json({ error: 'All required fields must be provided (pincode must be 6 digits)' }, { status: 400 });
+  }
+
+  if (lat === null || lng === null) {
+    return NextResponse.json({ error: 'Pin drop location (lat/lng) is required' }, { status: 400 });
   }
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -66,6 +72,8 @@ export async function POST(req: NextRequest) {
     city,
     state,
     pincode,
+    lat,
+    lng,
     is_default: true,
   });
 
