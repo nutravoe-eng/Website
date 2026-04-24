@@ -21,9 +21,14 @@ import {
   DEFAULT_DELIVERY_POLICY,
   type DeliveryMode,
   type DeliveryPolicy,
-  generateScheduledSlots,
+  buildSlotKey,
+  formatCalendarSlotLabel,
+  formatDateLabel,
   getAsapSlot,
+  getIstDateIso,
   getNowIst,
+  getSlotAvailabilityForDate,
+  parseSlotKey,
 } from "@/lib/delivery-policy";
 
 
@@ -66,7 +71,15 @@ export default function CartPage() {
   useDialogAccessibility(addressDialogRef, () => setShowAddressPicker(false));
   const nowIst = getNowIst();
   const asapSlot = getAsapSlot(deliveryPolicy, nowIst);
-  const deliverySlots = generateScheduledSlots(deliveryPolicy, nowIst).map((slot) => slot.label);
+  const todayIso = getIstDateIso(nowIst);
+
+  // Calendar picker state
+  const [calViewState, setCalViewState] = useState<"calendar" | "slots">("calendar");
+  const [calSelectedDateIso, setCalSelectedDateIso] = useState<string | null>(null);
+  const [calMonth, setCalMonth] = useState<{ year: number; month: number }>(() => ({
+    year: nowIst.getFullYear(),
+    month: nowIst.getMonth(),
+  }));
 
   // Active subscription plan (tiered standard / premium rates)
   const [subPlanConfig, setSubPlanConfig] = useState<PlanConfig | null>(null);
@@ -276,7 +289,12 @@ export default function CartPage() {
   const effectiveTotal = total - subscriberDiscount;
   const grandTotal = effectiveTotal + deliveryFee;
   const canPayFromWallet = hasActivePaidSub && !deliveryFeeLoading && walletBalanceRs >= grandTotal;
-  const activeDeliverySlot = deliveryMode === "asap" ? (asapSlot?.label ?? "") : selectedSlot;
+  const selectedSlotLabel = (() => {
+    if (!selectedSlot) return "";
+    const parsed = parseSlotKey(selectedSlot);
+    return parsed ? formatCalendarSlotLabel(parsed.dateIso, parsed.startHour) : selectedSlot;
+  })();
+  const activeDeliverySlot = deliveryMode === "asap" ? (asapSlot?.label ?? "") : selectedSlotLabel;
 
   // Record order in Supabase — returns short order ref on success
   const recordOrder = async (): Promise<string | null> => {
@@ -434,19 +452,27 @@ export default function CartPage() {
     try {
       const supabase = createClient();
       let deliveryAddress = "";
+      let deliveryLat: number | undefined;
+      let deliveryLng: number | undefined;
       if (selectedAddress) {
         deliveryAddress = formatAddressSingleLine(selectedAddress);
+        deliveryLat = typeof selectedAddress.lat === "number" ? selectedAddress.lat : undefined;
+        deliveryLng = typeof selectedAddress.lng === "number" ? selectedAddress.lng : undefined;
       } else {
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (authUser) {
           const { data: addrs } = await supabase
             .from("addresses")
-            .select("line1, line2, city, pincode, is_default")
+            .select("line1, line2, city, pincode, is_default, lat, lng")
             .eq("user_id", authUser.id)
             .order("is_default", { ascending: false })
             .limit(1);
           const a = addrs?.[0];
-          if (a) deliveryAddress = [a.line1, a.line2, `${a.city}, ${a.pincode}`].filter(Boolean).join(", ");
+          if (a) {
+            deliveryAddress = [a.line1, a.line2, `${a.city}, ${a.pincode}`].filter(Boolean).join(", ");
+            deliveryLat = typeof a.lat === "number" ? a.lat : undefined;
+            deliveryLng = typeof a.lng === "number" ? a.lng : undefined;
+          }
         }
       }
 
@@ -481,6 +507,8 @@ export default function CartPage() {
         customerPhone: user.phone,
         customerEmail: user.email,
         deliveryAddress,
+        lat: deliveryLat,
+        lng: deliveryLng,
         deliverySlot: activeDeliverySlot,
         items: detailedItems,
         subtotal: total,
@@ -763,6 +791,8 @@ export default function CartPage() {
                       onClick={() => {
                         setDeliveryMode("scheduled");
                         setError("");
+                        setCalViewState("calendar");
+                        setShowSlotPicker(true);
                       }}
                       className={`rounded-lg border px-4 py-3 text-left transition-colors ${
                         deliveryMode === "scheduled"
@@ -792,8 +822,8 @@ export default function CartPage() {
                       onClick={() => { setShowSlotPicker(true); setError(""); }}
                       className="w-full flex items-center justify-between border border-black/10 rounded-lg px-4 py-3.5 bg-[#F9F8F6] hover:bg-sage/5 hover:border-sage/30 transition-colors text-left group cursor-pointer shadow-sm"
                     >
-                      <span className={`font-body text-[13px] ${selectedSlot ? 'text-ink font-bold tracking-wide' : 'text-stone font-medium'}`}>
-                        {selectedSlot || "Choose an available time slot"}
+                      <span className={`font-body text-[13px] ${selectedSlotLabel ? 'text-ink font-bold tracking-wide' : 'text-stone font-medium'}`}>
+                        {selectedSlotLabel || "Choose an available time slot"}
                       </span>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone group-hover:text-sage transition-colors"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
@@ -963,91 +993,207 @@ export default function CartPage() {
         </div>
       )}
 
-      {/* Delivery Slot Picker Modal */}
-      {showSlotPicker && (
-        <div className="fixed inset-0 z-[110] flex items-end md:items-center justify-center p-0 md:p-4 bg-ink/70 backdrop-blur-sm animate-in fade-in duration-300">
-          <div
-            ref={slotDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delivery-slot-title"
-            tabIndex={-1}
-            className="bg-white rounded-t-3xl md:rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-[50%] md:zoom-in-95 duration-400"
-          >
-            {/* Header */}
-            <div className="bg-white px-6 py-5 flex items-center justify-between border-b border-black/5 shrink-0 sticky top-0 z-10">
-              <div>
-                <h3 id="delivery-slot-title" className="font-display text-2xl font-medium text-ink">Choose a timeslot</h3>
-                <p className="font-body text-[12px] text-stone mt-0.5 tracking-wide">Select your ideal delivery window</p>
-              </div>
-              <button
-                onClick={() => setShowSlotPicker(false)}
-                className="text-stone hover:text-ink w-8 h-8 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage focus-visible:ring-offset-1"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-              </button>
-            </div>
+      {/* Delivery Slot Picker Modal — Calendar */}
+      {showSlotPicker && (() => {
+        const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+        const startYear = nowIst.getFullYear();
+        const startMonthIdx = nowIst.getMonth();
+        const maxMonthIdx = startMonthIdx === 11 ? 0 : startMonthIdx + 1;
+        const maxMonthYear = startMonthIdx === 11 ? startYear + 1 : startYear;
+        const isAtMinMonth = calMonth.year === startYear && calMonth.month === startMonthIdx;
+        const isAtMaxMonth = calMonth.year === maxMonthYear && calMonth.month === maxMonthIdx;
+        const firstDayOfWeek = new Date(calMonth.year, calMonth.month, 1).getDay();
+        const daysInMonth = new Date(calMonth.year, calMonth.month + 1, 0).getDate();
 
-            {/* Scrollable List */}
-            <div className="p-5 overflow-y-auto flex-1 custom-scrollbar w-full bg-[#F9F8F6]">
-              {/* Delivery cutoff notice */}
-              <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 flex gap-3 items-start">
-                <span className="text-amber-500 mt-0.5 shrink-0">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-                </span>
-                <p className="font-body text-[12px] text-amber-800 leading-relaxed">
-                  <strong>7:00–10:00 AM deliveries</strong> require ordering by <strong>11:00 PM</strong> the night before. Same-day orders close at <strong>7:00 PM</strong>, and the last delivery slot is <strong>7:00–8:00 PM</strong>.
+        const handleDayClick = (dayIso: string) => {
+          setCalSelectedDateIso(dayIso);
+          setCalViewState("slots");
+        };
+
+        const handleConfirmSlot = (dateIso: string, hour: number) => {
+          setSelectedSlot(buildSlotKey(dateIso, hour));
+          setShowSlotPicker(false);
+        };
+
+        const slotHours = calSelectedDateIso
+          ? getSlotAvailabilityForDate(deliveryPolicy, calSelectedDateIso, nowIst)
+          : [];
+
+        const selectedSlotHour = selectedSlot && calSelectedDateIso
+          ? (() => { const p = parseSlotKey(selectedSlot); return p?.dateIso === calSelectedDateIso ? p.startHour : null; })()
+          : null;
+
+        return (
+          <div className="fixed inset-0 z-[110] flex items-end md:items-center justify-center p-0 md:p-4 bg-ink/70 backdrop-blur-sm animate-in fade-in duration-300">
+            <div
+              ref={slotDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delivery-slot-title"
+              tabIndex={-1}
+              className="bg-white rounded-t-3xl md:rounded-2xl w-full md:max-w-sm shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-[50%] md:zoom-in-95 duration-400"
+            >
+              {/* Header */}
+              <div className="px-4 py-3.5 border-b border-black/5 flex items-center justify-between shrink-0">
+                <div>
+                  <h3 id="delivery-slot-title" className="font-display text-xl font-medium text-ink">Choose a delivery slot</h3>
+                  <p className="font-body text-[11px] text-stone mt-0.5">
+                    {calViewState === "calendar" ? "Pick a date, then a time window" : calSelectedDateIso ? formatDateLabel(calSelectedDateIso) : ""}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowSlotPicker(false)}
+                  aria-label="Close slot picker"
+                  className="text-stone hover:text-ink w-8 h-8 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 transition-colors cursor-pointer"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+              </div>
+
+              {/* Info banner */}
+              <div className="mx-3 mt-2.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 flex gap-2 items-start shrink-0">
+                <svg className="text-amber-500 shrink-0 mt-0.5" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                <p className="font-body text-[11px] text-amber-800 leading-relaxed">
+                  <strong>7–10 AM deliveries</strong> require ordering by <strong>11 PM</strong> the night before. Same-day closes at <strong>7 PM</strong>.
                 </p>
               </div>
-              <div className="flex flex-col gap-3">
-                {deliverySlots.map(slot => (
-                  <button
-                    key={slot}
-                    onClick={() => {
-                      setSelectedSlot(slot);
-                      setShowSlotPicker(false);
-                    }}
-                    className={`flex items-center justify-between p-4 rounded-2xl border transition-all text-left group w-full cursor-pointer ${
-                      selectedSlot === slot
-                        ? "border-sage bg-sage/5 shadow-sm"
-                        : "border-black/5 bg-white hover:border-sage/30 hover:shadow-sm"
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-                        selectedSlot === slot ? "bg-sage text-white shadow-md shadow-sage/30" : "bg-[#F0F2F2] text-stone group-hover:text-sage group-hover:bg-sage/10"
-                      }`}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                      </div>
-                      <div>
-                        <span className={`font-display text-[18px] block ${selectedSlot === slot ? "text-sage-dark font-medium" : "text-ink font-medium transition-colors group-hover:text-sage-dark"}`}>
-                          {slot}
-                        </span>
-                        <p className={`font-body text-[11px] mt-0.5 ${selectedSlot === slot ? "text-sage/80" : "text-stone"}`}>
-                          1 Hour Window • Guaranteed Fresh
-                        </p>
-                      </div>
-                    </div>
 
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0 ${
-                      selectedSlot === slot ? "border-sage bg-sage" : "border-stone/20 bg-white"
-                    }`}>
-                      {selectedSlot === slot && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+              {/* ── CALENDAR VIEW ── */}
+              {calViewState === "calendar" && (
+                <div className="overflow-y-auto flex-1 pb-4">
+                  {/* Month navigation */}
+                  <div className="flex items-center justify-between px-4 pt-3 pb-1">
+                    <button
+                      onClick={() => setCalMonth((m) => {
+                        const newMonth = m.month === 0 ? 11 : m.month - 1;
+                        const newYear = m.month === 0 ? m.year - 1 : m.year;
+                        return { year: newYear, month: newMonth };
+                      })}
+                      disabled={isAtMinMonth}
+                      aria-label="Previous month"
+                      className="w-7 h-7 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    </button>
+                    <span className="font-body text-[13px] font-bold text-ink">
+                      {MONTH_NAMES[calMonth.month]} {calMonth.year}
+                    </span>
+                    <button
+                      onClick={() => setCalMonth((m) => {
+                        const newMonth = m.month === 11 ? 0 : m.month + 1;
+                        const newYear = m.month === 11 ? m.year + 1 : m.year;
+                        return { year: newYear, month: newMonth };
+                      })}
+                      disabled={isAtMaxMonth}
+                      aria-label="Next month"
+                      className="w-7 h-7 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
+                  </div>
 
-            {/* Footer */}
-            <div className="p-4 border-t border-black/5 bg-white shrink-0 text-center pb-8 md:pb-4">
-              <p className="font-body text-[11px] text-stone/80 tracking-widest uppercase font-medium">
-                Nutravoe Custom Delivery
-              </p>
+                  {/* Weekday headers */}
+                  <div className="grid grid-cols-7 px-3 mb-1">
+                    {["Su","Mo","Tu","We","Th","Fr","Sa"].map((d) => (
+                      <span key={d} className="text-center font-body text-[10px] font-bold uppercase tracking-wider text-stone/50 py-1">{d}</span>
+                    ))}
+                  </div>
+
+                  {/* Day grid */}
+                  <div className="grid grid-cols-7 px-3 gap-y-0.5">
+                    {Array.from({ length: firstDayOfWeek }, (_, i) => (
+                      <span key={`empty-${i}`} />
+                    ))}
+                    {Array.from({ length: daysInMonth }, (_, i) => {
+                      const day = i + 1;
+                      const dayIso = `${calMonth.year}-${String(calMonth.month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                      const isPast = dayIso < todayIso;
+                      const isToday = dayIso === todayIso;
+                      const isSelected = dayIso === calSelectedDateIso;
+                      return (
+                        <button
+                          key={day}
+                          onClick={() => !isPast && handleDayClick(dayIso)}
+                          disabled={isPast}
+                          aria-label={dayIso}
+                          aria-pressed={isSelected}
+                          className={[
+                            "aspect-square flex items-center justify-center rounded-full font-body text-[13px] font-medium transition-colors relative",
+                            isPast ? "text-black/20 cursor-not-allowed" : "cursor-pointer",
+                            isSelected ? "bg-sage text-white" : isToday ? "text-sage-dark font-bold" : !isPast ? "hover:bg-sage/15 hover:text-sage-dark" : "",
+                          ].join(" ")}
+                        >
+                          {day}
+                          {isToday && !isSelected && (
+                            <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-sage-dark" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── SLOT VIEW ── */}
+              {calViewState === "slots" && calSelectedDateIso && (
+                <div className="flex flex-col flex-1 overflow-hidden">
+                  {/* Back button */}
+                  <div className="px-3 pt-2 shrink-0">
+                    <button
+                      onClick={() => setCalViewState("calendar")}
+                      className="flex items-center gap-1.5 font-body text-[12px] font-bold text-sage hover:text-sage-dark transition-colors px-2 py-1.5 rounded-lg hover:bg-sage/8"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                      Back to calendar
+                    </button>
+                  </div>
+
+                  {/* Slots label */}
+                  <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone/50 px-4 pt-2 pb-1 shrink-0">
+                    Available times
+                  </p>
+
+                  {/* Slot grid */}
+                  <div className="grid grid-cols-3 gap-2 px-3 overflow-y-auto flex-1 pb-2">
+                    {slotHours.map(({ hour, available }) => {
+                      const isSelected = selectedSlotHour === hour;
+                      const fmtH = (h: number) => h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h - 12} PM`;
+                      return (
+                        <button
+                          key={hour}
+                          onClick={() => { if (available) setSelectedSlot(buildSlotKey(calSelectedDateIso, hour)); }}
+                          disabled={!available}
+                          aria-pressed={isSelected}
+                          className={[
+                            "rounded-xl border py-2.5 text-center transition-all font-body text-[12px] font-semibold",
+                            !available ? "border-black/5 bg-black/3 text-black/20 cursor-not-allowed line-through" : isSelected ? "border-sage bg-sage/10 text-sage-dark shadow-sm" : "border-black/10 bg-[#F9F8F6] text-ink hover:border-sage/40 hover:bg-sage/6 cursor-pointer",
+                          ].join(" ")}
+                        >
+                          <span className="block">{fmtH(hour)}</span>
+                          <span className="block text-[9px] opacity-60">– {fmtH(hour + 1)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Confirm button */}
+                  <div className="px-3 py-3 border-t border-black/5 shrink-0 pb-6 md:pb-3">
+                    <button
+                      onClick={() => selectedSlotHour !== null && handleConfirmSlot(calSelectedDateIso, selectedSlotHour)}
+                      disabled={selectedSlotHour === null}
+                      className="w-full bg-terracotta hover:bg-[#D55F43] disabled:bg-black/10 disabled:text-stone text-white font-body text-[13px] font-bold py-3.5 rounded-lg transition-colors"
+                    >
+                      {selectedSlotHour !== null
+                        ? `Confirm — ${formatCalendarSlotLabel(calSelectedDateIso, selectedSlotHour)}`
+                        : "Select a time above"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </>
   );
