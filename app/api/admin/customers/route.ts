@@ -5,10 +5,18 @@ import { adminSupabase } from '@/lib/supabase/admin';
 import { sendBrevoEmail } from '@/lib/brevo';
 
 function generatePassword(): string {
-  // 12-character password avoiding ambiguous chars (0/O, 1/l/I)
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
-  const bytes = randomBytes(12);
-  return Array.from(bytes).map(b => chars[b % chars.length]).join('');
+  // 64-char set (power of 2) with & 63 bitmask — no modular bias
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz234567890!@#$%^&*';
+  const result: string[] = [];
+  while (result.length < 12) {
+    const bytes = Array.from(randomBytes(16));
+    for (const b of bytes) {
+      if (result.length >= 12) break;
+      const idx = b & 63;          // unbiased for 64-char set
+      result.push(chars[idx]);
+    }
+  }
+  return result.join('');
 }
 
 export async function POST(req: NextRequest) {
@@ -23,9 +31,10 @@ export async function POST(req: NextRequest) {
   const line2 = typeof body?.line2 === 'string' ? body.line2.trim() || null : null;
   const city = typeof body?.city === 'string' ? body.city.trim() : '';
   const state = typeof body?.state === 'string' ? body.state.trim() : '';
+  const pincode = typeof body?.pincode === 'string' ? body.pincode.trim() : '';
 
-  if (!fullName || !email || phone.length !== 10 || !line1 || !city || !state) {
-    return NextResponse.json({ error: 'All required fields must be provided' }, { status: 400 });
+  if (!fullName || !email || phone.length !== 10 || !line1 || !city || !state || !/^\d{6}$/.test(pincode)) {
+    return NextResponse.json({ error: 'All required fields must be provided (pincode must be 6 digits)' }, { status: 400 });
   }
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -56,6 +65,7 @@ export async function POST(req: NextRequest) {
     line2,
     city,
     state,
+    pincode,
     is_default: true,
   });
 

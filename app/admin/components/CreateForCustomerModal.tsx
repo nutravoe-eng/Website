@@ -127,19 +127,20 @@ function Step2CreateAccount({ prefill, onCreated }: {
   const [line1, setLine1] = useState('');
   const [line2, setLine2] = useState('');
   const [city, setCity] = useState('');
+  const [pincode, setPincode] = useState('');
   const [state, setState] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
   async function create() {
-    if (!fullName.trim() || !email.trim() || !phone.trim() || !line1.trim() || !city.trim() || !state) {
+    if (!fullName.trim() || !email.trim() || !phone.trim() || !line1.trim() || !city.trim() || !state || !pincode.trim()) {
       setErr('All fields except Landmark are required'); return;
     }
     setLoading(true); setErr('');
     try {
       const res = await fetch('/api/admin/customers', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName, email, phone, line1, line2, city, state }),
+        body: JSON.stringify({ fullName, email, phone, line1, line2, city, pincode, state }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error ?? 'Failed to create account'); return; }
@@ -157,6 +158,7 @@ function Step2CreateAccount({ prefill, onCreated }: {
       <div><Lbl>Street / Flat / Building</Lbl><input className={inputCls()} value={line1} onChange={e => setLine1(e.target.value)} placeholder="Flat 4B, Sunrise Apartments" /></div>
       <div><Lbl>Landmark <span className="font-normal text-stone/60">(optional)</span></Lbl><input className={inputCls()} value={line2} onChange={e => setLine2(e.target.value)} placeholder="Near HDFC Bank" /></div>
       <div><Lbl>City</Lbl><input className={inputCls()} value={city} onChange={e => setCity(e.target.value)} placeholder="Bengaluru" /></div>
+      <div><Lbl>Pincode</Lbl><input className={inputCls()} value={pincode} onChange={e => setPincode(e.target.value)} placeholder="560001" maxLength={6} /></div>
       <div>
         <Lbl>State</Lbl>
         <select className={inputCls()} value={state} onChange={e => setState(e.target.value)}>
