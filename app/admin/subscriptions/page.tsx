@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import AdminTopNav from '../components/AdminTopNav';
+import CreateForCustomerModal from '../components/CreateForCustomerModal';
 
 interface DayConfig {
   id: string;
@@ -74,6 +75,7 @@ export default function AdminSubscriptionsPage() {
   const [editConfigs, setEditConfigs]       = useState<{ id: string; bowl_slug: string; bowl_name: string; isPremium: boolean }[]>([]);
   const [availableBowls, setAvailableBowls] = useState<{ slug: string; name: string; isPremium: boolean }[]>([]);
   const [bowlsLoading, setBowlsLoading]     = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   function estimateDeliveryDebit(sub: AdminSubscription): {
     baseRs: number;
@@ -358,7 +360,15 @@ export default function AdminSubscriptionsPage() {
 
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-display text-2xl text-ink">Subscriptions</h1>
-        <AdminTopNav current="subscriptions" onRefresh={fetchSubs} />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="font-body text-[12px] font-bold uppercase tracking-wider text-white bg-ink border border-ink rounded-lg px-3 py-2 hover:bg-black transition-colors"
+          >
+            + Create for Customer
+          </button>
+          <AdminTopNav current="subscriptions" onRefresh={fetchSubs} />
+        </div>
       </div>
 
       {/* Filter tabs */}
@@ -836,6 +846,13 @@ export default function AdminSubscriptionsPage() {
           </div>
         </div>
       )}
+
+      <CreateForCustomerModal
+        open={showCreateModal}
+        defaultMode="subscription"
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => { setShowCreateModal(false); fetchSubs(); }}
+      />
     </div>
   );
 }
