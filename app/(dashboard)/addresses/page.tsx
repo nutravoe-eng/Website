@@ -189,20 +189,19 @@ export default function AddressesPage() {
     }
   }, [searchParams]);
 
-  async function resolveDistanceCacheFields(lat: number | null, lng: number | null) {
-    if (typeof lat !== "number" || typeof lng !== "number") return {};
+  async function syncSavedAddressDeliveryMeta(addressId: string) {
     try {
-      const res = await fetch(
-        `/api/delivery-distance?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`,
-      );
-      if (!res.ok) return {};
-      const data = (await res.json()) as { distanceKm?: number; deliveryFee?: number };
-      if (typeof data.distanceKm !== "number" || typeof data.deliveryFee !== "number") {
-        return {};
+      const res = await fetch("/api/addresses/sync-delivery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addressId }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        console.warn("Delivery metadata sync failed:", j?.error ?? res.status);
       }
-      return { distance_km: data.distanceKm, delivery_fee: data.deliveryFee };
-    } catch {
-      return {};
+    } catch (e) {
+      console.warn("Delivery metadata sync failed", e);
     }
   }
 
@@ -280,11 +279,6 @@ export default function AddressesPage() {
       return;
     }
     setEditSaving(true);
-    const coords =
-      typeof editPinLat === "number" && typeof editPinLng === "number"
-        ? { lat: editPinLat, lng: editPinLng }
-        : null;
-    const cacheFields = await resolveDistanceCacheFields(coords?.lat ?? null, coords?.lng ?? null);
     const { data, error } = await supabase
       .from("addresses")
       .update({
@@ -295,15 +289,13 @@ export default function AddressesPage() {
         state: editForm.state,
         pincode: editForm.pincode,
         ...(editPinLat && editPinLng ? { lat: editPinLat, lng: editPinLng } : {}),
-        ...cacheFields,
       })
       .eq("id", editingId)
       .select("id, label, line1, line2, city, state, pincode, is_default, lat, lng, distance_km, delivery_fee")
       .single();
     if (!error && data) {
-      const updated = addresses.map(a => a.id === editingId ? (data as Address) : a);
-      setAddresses(updated);
-      syncNavbar(updated);
+      await syncSavedAddressDeliveryMeta(editingId);
+      await loadAddresses();
     }
     setEditSaving(false);
     cancelEdit();
@@ -324,11 +316,6 @@ export default function AddressesPage() {
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
-    const coords =
-      typeof pinLat === "number" && typeof pinLng === "number"
-        ? { lat: pinLat, lng: pinLng }
-        : null;
-    const cacheFields = await resolveDistanceCacheFields(coords?.lat ?? null, coords?.lng ?? null);
     const { data, error } = await supabase
       .from("addresses")
       .insert({
@@ -341,14 +328,12 @@ export default function AddressesPage() {
         pincode: formData.pincode,
         is_default: addresses.length === 0,
         ...(pinLat && pinLng ? { lat: pinLat, lng: pinLng } : {}),
-        ...cacheFields,
       })
       .select("id, label, line1, line2, city, state, pincode, is_default, lat, lng, distance_km, delivery_fee")
       .single();
     if (!error && data) {
-      const updated = [...addresses, data as Address];
-      setAddresses(updated);
-      syncNavbar(updated);
+      if (data.id) await syncSavedAddressDeliveryMeta(data.id);
+      await loadAddresses();
     }
     setSaving(false);
     setIsAdding(false);

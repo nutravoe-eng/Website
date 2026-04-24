@@ -1,9 +1,24 @@
 import type { PlanConfig } from "@/app/subscribe/PlanCard";
 import type { Bowl, SubscriptionPlan } from "@/types";
 
+/** List-price floor to treat a bowl as premium when `subscriptionPriceTier` is missing in CMS (e.g. ₹399 retail). */
+const PREMIUM_BOWL_DEFAULT_RETAIL_FLOOR = 360;
+
+function normTier(t: Bowl["subscriptionPriceTier"] | undefined | string | null): string {
+  if (t == null) return "";
+  return String(t)
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 /** True when the bowl should use the plan's premium per-bowl row (e.g. ₹399-class menu). */
 export function isPremiumBowl(bowl: Bowl): boolean {
-  return bowl.subscriptionPriceTier === "premium";
+  const t = normTier(bowl.subscriptionPriceTier);
+  if (t === "premium") return true;
+  if (t === "standard") return false;
+  // CMS forgot tier: use list price to separate ~₹299 standard from ~₹399 premium
+  return typeof bowl.price === "number" && bowl.price >= PREMIUM_BOWL_DEFAULT_RETAIL_FLOOR;
 }
 
 /** Standard (299-class) subscription unit price, global (delivery is separate). */

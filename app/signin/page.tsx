@@ -226,6 +226,12 @@ function SignInForm() {
       return;
     }
 
+    // Self-signup welcome email (BREVO_WELCOME_TEMPLATE_ID) — not sent from Supabase webhook
+    void fetch("/api/auth/send-welcome-self-signup", {
+      method: "POST",
+      credentials: "include",
+    });
+
     setLoading(false);
     setIsNewUser(true);
     setStep("success");

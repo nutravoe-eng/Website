@@ -4,6 +4,11 @@ import { useRef, useState } from 'react';
 import type { Bowl, BowlPresetOptions, Subscription, IngredientCustomization } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { STUB_PLANS as PLANS } from '../../subscribe/PlanCard';
+import {
+  minWeeklyBowlSubtotalFromPlan,
+  maxWeeklyBowlSubtotalFromPlan,
+  weeklyBowlSubtotalFromDayRows,
+} from '@/lib/subscription-weekly-display';
 import BowlPicker from '../../subscribe/BowlPicker';
 import CustomizationModal from '@/components/CustomizationModal';
 import { useDialogAccessibility } from '@/lib/use-dialog-accessibility';
@@ -74,6 +79,16 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
 
   if (!plan) return null;
 
+  const spreadTieredBowlSubtotal = sub.deliveryStyle === 'spread' && sub.dayConfigs.length
+    ? weeklyBowlSubtotalFromDayRows(
+        plan,
+        sub.dayConfigs.map((d) => ({ bowlId: d.bowlId, quantity: d.quantity ?? 1 })),
+        (id) => findBowlByIdentifier(bowls, id),
+      )
+    : null;
+  const fromStandardOnly = minWeeklyBowlSubtotalFromPlan(plan);
+  const ifAllPremium = maxWeeklyBowlSubtotalFromPlan(plan);
+
   const isValid = (() => {
     if (edit.deliveryStyle === 'flexible') return true;
     if (!edit.deliveryTimeSlot) return false;
@@ -140,7 +155,19 @@ export default function ManageModal({ sub, bowls, onSave, onClose }: Props) {
           <div>
             <h3 id="manage-subscription-title" className="font-display text-xl font-medium text-ink">Manage Subscription</h3>
             <p className="font-body text-[13px] text-stone mt-0.5">
-              {plan.name} · {formatCurrency(plan.weeklyPrice)}/week
+              {plan.name} · {spreadTieredBowlSubtotal != null
+                ? (
+                  <>
+                    {formatCurrency(spreadTieredBowlSubtotal)}/week (your bowls)
+                  </>
+                ) : (
+                  <>
+                    from {formatCurrency(fromStandardOnly)}/week
+                    {plan.ratePremium != null && plan.ratePremium > 0 && (
+                      <span> — up to {formatCurrency(ifAllPremium)}/week if all premium</span>
+                    )}
+                  </>
+                )}
             </p>
           </div>
           <button onClick={onClose} className="text-stone hover:text-ink transition-colors p-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage focus-visible:ring-offset-1">

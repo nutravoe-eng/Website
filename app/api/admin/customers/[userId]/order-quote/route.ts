@@ -4,6 +4,10 @@ import { adminSupabase } from '@/lib/supabase/admin';
 import { buildAuthoritativeOrder, type CheckoutItemInput } from '@/lib/checkout-security';
 import { requestOriginReferrer } from '@/lib/ola-maps';
 
+/**
+ * Server-authoritative one-time order quote (subtotal, delivery, line items) for admin preview.
+ * Uses the same pricing as customer checkout and admin order creation.
+ */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   const admin = await verifyAdmin();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -19,16 +23,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
   if (!targetUser) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
   const body = await req.json().catch(() => null);
-  const deliveryDate = typeof body?.deliveryDate === 'string' ? body.deliveryDate : '';
-  const deliveryTimeSlot = typeof body?.deliveryTimeSlot === 'string' ? body.deliveryTimeSlot.trim() : '';
   const incomingItems: unknown[] = Array.isArray(body?.items) ? body.items : [];
 
-  if (!deliveryDate || !deliveryTimeSlot || !incomingItems.length) {
-    return NextResponse.json({ error: 'deliveryDate, deliveryTimeSlot, and items are required' }, { status: 400 });
-  }
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate)) {
-    return NextResponse.json({ error: 'deliveryDate must be YYYY-MM-DD' }, { status: 400 });
+  if (!incomingItems.length) {
+    return NextResponse.json({ error: 'items are required' }, { status: 400 });
   }
 
   const items: CheckoutItemInput[] = incomingItems.map((raw: unknown) => {
@@ -46,7 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
     };
   });
 
-  if (items.some(item => !item.bowlSlug || item.quantity <= 0)) {
+  if (items.some((item) => !item.bowlSlug || item.quantity <= 0)) {
     return NextResponse.json({ error: 'Invalid order items' }, { status: 400 });
   }
 
@@ -62,54 +60,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
     return NextResponse.json({ error: 'Customer has no delivery address on file' }, { status: 400 });
   }
 
-  let quote;
   try {
-    quote = await buildAuthoritativeOrder(items, address, null, {
+    const quote = await buildAuthoritativeOrder(items, address, null, {
       httpReferrer: requestOriginReferrer(req),
+    });
+    return NextResponse.json({
+      subtotal: quote.subtotal,
+      deliveryFee: quote.deliveryFee,
+      total: quote.total,
+      lineItems: quote.lineItems,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unable to price order';
     return NextResponse.json({ error: message }, { status: 400 });
   }
-
-  const { data: order, error: orderError } = await adminSupabase
-    .from('orders')
-    .insert({
-      user_id: userId,
-      order_type: 'one_time',
-      status: 'pending',
-      delivery_date: deliveryDate,
-      delivery_time_slot: deliveryTimeSlot,
-      delivery_address_id: address.id,
-      delivery_fee: quote.deliveryFee,
-      subtotal: quote.subtotal,
-      total: quote.total,
-      // DB enum: razorpay | upi | wallet | whatsapp_cod | cod — use cod for pay-on-delivery
-      payment_method: 'cod',
-      payment_status: 'pending',
-      notes: 'requested_via_whatsapp',
-    })
-    .select('id')
-    .single();
-
-  if (orderError) {
-    return NextResponse.json(
-      { error: orderError.message || 'Failed to create order' },
-      { status: 500 },
-    );
-  }
-
-  const { error: itemsError } = await adminSupabase
-    .from('order_items')
-    .insert(quote.lineItems.map(item => ({ order_id: order.id, ...item })));
-
-  if (itemsError) {
-    await adminSupabase.from('orders').delete().eq('id', order.id);
-    return NextResponse.json(
-      { error: itemsError.message || 'Failed to save order items' },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({ id: order.id, subtotal: quote.subtotal, total: quote.total });
 }

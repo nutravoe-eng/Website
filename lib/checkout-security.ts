@@ -59,39 +59,56 @@ async function resolveAddressCoordinates(address: AddressForPricing): Promise<{ 
   return null;
 }
 
-export async function isNearZoneAddress(address: AddressForPricing, options?: PricingContextOptions): Promise<boolean> {
+/**
+ * Distance (km) for delivery pricing. Prefer **stored** `distance_km` when set (saved at
+ * address create/update via Ola + {@link resolveDeliveryDistanceKm}) so we do not call
+ * routing on every checkout. Otherwise compute from lat/lng, then pincode geocode.
+ */
+async function resolveDistanceKmForDeliveryPricing(
+  address: AddressForPricing,
+  options?: PricingContextOptions,
+): Promise<number | null> {
   if (typeof address.distance_km === "number" && Number.isFinite(address.distance_km)) {
-    return address.distance_km <= FREE_ZONE_RADIUS_KM;
+    return address.distance_km;
+  }
+  if (
+    typeof address.lat === "number" &&
+    typeof address.lng === "number" &&
+    Number.isFinite(address.lat) &&
+    Number.isFinite(address.lng)
+  ) {
+    const { distanceKm } = await resolveDeliveryDistanceKm(address.lat, address.lng, {
+      httpReferrer: options?.httpReferrer,
+    });
+    return distanceKm;
   }
   const coords = await resolveAddressCoordinates(address);
-  // Fail safe: assume far zone when coords are unavailable to avoid unintended free delivery
-  if (!coords) return false;
-  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng, { httpReferrer: options?.httpReferrer });
-  return distanceKm <= FREE_ZONE_RADIUS_KM;
+  if (!coords) return null;
+  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng, {
+    httpReferrer: options?.httpReferrer,
+  });
+  return distanceKm;
+}
+
+export async function isNearZoneAddress(address: AddressForPricing, options?: PricingContextOptions): Promise<boolean> {
+  const d = await resolveDistanceKmForDeliveryPricing(address, options);
+  if (d === null) return false;
+  return d <= FREE_ZONE_RADIUS_KM;
 }
 
 export async function getAddressDeliveryFee(address: AddressForPricing, options?: PricingContextOptions): Promise<number> {
-  if (typeof address.distance_km === "number" && Number.isFinite(address.distance_km)) {
-    return deliveryFeeFromDistanceKm(address.distance_km);
-  }
-  const coords = await resolveAddressCoordinates(address);
-  // Fail safe: charge the standard delivery fee when coords are unavailable
-  if (!coords) return DELIVERY_FEE_RS;
-  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng, { httpReferrer: options?.httpReferrer });
-  return deliveryFeeFromDistanceKm(distanceKm);
+  const d = await resolveDistanceKmForDeliveryPricing(address, options);
+  if (d === null) return DELIVERY_FEE_RS;
+  return deliveryFeeFromDistanceKm(d);
 }
 
 export async function getAddressDeliveryBreakdown(
   address: AddressForPricing,
   options?: PricingContextOptions,
 ): Promise<({ isFree: true; distanceKm: number } | ({ isFree: false } & DeliveryPriceBreakdown)) | null> {
-  if (typeof address.distance_km === "number" && Number.isFinite(address.distance_km)) {
-    return deliveryPricingFromDistanceKm(address.distance_km);
-  }
-  const coords = await resolveAddressCoordinates(address);
-  if (!coords) return null;
-  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng, { httpReferrer: options?.httpReferrer });
-  return deliveryPricingFromDistanceKm(distanceKm);
+  const d = await resolveDistanceKmForDeliveryPricing(address, options);
+  if (d === null) return null;
+  return deliveryPricingFromDistanceKm(d);
 }
 
 function summarizeCustomizations(
@@ -242,23 +259,15 @@ export async function buildSubscriptionQuote(
   totalIngredientExtrasRs: number;
   weeklyDeliveryFeeRs: number;
 }> {
-  const [plans, bowls, coords] = await Promise.all([
+  const [plans, bowls, distanceKmForPricing] = await Promise.all([
     getSubscriptionPlans(),
     getAllBowls(),
-    resolveAddressCoordinates(address),
+    resolveDistanceKmForDeliveryPricing(address, options),
   ]);
 
   const plan = getPlanBySlug(plans, planSlug);
   if (!plan) {
     throw new Error(`Unknown subscription plan: ${planSlug}`);
-  }
-
-  let distanceKmForPricing: number | null = null;
-  if (typeof address.distance_km === "number" && Number.isFinite(address.distance_km)) {
-    distanceKmForPricing = address.distance_km;
-  } else if (coords) {
-    const resolved = await resolveDeliveryDistanceKm(coords.lat, coords.lng, { httpReferrer: options?.httpReferrer });
-    distanceKmForPricing = resolved.distanceKm;
   }
   const bowlMap = buildBowlLookupMap(bowls);
   const perBowl = plan.pricePerBowl || plan.price_per_bowl || 0;

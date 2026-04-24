@@ -3,6 +3,8 @@ import { randomBytes } from 'crypto';
 import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 import { sendBrevoEmail } from '@/lib/brevo';
+import { requestOriginReferrer } from '@/lib/ola-maps';
+import { syncAddressDeliveryMetadata } from '@/lib/address-delivery-sync';
 
 function generatePassword(): string {
   // 64-char set (power of 2) with & 63 bitmask — no modular bias
@@ -54,7 +56,7 @@ export async function POST(req: NextRequest) {
     email,
     password: tempPassword,
     email_confirm: true,
-    user_metadata: { full_name: fullName, phone },
+    user_metadata: { full_name: fullName, phone, admin_created: true },
   });
 
   if (authError || !authData.user) {
@@ -64,23 +66,38 @@ export async function POST(req: NextRequest) {
 
   const userId = authData.user.id;
 
-  // Insert delivery address
-  const { error: addrError } = await adminSupabase.from('addresses').insert({
-    user_id: userId,
-    line1,
-    line2,
-    city,
-    state,
-    pincode,
-    lat,
-    lng,
-    is_default: true,
-  });
+  // The DB trigger only writes id/email/full_name — phone must be set explicitly
+  await adminSupabase.from('users').update({ phone }).eq('id', userId);
 
-  if (addrError) {
+  // Insert delivery address
+  const { data: addrRow, error: addrError } = await adminSupabase
+    .from('addresses')
+    .insert({
+      user_id: userId,
+      line1,
+      line2,
+      city,
+      state,
+      pincode,
+      lat,
+      lng,
+      is_default: true,
+    })
+    .select('id')
+    .single();
+
+  if (addrError || !addrRow?.id) {
     // Best-effort cleanup of auth user if address insert fails
     await adminSupabase.auth.admin.deleteUser(userId);
     return NextResponse.json({ error: 'Failed to save address' }, { status: 500 });
+  }
+
+  try {
+    await syncAddressDeliveryMetadata(adminSupabase, addrRow.id, lat, lng, {
+      httpReferrer: requestOriginReferrer(req),
+    });
+  } catch (e) {
+    console.error('[admin/customers] address delivery sync failed', e);
   }
 
   // Send welcome email with temp password

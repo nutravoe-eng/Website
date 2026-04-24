@@ -94,12 +94,17 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
 
     return () => {
       cancelled = true;
-      try {
-        mapRef.current?.remove();
-      } catch {
-        /* ignore */
+      if (mapRef.current) {
+        // OlaMaps/MapLibre aborts in-flight tile requests on remove(), which fires an async
+        // AbortError rejection that escapes try-catch. Suppress it for 300ms then clean up.
+        const suppressAbort = (e: PromiseRejectionEvent) => {
+          if (e.reason?.name === 'AbortError') e.preventDefault();
+        };
+        window.addEventListener('unhandledrejection', suppressAbort, { capture: true });
+        try { mapRef.current.remove(); } catch { /* ignore */ }
+        setTimeout(() => window.removeEventListener('unhandledrejection', suppressAbort, { capture: true }), 300);
+        mapRef.current = null;
       }
-      mapRef.current = null;
       markerRef.current = null;
     };
   }, [mapContainerId]);

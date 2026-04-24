@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { adminSupabase } from "@/lib/supabase/admin";
-import { deliveryFeeFromDistanceKm } from "@/lib/delivery";
 import { requestOriginReferrer } from "@/lib/ola-maps";
 import { resolveDeliveryDistanceKm } from "@/lib/road-distance";
+import { syncAddressDeliveryMetadata } from "@/lib/address-delivery-sync";
 
 type BackfillRow = {
   id: string;
@@ -26,9 +26,9 @@ function parseDryRun(value: string | null): boolean {
 /**
  * POST /api/admin/addresses/backfill-distance?limit=100&dryRun=false
  *
- * Backfills addresses.distance_km and addresses.delivery_fee for rows that:
- * - have lat/lng
- * - are missing distance_km or delivery_fee
+ * For rows with lat/lng that are missing route metadata, runs the same
+ * {@link syncAddressDeliveryMetadata} path as the dashboard: `distance_km`,
+ * `nearest_hub_id`, and clears legacy `delivery_fee` (fee is derived in app).
  */
 export async function POST(req: NextRequest) {
   const admin = await verifyAdmin();
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     .select("id, lat, lng")
     .not("lat", "is", null)
     .not("lng", "is", null)
-    .or("distance_km.is.null,delivery_fee.is.null")
+    .or("distance_km.is.null,nearest_hub_id.is.null")
     .limit(limit);
 
   if (error) {
@@ -52,29 +52,18 @@ export async function POST(req: NextRequest) {
   const rows = (data ?? []) as BackfillRow[];
   const failures: Array<{ id: string; error: string }> = [];
   let updated = 0;
+  const referrer = requestOriginReferrer(req);
 
   for (const row of rows) {
     try {
-      const resolved = await resolveDeliveryDistanceKm(row.lat, row.lng, {
-        httpReferrer: requestOriginReferrer(req),
-      });
-      const distanceKm = resolved.distanceKm;
-      const deliveryFee = deliveryFeeFromDistanceKm(distanceKm);
-
-      if (!dryRun) {
-        const { error: updateError } = await adminSupabase
-          .from("addresses")
-          .update({
-            distance_km: distanceKm,
-            delivery_fee: deliveryFee,
-          })
-          .eq("id", row.id);
-        if (updateError) {
-          failures.push({ id: row.id, error: updateError.message });
-          continue;
-        }
+      if (dryRun) {
+        await resolveDeliveryDistanceKm(row.lat, row.lng, { httpReferrer: referrer });
+        updated += 1;
+        continue;
       }
-
+      await syncAddressDeliveryMetadata(adminSupabase, row.id, row.lat, row.lng, {
+        httpReferrer: referrer,
+      });
       updated += 1;
     } catch (err) {
       failures.push({

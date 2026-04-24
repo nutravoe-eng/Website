@@ -195,22 +195,39 @@ export function formatCalendarSlotLabel(dateIso: string, startHour: number): str
   return `${formatDateLabel(dateIso)} · ${fmtHour(startHour)} – ${fmtHour(startHour + 1)}`;
 }
 
-/** Available hours (7–19) for a given date, respecting policy blackouts and today's cutoff. */
+/**
+ * 7–10 AM slots (hours 7, 8, 9) for delivery date D can only be booked on or before 11:00 PM
+ * IST on D−1 (night before). After that, those hours for D are closed even if "today" at 1 AM.
+ */
+function isEarlyMorningSlotBookableForDate(dateIso: string, startHour24: number, nowIst: Date): boolean {
+  if (startHour24 < 7 || startHour24 > 9) return true;
+  const prev = addDays(dateIso, -1);
+  const deadlineMs = new Date(`${prev}T23:00:00+05:30`).getTime();
+  return nowIst.getTime() <= deadlineMs;
+}
+
+/** Available hours (7–19) for a given date, respecting policy blackouts, same-day hour cutoff, and 7–10 AM “order by 11 PM previous day” rule. */
 export function getSlotAvailabilityForDate(
   policy: DeliveryPolicy,
   dateIso: string,
   nowIst: Date = getNowIst(),
 ): { hour: number; available: boolean }[] {
   const todayIso = getIstDateIso(nowIst);
+  if (dateIso < todayIso) {
+    return Array.from({ length: 13 }, (_, i) => i + 7).map((hour) => ({ hour, available: false }));
+  }
   const isToday = dateIso === todayIso;
-  const cutoff = isToday ? nowIst.getHours() + 1 : 0;
-  return Array.from({ length: 13 }, (_, i) => i + 7).map((hour) => ({
-    hour,
-    available:
-      hour >= (isToday ? cutoff : 7) &&
+  const cutoff = isToday ? nowIst.getHours() + 1 : 7;
+  return Array.from({ length: 13 }, (_, i) => i + 7).map((hour) => {
+    if (!isEarlyMorningSlotBookableForDate(dateIso, hour, nowIst)) {
+      return { hour, available: false };
+    }
+    const available =
+      hour >= (isToday ? Math.max(7, cutoff) : 7) &&
       !isBlockedByBlackout(policy, dateIso, hour) &&
-      !isDisabled(policy, dateIso, hour),
-  }));
+      !isDisabled(policy, dateIso, hour);
+    return { hour, available };
+  });
 }
 
 /** All valid slots from today through the last day of next calendar month. */

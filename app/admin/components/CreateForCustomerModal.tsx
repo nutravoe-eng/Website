@@ -1,9 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { DELIVERY_TIME_SLOTS } from '@/lib/delivery-slots';
+import { filterBowlsForSubscriptionPicker, filterWeeklySpreadPlansForUI } from '@/lib/bowl-filters';
+import {
+  DEFAULT_BOWL_PRESET,
+  encodePresetIntoCustomizations,
+  findBowlByIdentifier,
+  formatBowlCustomizationSummary,
+} from '@/lib/bowl-customization';
 import type { Bowl, SubscriptionPlan, IngredientCustomization, BowlPresetOptions } from '@/types';
+import BowlPicker from '@/app/subscribe/BowlPicker';
+import CustomizationModal from '@/components/CustomizationModal';
+import RepeatCustomisationChoiceSheet from '@/components/RepeatCustomisationChoiceSheet';
+import { formatCurrency } from '@/lib/utils';
 
 const MapPicker = dynamic(() => import('@/components/MapPicker'), { ssr: false });
 
@@ -26,11 +37,30 @@ interface DayConfig {
   bowlId: string;
   quantity: number;
   customizations: IngredientCustomization[];
+  presetOptions: BowlPresetOptions;
   deliveryTimeSlot: string;
 }
 
 type Step = 1 | 2 | 3;
 type Mode = 'order' | 'subscription';
+
+interface OrderQuotePreview {
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  lineItems: { bowl_name: string; quantity: number; total_price: number; unit_price: number }[];
+}
+
+interface SubQuotePreview {
+  billingCycle: string;
+  bowlsPerCycle: number;
+  perBowl: number;
+  bowlsAmountRs: number;
+  baseBowlSubtotalRs: number;
+  totalIngredientExtrasRs: number;
+  weeklyDeliveryFeeRs: number;
+  totalAmountRs: number;
+}
 
 interface Props {
   open: boolean;
@@ -52,6 +82,11 @@ function inputCls(err?: boolean) {
 
 function Lbl({ children }: { children: React.ReactNode }) {
   return <label className="block font-body text-[12px] font-medium text-stone mb-1">{children}</label>;
+}
+
+/** Match SubscribeWizard: only bowls with a customisation definition get the repeat/different sheet. */
+function bowlOffersCustomiseFlow(b: Bowl | undefined): boolean {
+  return Boolean(b?.customizableIngredients?.length);
 }
 
 // ── Step 1: Lookup ────────────────────────────────────────────────────────────
@@ -222,7 +257,7 @@ function Step2CreateAccount({ prefill, onCreated }: {
                 ? 'Loading map\u2026'
                 : 'Drag the pin or tap to mark the exact delivery location.'}
           </p>
-          {pincode.length === 6 && !pincodeLookupLoading && isIndianPincode !== false && (
+          {pincode.length === 6 && isIndianPincode !== false && (
             <MapPicker
               centerLat={mapCenter?.lat}
               centerLng={mapCenter?.lng}
@@ -257,8 +292,9 @@ function Step3Create({ userId, defaultMode, onSuccess }: {
 
   // Order state
   const [orderItems, setOrderItems] = useState<OrderItem[]>([
-    { bowlSlug: '', quantity: 1, customizations: [], presetOptions: { baseChoice: 'yogurt', oatsChoice: 'soaked', noSugar: false } },
+    { bowlSlug: '', quantity: 1, customizations: [], presetOptions: { ...DEFAULT_BOWL_PRESET } },
   ]);
+  const [orderCustomizeIdx, setOrderCustomizeIdx] = useState<number | null>(null);
   const [deliveryDate, setDeliveryDate] = useState('');
   const [deliverySlot, setDeliverySlot] = useState('');
 
@@ -268,8 +304,73 @@ function Step3Create({ userId, defaultMode, onSuccess }: {
   const [subSlot, setSubSlot] = useState('');
   const [startDate, setStartDate] = useState('');
   const [dayConfigs, setDayConfigs] = useState<DayConfig[]>([
-    { day: 'Mon', bowlId: '', quantity: 1, customizations: [], deliveryTimeSlot: '' },
+    {
+      day: 'Mon',
+      bowlId: '',
+      quantity: 1,
+      customizations: [],
+      presetOptions: { ...DEFAULT_BOWL_PRESET },
+      deliveryTimeSlot: '',
+    },
   ]);
+  const [subDayCustomizeIdx, setSubDayCustomizeIdx] = useState<number | null>(null);
+  const [orderRepeatLineIdx, setOrderRepeatLineIdx] = useState<number | null>(null);
+  const [subRepeatLineIdx, setSubRepeatLineIdx] = useState<number | null>(null);
+  const [orderPreview, setOrderPreview] = useState<OrderQuotePreview | null>(null);
+  const [subPreview, setSubPreview] = useState<SubQuotePreview | null>(null);
+  const [orderQuoteLoading, setOrderQuoteLoading] = useState(false);
+  const [subQuoteLoading, setSubQuoteLoading] = useState(false);
+  const [orderPricingError, setOrderPricingError] = useState('');
+  const [subPricingError, setSubPricingError] = useState('');
+
+  const subscriptionPlansUi = useMemo(
+    () => filterWeeklySpreadPlansForUI(plans ?? []),
+    [plans],
+  );
+  const subscriptionBowls = useMemo(
+    () => filterBowlsForSubscriptionPicker(bowls ?? []),
+    [bowls],
+  );
+  const selectedPlan = useMemo(
+    () => subscriptionPlansUi.find((p) => p.slug === planId) ?? (plans ?? []).find((p) => p.slug === planId),
+    [subscriptionPlansUi, plans, planId],
+  );
+  const bowlsPerWeekCap = selectedPlan?.bowlsPerCycle ?? 0;
+  const spreadTotal = useMemo(
+    () => dayConfigs.reduce((a, d) => a + d.quantity, 0),
+    [dayConfigs],
+  );
+
+  const canPreviewOrder =
+    orderItems.length > 0 && orderItems.every((i) => i.bowlSlug && i.quantity >= 1);
+  const timeSlotsOkForSpread =
+    subSlot || (dayConfigs.length > 0 && dayConfigs.every((d) => d.deliveryTimeSlot));
+  const canPreviewSubscription = Boolean(
+    planId &&
+      (style === 'flexible' ||
+        (style === 'spread' &&
+          bowlsPerWeekCap > 0 &&
+          spreadTotal === bowlsPerWeekCap &&
+          !dayConfigs.some((d) => !d.bowlId || d.quantity < 1) &&
+          timeSlotsOkForSpread)),
+  );
+
+  useEffect(() => {
+    setOrderPricingError('');
+    setSubPricingError('');
+  }, [mode]);
+
+  useEffect(() => {
+    setOrderCustomizeIdx(null);
+    setSubDayCustomizeIdx(null);
+    setOrderRepeatLineIdx(null);
+    setSubRepeatLineIdx(null);
+  }, [mode]);
+
+  useEffect(() => {
+    if (style !== 'spread') setSubDayCustomizeIdx(null);
+    setSubRepeatLineIdx(null);
+  }, [style]);
 
   useEffect(() => {
     Promise.all([
@@ -280,6 +381,117 @@ function Step3Create({ userId, defaultMode, onSuccess }: {
       setPlans(pd.plans ?? []);
     }).catch(() => setErr('Failed to load catalog')).finally(() => setCatalogLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (mode !== 'order' || !userId) {
+      setOrderPreview(null);
+      return;
+    }
+    if (!canPreviewOrder) {
+      setOrderPreview(null);
+      setOrderQuoteLoading(false);
+      return;
+    }
+    const ac = new AbortController();
+    setOrderQuoteLoading(true);
+    setOrderPricingError('');
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/customers/${userId}/order-quote`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: orderItems }),
+          signal: ac.signal,
+        });
+        const data = await res.json();
+        if (ac.signal.aborted) return;
+        if (!res.ok) {
+          setOrderPricingError(typeof data.error === 'string' ? data.error : 'Unable to price order');
+          setOrderPreview(null);
+          return;
+        }
+        setOrderPreview(data);
+        setOrderPricingError('');
+      } catch (e) {
+        if (ac.signal.aborted) return;
+        setOrderPricingError('Network error');
+        setOrderPreview(null);
+      } finally {
+        if (!ac.signal.aborted) setOrderQuoteLoading(false);
+      }
+    })();
+    return () => {
+      ac.abort();
+    };
+  }, [mode, userId, canPreviewOrder, orderItems]);
+
+  useEffect(() => {
+    if (mode !== 'subscription' || !userId) {
+      setSubPreview(null);
+      return;
+    }
+    if (!canPreviewSubscription) {
+      setSubPreview(null);
+      setSubQuoteLoading(false);
+      return;
+    }
+    const ac = new AbortController();
+    setSubQuoteLoading(true);
+    setSubPricingError('');
+    const body = {
+      planId,
+      deliveryStyle: style,
+      deliveryTimeSlot: subSlot,
+      startDate: startDate || undefined,
+      dayConfigs:
+        style === 'spread'
+          ? dayConfigs.map((d) => ({
+              day: d.day,
+              bowlId: d.bowlId,
+              quantity: d.quantity,
+              customizations: encodePresetIntoCustomizations(d.customizations, d.presetOptions),
+              deliveryTimeSlot: d.deliveryTimeSlot || undefined,
+            }))
+          : [],
+    };
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/customers/${userId}/subscription-quote`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: ac.signal,
+        });
+        const data = await res.json();
+        if (ac.signal.aborted) return;
+        if (!res.ok) {
+          setSubPricingError(typeof data.error === 'string' ? data.error : 'Unable to price subscription');
+          setSubPreview(null);
+          return;
+        }
+        setSubPreview(data);
+        setSubPricingError('');
+      } catch (e) {
+        if (ac.signal.aborted) return;
+        setSubPricingError('Network error');
+        setSubPreview(null);
+      } finally {
+        if (!ac.signal.aborted) setSubQuoteLoading(false);
+      }
+    })();
+    return () => {
+      ac.abort();
+    };
+  }, [
+    mode,
+    userId,
+    canPreviewSubscription,
+    planId,
+    style,
+    subSlot,
+    startDate,
+    dayConfigs,
+  ]);
 
   async function submitOrder() {
     if (!deliveryDate || !deliverySlot) { setErr('Delivery date and time slot are required'); return; }
@@ -299,6 +511,10 @@ function Step3Create({ userId, defaultMode, onSuccess }: {
 
   async function submitSubscription() {
     if (!planId) { setErr('Select a plan'); return; }
+    if (style === 'spread' && planId && bowlsPerWeekCap > 0 && spreadTotal !== bowlsPerWeekCap) {
+      setErr(`This plan needs exactly ${bowlsPerWeekCap} bowls per week (you have ${spreadTotal} assigned).`);
+      return;
+    }
     if (style === 'spread' && dayConfigs.some(d => !d.bowlId || d.quantity < 1)) {
       setErr('Each day config needs a bowl and qty \u2265 1'); return;
     }
@@ -312,9 +528,11 @@ function Step3Create({ userId, defaultMode, onSuccess }: {
         body: JSON.stringify({
           planId, deliveryStyle: style, deliveryTimeSlot: subSlot,
           startDate: startDate || undefined,
-          dayConfigs: style === 'spread' ? dayConfigs.map(d => ({
-            day: d.day, bowlId: d.bowlId, quantity: d.quantity,
-            customizations: d.customizations,
+          dayConfigs: style === 'spread' ? dayConfigs.map((d) => ({
+            day: d.day,
+            bowlId: d.bowlId,
+            quantity: d.quantity,
+            customizations: encodePresetIntoCustomizations(d.customizations, d.presetOptions),
             deliveryTimeSlot: d.deliveryTimeSlot || undefined,
           })) : [],
         }),
@@ -326,7 +544,46 @@ function Step3Create({ userId, defaultMode, onSuccess }: {
     } catch { setErr('Network error'); } finally { setSubmitting(false); }
   }
 
-  if (catalogLoading) return <p className="font-body text-[13px] text-stone text-center py-8">Loading catalog\u2026</p>;
+  function decOrderLine(idx: number) {
+    setOrderItems((p) => p.map((it, i) => (i === idx ? { ...it, quantity: Math.max(1, it.quantity - 1) } : it)));
+  }
+
+  function incOrderLine(idx: number) {
+    const item = orderItems[idx];
+    const b = findBowlByIdentifier(bowls ?? [], item.bowlSlug);
+    if (!item.bowlSlug || !b) return;
+    if (!bowlOffersCustomiseFlow(b)) {
+      setOrderItems((p) => p.map((it, i) => (i === idx ? { ...it, quantity: it.quantity + 1 } : it)));
+      return;
+    }
+    if (item.quantity >= 1) setOrderRepeatLineIdx(idx);
+  }
+
+  function decSubLine(idx: number) {
+    setDayConfigs((p) => p.map((d, i) => (i === idx ? { ...d, quantity: Math.max(1, d.quantity - 1) } : d)));
+  }
+
+  function incSubLine(idx: number) {
+    if (!planId || bowlsPerWeekCap <= 0) {
+      setErr('Select a plan first to set the weekly bowl count.');
+      return;
+    }
+    if (spreadTotal >= bowlsPerWeekCap) {
+      setErr(`This plan only includes ${bowlsPerWeekCap} bowls per week.`);
+      return;
+    }
+    setErr('');
+    const dc = dayConfigs[idx];
+    const b = findBowlByIdentifier(bowls ?? [], dc.bowlId);
+    if (!dc.bowlId || !b) return;
+    if (!bowlOffersCustomiseFlow(b)) {
+      setDayConfigs((p) => p.map((d, i) => (i === idx ? { ...d, quantity: d.quantity + 1 } : d)));
+      return;
+    }
+    if (dc.quantity >= 1) setSubRepeatLineIdx(idx);
+  }
+
+  if (catalogLoading) return <p className="font-body text-[13px] text-stone text-center py-8">Loading catalog…</p>;
   if (success) return <p className="font-body text-[13px] text-green-700 bg-green-50 rounded-xl p-4 text-center">{success}</p>;
 
   return (
@@ -344,50 +601,99 @@ function Step3Create({ userId, defaultMode, onSuccess }: {
 
       {mode === 'order' && (
         <div className="space-y-3">
-          {orderItems.map((item, idx) => (
-            <div key={idx} className="border border-black/10 rounded-xl p-3 space-y-2">
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Lbl>Bowl</Lbl>
-                  <select className={inputCls()} value={item.bowlSlug}
-                    onChange={e => setOrderItems(p => p.map((it, i) => i === idx ? { ...it, bowlSlug: e.target.value } : it))}>
-                    <option value="">Select bowl</option>
-                    {(bowls ?? []).map(b => <option key={b.slug} value={b.slug}>{b.name}</option>)}
-                  </select>
+          {orderItems.map((item, idx) => {
+            const bowl = findBowlByIdentifier(bowls ?? [], item.bowlSlug);
+            return (
+              <div key={idx} className="border border-black/10 rounded-xl p-3 space-y-2">
+                <div className="flex flex-wrap items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <Lbl>Choose bowl</Lbl>
+                    <BowlPicker
+                      bowls={bowls ?? []}
+                      selectedBowlId={item.bowlSlug}
+                      onSelect={(slug) =>
+                        setOrderItems((p) =>
+                          p.map((it, i) =>
+                            i === idx
+                              ? {
+                                  ...it,
+                                  bowlSlug: slug,
+                                  customizations: [],
+                                  presetOptions: { ...DEFAULT_BOWL_PRESET },
+                                }
+                              : it,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="w-28 shrink-0">
+                    <Lbl>Qty</Lbl>
+                    <div className="flex items-center gap-1 bg-white border border-black/10 rounded-lg px-1 py-0.5">
+                      <button
+                        type="button"
+                        onClick={() => decOrderLine(idx)}
+                        className="w-8 h-8 flex items-center justify-center text-stone hover:text-ink rounded-md hover:bg-black/5"
+                        aria-label="Decrease quantity"
+                      >
+                        −
+                      </button>
+                      <span className="font-body text-[13px] font-medium w-6 text-center tabular-nums">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => incOrderLine(idx)}
+                        disabled={!item.bowlSlug}
+                        className="w-8 h-8 flex items-center justify-center text-stone hover:text-ink rounded-md hover:bg-black/5 disabled:opacity-30 disabled:cursor-not-allowed"
+                        aria-label="Increase quantity"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="w-24">
-                  <Lbl>Qty</Lbl>
-                  <input type="number" min={1} className={inputCls()} value={item.quantity}
-                    onChange={e => setOrderItems(p => p.map((it, i) => i === idx ? { ...it, quantity: Math.max(1, Number(e.target.value)) } : it))} />
-                </div>
+                {item.bowlSlug && bowl && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setOrderCustomizeIdx(idx)}
+                      className="font-body text-[12px] font-bold text-sage-dark border border-sage/30 rounded-lg px-3 py-1.5 hover:bg-sage/5"
+                    >
+                      Customise bowl
+                    </button>
+                    <p className="font-body text-[11px] text-stone flex-1 min-w-0">
+                      {formatBowlCustomizationSummary(item.customizations, bowl, item.presetOptions)}
+                    </p>
+                  </div>
+                )}
+                {orderItems.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrderItems((p) => p.filter((_, i) => i !== idx));
+                      setOrderCustomizeIdx((c) => (c === idx ? null : c));
+                    }}
+                    className="font-body text-[11px] text-red-500 hover:underline"
+                  >
+                    Remove line
+                  </button>
+                )}
               </div>
-              <div className="flex flex-wrap gap-3 text-[11px] font-body text-stone items-center">
-                <span className="font-medium">Base:</span>
-                <select className="border border-black/10 rounded px-1 py-0.5 text-[11px]"
-                  value={item.presetOptions.baseChoice}
-                  onChange={e => setOrderItems(p => p.map((it, i) => i === idx ? { ...it, presetOptions: { ...it.presetOptions, baseChoice: e.target.value as 'yogurt' | 'milk' } } : it))}>
-                  <option value="yogurt">Yogurt</option><option value="milk">Milk</option>
-                </select>
-                <span className="font-medium">Oats:</span>
-                <select className="border border-black/10 rounded px-1 py-0.5 text-[11px]"
-                  value={item.presetOptions.oatsChoice}
-                  onChange={e => setOrderItems(p => p.map((it, i) => i === idx ? { ...it, presetOptions: { ...it.presetOptions, oatsChoice: e.target.value as 'soaked' | 'roasted' } } : it))}>
-                  <option value="soaked">Soaked</option><option value="roasted">Roasted</option>
-                </select>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={item.presetOptions.noSugar}
-                    onChange={e => setOrderItems(p => p.map((it, i) => i === idx ? { ...it, presetOptions: { ...it.presetOptions, noSugar: e.target.checked } } : it))} />
-                  <span>No Sugar</span>
-                </label>
-              </div>
-              {idx > 0 && (
-                <button onClick={() => setOrderItems(p => p.filter((_, i) => i !== idx))}
-                  className="font-body text-[11px] text-red-500 hover:underline">Remove</button>
-              )}
-            </div>
-          ))}
-          <button onClick={() => setOrderItems(p => [...p, { bowlSlug: '', quantity: 1, customizations: [], presetOptions: { baseChoice: 'yogurt', oatsChoice: 'soaked', noSugar: false } }])}
-            className="font-body text-[12px] text-stone hover:text-ink underline">+ Add Bowl</button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() =>
+              setOrderItems((p) => [
+                ...p,
+                { bowlSlug: '', quantity: 1, customizations: [], presetOptions: { ...DEFAULT_BOWL_PRESET } },
+              ])
+            }
+            className="font-body text-[12px] text-stone hover:text-ink underline"
+          >
+            + Add bowl
+          </button>
           <div><Lbl>Delivery Date</Lbl><input type="date" className={inputCls()} value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} /></div>
           <div>
             <Lbl>Delivery Time Slot</Lbl>
@@ -396,6 +702,42 @@ function Step3Create({ userId, defaultMode, onSuccess }: {
               {DELIVERY_TIME_SLOTS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
+          {orderQuoteLoading && (
+            <p className="font-body text-[12px] text-stone">Calculating price from the customer&apos;s address…</p>
+          )}
+          {orderPricingError && (
+            <p className="font-body text-[11px] text-amber-800 bg-amber-50 border border-amber-200/80 rounded-lg px-3 py-2">{orderPricingError}</p>
+          )}
+          {orderPreview && !orderQuoteLoading && (
+            <div className="rounded-xl border border-black/10 bg-[#F9F8F6] p-4 space-y-2">
+              <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">Estimated total</p>
+              <p className="font-body text-[10px] text-stone/80 -mt-1 mb-1">Same pricing as checkout: bowls, customisations, delivery to their saved address.</p>
+              {orderPreview.lineItems.map((row, i) => (
+                <div key={i} className="flex justify-between gap-3 text-[12px]">
+                  <span className="text-stone font-body">{row.bowl_name} <span className="text-stone/70">×{row.quantity}</span></span>
+                  <span className="text-ink font-medium shrink-0">{formatCurrency(row.total_price)}</span>
+                </div>
+              ))}
+              <div className="border-t border-black/8 pt-2 mt-1 space-y-1.5">
+                <div className="flex justify-between font-body text-[13px] text-stone">
+                  <span>Subtotal</span>
+                  <span>{formatCurrency(orderPreview.subtotal)}</span>
+                </div>
+                <div className="flex justify-between font-body text-[13px]">
+                  <span className="text-stone">Delivery</span>
+                  {orderPreview.deliveryFee === 0 ? (
+                    <span className="font-bold text-sage-dark">Free</span>
+                  ) : (
+                    <span className="font-bold text-terracotta">+ {formatCurrency(orderPreview.deliveryFee)}</span>
+                  )}
+                </div>
+                <div className="flex justify-between items-baseline pt-1">
+                  <span className="font-body text-sm font-bold uppercase tracking-wider text-ink/80">Total</span>
+                  <span className="font-display text-2xl text-sage-dark font-medium">{formatCurrency(orderPreview.total)}</span>
+                </div>
+              </div>
+            </div>
+          )}
           <button onClick={submitOrder} disabled={submitting}
             className="w-full bg-ink text-white font-body text-[13px] font-bold rounded-lg py-2.5 hover:bg-black transition-colors disabled:opacity-50">
             {submitting ? 'Creating order\u2026' : 'Create Order'}
@@ -407,9 +749,15 @@ function Step3Create({ userId, defaultMode, onSuccess }: {
         <div className="space-y-3">
           <div>
             <Lbl>Plan</Lbl>
-            <select className={inputCls()} value={planId} onChange={e => setPlanId(e.target.value)}>
+            <select className={inputCls()} value={planId} onChange={e => { setPlanId(e.target.value); setErr(''); }}>
               <option value="">Select plan</option>
-              {(plans ?? []).map(p => <option key={p.slug} value={p.slug}>{p.name} \u2014 \u20b9{p.pricePerBowl}/bowl</option>)}
+              {subscriptionPlansUi.map((p) => (
+                <option key={p.slug} value={p.slug}>
+                  {p.pricePerBowlPremium != null && p.pricePerBowlPremium > 0
+                    ? `${p.name} — std ₹${p.pricePerBowl} / prem ₹${p.pricePerBowlPremium} per bowl`
+                    : `${p.name} — ₹${p.pricePerBowl}/bowl`}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -434,47 +782,234 @@ function Step3Create({ userId, defaultMode, onSuccess }: {
           </div>
           {style === 'spread' && (
             <div className="space-y-2">
-              <Lbl>Delivery Days &amp; Bowls</Lbl>
-              {dayConfigs.map((dc, idx) => (
-                <div key={idx} className="border border-black/10 rounded-xl p-3 space-y-2">
-                  <div className="flex gap-2">
-                    <div className="w-24">
-                      <Lbl>Day</Lbl>
-                      <select className={inputCls()} value={dc.day}
-                        onChange={e => setDayConfigs(p => p.map((d, i) => i === idx ? { ...d, day: e.target.value } : d))}>
-                        {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+              <div>
+                <Lbl>Delivery days &amp; bowls</Lbl>
+                <p className="font-body text-[11px] text-stone/80 -mt-0.5 mb-1">
+                  Need two different bowls the same day? Add another row and pick the same weekday for each.
+                </p>
+                {planId && bowlsPerWeekCap > 0 && (
+                  <p className="font-body text-[11px] font-medium text-ink/90 mb-1">
+                    {spreadTotal} / {bowlsPerWeekCap} bowls this week
+                    {spreadTotal > bowlsPerWeekCap ? ' — reduce quantities or remove rows' : ''}
+                  </p>
+                )}
+              </div>
+              {dayConfigs.map((dc, idx) => {
+                const bowl = findBowlByIdentifier(bowls ?? [], dc.bowlId);
+                return (
+                  <div key={idx} className="border border-black/10 rounded-xl p-3 space-y-2">
+                    <div className="flex flex-wrap items-start gap-2">
+                      <div className="w-24 shrink-0">
+                        <Lbl>Day</Lbl>
+                        <select
+                          className={inputCls()}
+                          value={dc.day}
+                          onChange={(e) =>
+                            setDayConfigs((p) =>
+                              p.map((d, i) => (i === idx ? { ...d, day: e.target.value } : d)),
+                            )
+                          }
+                        >
+                          {DAYS.map((d) => (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <Lbl>Choose bowl</Lbl>
+                        <BowlPicker
+                          bowls={subscriptionBowls}
+                          selectedBowlId={dc.bowlId}
+                          onSelect={(slug) =>
+                            setDayConfigs((p) =>
+                              p.map((d, i) =>
+                                i === idx
+                                  ? {
+                                      ...d,
+                                      bowlId: slug,
+                                      customizations: [],
+                                      presetOptions: { ...DEFAULT_BOWL_PRESET },
+                                    }
+                                  : d,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="w-28 shrink-0">
+                        <Lbl>Qty</Lbl>
+                        <div className="flex items-center gap-1 bg-white border border-black/10 rounded-lg px-1 py-0.5">
+                          <button
+                            type="button"
+                            onClick={() => decSubLine(idx)}
+                            className="w-8 h-8 flex items-center justify-center text-stone hover:text-ink rounded-md hover:bg-black/5"
+                            aria-label="Decrease quantity"
+                          >
+                            −
+                          </button>
+                          <span className="font-body text-[13px] font-medium w-6 text-center tabular-nums">
+                            {dc.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => incSubLine(idx)}
+                            disabled={
+                              !dc.bowlId ||
+                              !planId ||
+                              (bowlsPerWeekCap > 0 && spreadTotal >= bowlsPerWeekCap)
+                            }
+                            className="w-8 h-8 flex items-center justify-center text-stone hover:text-ink rounded-md hover:bg-black/5 disabled:opacity-30 disabled:cursor-not-allowed"
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    {dc.bowlId && bowl && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSubDayCustomizeIdx(idx)}
+                          className="font-body text-[12px] font-bold text-sage-dark border border-sage/30 rounded-lg px-3 py-1.5 hover:bg-sage/5"
+                        >
+                          Customise bowl
+                        </button>
+                        <p className="font-body text-[11px] text-stone flex-1 min-w-0">
+                          {formatBowlCustomizationSummary(dc.customizations, bowl, dc.presetOptions)}
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <Lbl>
+                        Per-day slot <span className="font-normal text-stone/60">(optional, overrides global)</span>
+                      </Lbl>
+                      <select
+                        className={inputCls()}
+                        value={dc.deliveryTimeSlot}
+                        onChange={(e) =>
+                          setDayConfigs((p) =>
+                            p.map((d, i) => (i === idx ? { ...d, deliveryTimeSlot: e.target.value } : d)),
+                          )
+                        }
+                      >
+                        <option value="">Use global slot</option>
+                        {DELIVERY_TIME_SLOTS.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
                       </select>
                     </div>
-                    <div className="flex-1">
-                      <Lbl>Bowl</Lbl>
-                      <select className={inputCls()} value={dc.bowlId}
-                        onChange={e => setDayConfigs(p => p.map((d, i) => i === idx ? { ...d, bowlId: e.target.value } : d))}>
-                        <option value="">Select bowl</option>
-                        {(bowls ?? []).map(b => <option key={b.slug} value={b.slug}>{b.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="w-20">
-                      <Lbl>Qty</Lbl>
-                      <input type="number" min={1} className={inputCls()} value={dc.quantity}
-                        onChange={e => setDayConfigs(p => p.map((d, i) => i === idx ? { ...d, quantity: Math.max(1, Number(e.target.value)) } : d))} />
-                    </div>
+                    {dayConfigs.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDayConfigs((p) => p.filter((_, i) => i !== idx));
+                          setSubDayCustomizeIdx((c) => (c === idx ? null : c));
+                        }}
+                        className="font-body text-[11px] text-red-500 hover:underline"
+                      >
+                        Remove row
+                      </button>
+                    )}
                   </div>
-                  <div>
-                    <Lbl>Per-Day Slot <span className="font-normal text-stone/60">(optional, overrides global)</span></Lbl>
-                    <select className={inputCls()} value={dc.deliveryTimeSlot}
-                      onChange={e => setDayConfigs(p => p.map((d, i) => i === idx ? { ...d, deliveryTimeSlot: e.target.value } : d))}>
-                      <option value="">Use global slot</option>
-                      {DELIVERY_TIME_SLOTS.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  {idx > 0 && (
-                    <button onClick={() => setDayConfigs(p => p.filter((_, i) => i !== idx))}
-                      className="font-body text-[11px] text-red-500 hover:underline">Remove day</button>
-                  )}
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!planId) { setErr('Select a plan first.'); return; }
+                  if (bowlsPerWeekCap > 0 && spreadTotal >= bowlsPerWeekCap) {
+                    setErr(`This plan only includes ${bowlsPerWeekCap} bowls per week. Adjust quantities or pick a different plan.`);
+                    return;
+                  }
+                  setErr('');
+                  setDayConfigs((p) => [
+                    ...p,
+                    {
+                      day: 'Mon',
+                      bowlId: '',
+                      quantity: 1,
+                      customizations: [],
+                      presetOptions: { ...DEFAULT_BOWL_PRESET },
+                      deliveryTimeSlot: '',
+                    },
+                  ]);
+                }}
+                disabled={!planId || (bowlsPerWeekCap > 0 && spreadTotal >= bowlsPerWeekCap)}
+                className={`font-body text-[12px] underline ${
+                  !planId || (bowlsPerWeekCap > 0 && spreadTotal >= bowlsPerWeekCap)
+                    ? 'text-stone/40 cursor-not-allowed no-underline'
+                    : 'text-stone hover:text-ink'
+                }`}
+              >
+                + Add day (or an extra bowl)
+              </button>
+            </div>
+          )}
+          {subQuoteLoading && (
+            <p className="font-body text-[12px] text-stone">Calculating cycle total from the customer&apos;s address…</p>
+          )}
+          {subPricingError && (
+            <p className="font-body text-[11px] text-amber-800 bg-amber-50 border border-amber-200/80 rounded-lg px-3 py-2">{subPricingError}</p>
+          )}
+          {subPreview && !subQuoteLoading && style !== 'flexible' && (
+            <div className="rounded-xl border border-black/10 bg-[#F9F8F6] p-4 space-y-2">
+              <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">Estimated cycle total (spread plan)</p>
+              <p className="font-body text-[10px] text-stone/80 -mt-1 mb-1">Bowl rates, ingredient extras, and weekly delivery — same as customer subscribe flow.</p>
+              <div className="space-y-1.5 text-[12px]">
+                <div className="flex justify-between text-stone">
+                  <span>Base bowls (selected mix)</span>
+                  <span className="text-ink font-medium">{formatCurrency(subPreview.baseBowlSubtotalRs)}</span>
                 </div>
-              ))}
-              <button onClick={() => setDayConfigs(p => [...p, { day: 'Mon', bowlId: '', quantity: 1, customizations: [], deliveryTimeSlot: '' }])}
-                className="font-body text-[12px] text-stone hover:text-ink underline">+ Add Day</button>
+                {subPreview.totalIngredientExtrasRs > 0 && (
+                  <div className="flex justify-between text-stone">
+                    <span>Ingredient extras</span>
+                    <span className="text-ink font-medium">+ {formatCurrency(subPreview.totalIngredientExtrasRs)}</span>
+                  </div>
+                )}
+                {subPreview.weeklyDeliveryFeeRs > 0 && (
+                  <div className="flex justify-between text-stone">
+                    <span>Weekly delivery</span>
+                    <span className="text-terracotta font-bold">+ {formatCurrency(subPreview.weeklyDeliveryFeeRs)}</span>
+                  </div>
+                )}
+                {subPreview.weeklyDeliveryFeeRs === 0 && (
+                  <div className="flex justify-between text-stone">
+                    <span>Weekly delivery</span>
+                    <span className="text-sage-dark font-bold">Free</span>
+                  </div>
+                )}
+                <div className="border-t border-black/8 pt-2 flex justify-between items-baseline">
+                  <span className="font-body text-sm font-bold uppercase tracking-wider text-ink/80">Total (per cycle)</span>
+                  <span className="font-display text-2xl text-sage-dark font-medium">{formatCurrency(subPreview.totalAmountRs)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          {subPreview && !subQuoteLoading && style === 'flexible' && (
+            <div className="rounded-xl border border-black/10 bg-[#F9F8F6] p-4 space-y-2">
+              <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">Wallet load (flexible plan)</p>
+              <p className="font-body text-[10px] text-stone/80 -mt-1 mb-1">Same formula as customer checkout: per-bowl load includes delivery in the total below.</p>
+              <div className="space-y-1.5 text-[12px] text-stone">
+                <div className="flex justify-between">
+                  <span>Bowls + extras (allotted load)</span>
+                  <span className="text-ink font-medium">{formatCurrency(subPreview.bowlsAmountRs)}</span>
+                </div>
+                {subPreview.weeklyDeliveryFeeRs > 0 && (
+                  <div className="flex justify-between">
+                    <span>Weekly delivery</span>
+                    <span className="text-terracotta font-bold">+ {formatCurrency(subPreview.weeklyDeliveryFeeRs)}</span>
+                  </div>
+                )}
+                <div className="border-t border-black/8 pt-2 flex justify-between items-baseline">
+                  <span className="font-body text-sm font-bold uppercase tracking-wider text-ink/80">Total (per cycle)</span>
+                  <span className="font-display text-2xl text-sage-dark font-medium">{formatCurrency(subPreview.totalAmountRs)}</span>
+                </div>
+              </div>
             </div>
           )}
           <button onClick={submitSubscription} disabled={submitting}
@@ -483,6 +1018,130 @@ function Step3Create({ userId, defaultMode, onSuccess }: {
           </button>
         </div>
       )}
+
+      {orderCustomizeIdx !== null && (() => {
+        const item = orderItems[orderCustomizeIdx];
+        const bowl = findBowlByIdentifier(bowls ?? [], item.bowlSlug);
+        if (!item.bowlSlug || !bowl) return null;
+        return (
+          <CustomizationModal
+            key={`order-${orderCustomizeIdx}`}
+            bowl={bowl}
+            mode="cart"
+            initialCustomizations={item.customizations}
+            initialPresetOptions={item.presetOptions}
+            onClose={() => setOrderCustomizeIdx(null)}
+            onConfirm={(customizations, presetOptions) => {
+              setOrderItems((p) =>
+                p.map((it, i) => (i === orderCustomizeIdx ? { ...it, customizations, presetOptions } : it)),
+              );
+              setOrderCustomizeIdx(null);
+            }}
+          />
+        );
+      })()}
+
+      {subDayCustomizeIdx !== null && (() => {
+        const dc = dayConfigs[subDayCustomizeIdx];
+        const bowl = findBowlByIdentifier(bowls ?? [], dc.bowlId);
+        if (!dc.bowlId || !bowl) return null;
+        return (
+          <CustomizationModal
+            key={`sub-${subDayCustomizeIdx}`}
+            bowl={bowl}
+            mode="subscription"
+            initialCustomizations={dc.customizations}
+            initialPresetOptions={dc.presetOptions}
+            onClose={() => setSubDayCustomizeIdx(null)}
+            onConfirm={(customizations, presetOptions) => {
+              setDayConfigs((p) =>
+                p.map((d, i) => (i === subDayCustomizeIdx ? { ...d, customizations, presetOptions } : d)),
+              );
+              setSubDayCustomizeIdx(null);
+            }}
+          />
+        );
+      })()}
+
+      {orderRepeatLineIdx !== null && (() => {
+        const item = orderItems[orderRepeatLineIdx];
+        const b = findBowlByIdentifier(bowls ?? [], item?.bowlSlug);
+        if (!item?.bowlSlug || !b) return null;
+        const idx = orderRepeatLineIdx;
+        return (
+          <RepeatCustomisationChoiceSheet
+            productName={b.name}
+            lastSummaryLine={formatBowlCustomizationSummary(item.customizations, b, item.presetOptions)}
+            onClose={() => setOrderRepeatLineIdx(null)}
+            onRepeatSame={() => {
+              setOrderItems((p) =>
+                p.map((it, i) => (i === idx ? { ...it, quantity: it.quantity + 1 } : it)),
+              );
+              setOrderRepeatLineIdx(null);
+            }}
+            onCustomiseDifferently={() => {
+              setOrderItems((p) => {
+                const n = [...p];
+                const line = p[idx]!;
+                n.splice(idx + 1, 0, {
+                  bowlSlug: line.bowlSlug,
+                  quantity: 1,
+                  customizations: [],
+                  presetOptions: { ...DEFAULT_BOWL_PRESET },
+                });
+                return n;
+              });
+              setOrderRepeatLineIdx(null);
+              setOrderCustomizeIdx(idx + 1);
+            }}
+          />
+        );
+      })()}
+
+      {subRepeatLineIdx !== null && (() => {
+        const idx = subRepeatLineIdx;
+        const dc = dayConfigs[idx];
+        const b = findBowlByIdentifier(bowls ?? [], dc?.bowlId);
+        if (!dc?.bowlId || !b) return null;
+        return (
+          <RepeatCustomisationChoiceSheet
+            productName={b.name}
+            lastSummaryLine={formatBowlCustomizationSummary(dc.customizations, b, dc.presetOptions)}
+            onClose={() => setSubRepeatLineIdx(null)}
+            onRepeatSame={() => {
+              if (bowlsPerWeekCap > 0 && spreadTotal >= bowlsPerWeekCap) {
+                setErr(`This plan only includes ${bowlsPerWeekCap} bowls per week.`);
+                setSubRepeatLineIdx(null);
+                return;
+              }
+              setDayConfigs((p) => p.map((d, i) => (i === idx ? { ...d, quantity: d.quantity + 1 } : d)));
+              setSubRepeatLineIdx(null);
+            }}
+            onCustomiseDifferently={() => {
+              if (bowlsPerWeekCap > 0 && spreadTotal >= bowlsPerWeekCap) {
+                setErr(`This plan only includes ${bowlsPerWeekCap} bowls per week.`);
+                setSubRepeatLineIdx(null);
+                return;
+              }
+              setDayConfigs((p) => {
+                const n = [...p];
+                const cur = p[idx]!;
+                n.splice(idx + 1, 0, {
+                  day: cur.day,
+                  bowlId: cur.bowlId,
+                  quantity: 1,
+                  customizations: [],
+                  presetOptions: { ...DEFAULT_BOWL_PRESET },
+                  deliveryTimeSlot: cur.deliveryTimeSlot,
+                });
+                return n;
+              });
+              setSubRepeatLineIdx(null);
+              setSubDayCustomizeIdx(idx + 1);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -514,7 +1173,7 @@ export default function CreateForCustomerModal({ open, defaultMode, onClose, onS
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-black/10">
           <h2 className="font-display text-lg text-ink">Create for Customer</h2>
           <button onClick={handleClose} className="font-body text-xl text-stone hover:text-ink leading-none">&times;</button>

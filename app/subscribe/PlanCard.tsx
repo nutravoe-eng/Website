@@ -53,15 +53,19 @@ export default function PlanCard({
         </span>
       </div>
 
-      <div className="flex items-baseline gap-1 mb-1">
-        <span className="font-body text-[12px] uppercase tracking-wider text-stone/80 mr-1">Starts at</span>
+      <div className="flex items-baseline gap-1 mb-1 flex-wrap">
+        <span className="font-body text-[12px] uppercase tracking-wider text-stone/80 mr-1">From</span>
         <span className="font-display text-3xl font-medium text-ink">₹{plan.weeklyPrice.toLocaleString('en-IN')}</span>
         <span className="font-body text-[13px] text-stone">/week</span>
       </div>
       <p className="font-body text-[12px] text-stone/90 mt-0.5">
         {plan.ratePremium != null && plan.ratePremium > 0
           ? (
-            <>Standard bowls: ₹{plan.perBowl} each · Premium bowls: ₹{plan.ratePremium} each</>
+            <>
+              <span className="block sm:inline">That total is if every bowl in the plan is a standard (₹{plan.perBowl}) bowl.</span>
+              {' '}
+              <span className="block sm:inline">Premium bowls (₹{plan.ratePremium} each) increase your weekly amount.</span>
+            </>
           ) : (
             <>Per-bowl price: ₹{plan.perBowl} each</>
           )}

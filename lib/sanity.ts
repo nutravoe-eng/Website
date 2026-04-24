@@ -194,8 +194,8 @@ export const STUB_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     slug: 'three-bowl',
     bowlsPerCycle: 3,
     billingCycle: 'weekly',
-    pricePerBowl: 284,
-    pricePerBowlPremium: 370,
+    pricePerBowl: 280,
+    pricePerBowlPremium: 380,
     customisationChargePerBowl: 30,
     deliveryStyles: ['spread', 'flexible'],
     savingsBadge: 'Save 5%',
@@ -208,8 +208,8 @@ export const STUB_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     slug: 'five-bowl',
     bowlsPerCycle: 5,
     billingCycle: 'weekly',
-    pricePerBowl: 269,
-    pricePerBowlPremium: 360,
+    pricePerBowl: 270,
+    pricePerBowlPremium: 370,
     customisationChargePerBowl: 30,
     deliveryStyles: ['spread', 'flexible'],
     savingsBadge: 'Save 10%',
@@ -222,8 +222,8 @@ export const STUB_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     slug: 'daily',
     bowlsPerCycle: 7,
     billingCycle: 'weekly',
-    pricePerBowl: 257,
-    pricePerBowlPremium: 350,
+    pricePerBowl: 260,
+    pricePerBowlPremium: 360,
     customisationChargePerBowl: 30,
     deliveryStyles: ['spread', 'flexible'],
     savingsBadge: 'Best Value',
@@ -232,14 +232,57 @@ export const STUB_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   },
 ];
 
+/** Strip stega / invisible chars; normalize tier strings from CMS. */
+function cleanCmsString(s: unknown): string {
+  if (s == null) return "";
+  return String(s)
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .trim();
+}
+
+/**
+ * Coerce `subscriptionPriceTier` to the enum the app uses (Studio can send different casing; stega
+ * can add invisible characters that break `=== "premium"` and subscription bowl filters.
+ */
+function normalizeBowlFromCms(raw: Bowl): Bowl {
+  const t = cleanCmsString((raw as { subscriptionPriceTier?: unknown }).subscriptionPriceTier).toLowerCase();
+  let subscriptionPriceTier: Bowl["subscriptionPriceTier"] = undefined;
+  if (t === "standard" || t === "premium") {
+    subscriptionPriceTier = t;
+  }
+  return { ...raw, subscriptionPriceTier };
+}
+
+function toFiniteNumber(v: unknown, fallback: number | undefined): number | undefined {
+  if (typeof v === "number" && Number.isFinite(v)) {
+    if (v > 0) return v;
+  }
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(cleanCmsString(v).replace(/[^\d.]/g, ""));
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return fallback;
+}
+
 function normalizeSubscriptionPlan(plan: SubscriptionPlan): SubscriptionPlan {
   const fallback = STUB_SUBSCRIPTION_PLANS.find((p) => p.slug === plan.slug);
-  const pricePerBowl = plan.pricePerBowl ?? plan.price_per_bowl ?? fallback?.pricePerBowl ?? 0;
-  const pricePerBowlPremium = plan.pricePerBowlPremium ?? fallback?.pricePerBowlPremium;
+  const fromSanity = plan as {
+    pricePerBowl?: number;
+    price_per_bowl?: number;
+    pricePerBowlPremium?: number;
+    price_per_bowl_premium?: number;
+  };
+  const rawStd = fromSanity.pricePerBowl ?? fromSanity.price_per_bowl ?? fallback?.pricePerBowl;
+  const pricePerBowl =
+    toFiniteNumber(rawStd, fallback?.pricePerBowl) ?? fallback?.pricePerBowl ?? 0;
+  const rawPrem = fromSanity.pricePerBowlPremium ?? fromSanity.price_per_bowl_premium;
+  const coercedPrem = toFiniteNumber(rawPrem, fallback?.pricePerBowlPremium);
+  const pricePerBowlPremium =
+    coercedPrem != null && coercedPrem > 0 ? coercedPrem : undefined;
   return {
     ...plan,
     pricePerBowl,
-    ...(pricePerBowlPremium != null ? { pricePerBowlPremium } : {}),
+    ...(pricePerBowlPremium != null && pricePerBowlPremium > 0 ? { pricePerBowlPremium } : {}),
   };
 }
 
@@ -255,6 +298,8 @@ const isSanityConfigured =
   process.env.NEXT_PUBLIC_SANITY_PROJECT_ID !== "";
 
 let sanityClient: ReturnType<typeof import("@sanity/client").createClient> | null = null;
+let devWarnedUsingStubsNoSanityEnv = false;
+let devLoggedSanityClientReady = false;
 
 async function getSanityClient() {
   if (!isSanityConfigured) return null;
@@ -266,6 +311,14 @@ async function getSanityClient() {
     apiVersion: "2024-01-01",
     useCdn: false,
   });
+  if (process.env.NODE_ENV === "development" && !devLoggedSanityClientReady) {
+    devLoggedSanityClientReady = true;
+    const ds = process.env.NEXT_PUBLIC_SANITY_DATASET || "production";
+    // eslint-disable-next-line no-console
+    console.info(
+      `[sanity] Live CMS enabled (project=${process.env.NEXT_PUBLIC_SANITY_PROJECT_ID}, dataset=${ds}). No [sanity] warnings = fetch ok.`,
+    );
+  }
   return sanityClient;
 }
 
@@ -273,7 +326,16 @@ async function getSanityClient() {
 
 export async function getAllBowls(): Promise<Bowl[]> {
   const client = await getSanityClient();
-  if (!client) return STUB_BOWLS;
+  if (!client) {
+    if (process.env.NODE_ENV === "development" && !isSanityConfigured && !devWarnedUsingStubsNoSanityEnv) {
+      devWarnedUsingStubsNoSanityEnv = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[sanity] NEXT_PUBLIC_SANITY_PROJECT_ID is not set. Bowls and plans use built-in STUBS — your Studio content is not loaded.",
+      );
+    }
+    return STUB_BOWLS;
+  }
 
   const query = `*[_type == "bowl" && available == true] | order(displayOrder asc) {
     _id,
@@ -294,9 +356,22 @@ export async function getAllBowls(): Promise<Bowl[]> {
   }`;
 
   try {
-    const result = await client.fetch(query);
-    return result?.length ? result : STUB_BOWLS;
-  } catch {
+    const result = (await client.fetch(query)) as Bowl[] | null;
+    if (result?.length) {
+      return result.map(normalizeBowlFromCms);
+    }
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[sanity] getAllBowls: 0 published bowls (query: available==true). Using stub bowls — publish documents or check dataset.",
+      );
+    }
+    return STUB_BOWLS;
+  } catch (e) {
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.warn("[sanity] getAllBowls fetch failed, using stub bowls:", e);
+    }
     return STUB_BOWLS;
   }
 }
@@ -324,15 +399,29 @@ export async function getBowlBySlug(slug: string): Promise<Bowl | null> {
   }`;
 
   try {
-    return await client.fetch(query, { slug });
-  } catch {
+    const row = (await client.fetch(query, { slug })) as Bowl | null;
+    return row ? normalizeBowlFromCms(row) : STUB_BOWLS.find((b) => b.slug === slug) || null;
+  } catch (e) {
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.warn("[sanity] getBowlBySlug fetch failed:", e);
+    }
     return STUB_BOWLS.find((b) => b.slug === slug) || null;
   }
 }
 
 export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
   const client = await getSanityClient();
-  if (!client) return STUB_SUBSCRIPTION_PLANS;
+  if (!client) {
+    if (process.env.NODE_ENV === "development" && !isSanityConfigured && !devWarnedUsingStubsNoSanityEnv) {
+      devWarnedUsingStubsNoSanityEnv = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[sanity] NEXT_PUBLIC_SANITY_PROJECT_ID is not set. Subscription plan prices use built-in STUBS — your Studio content is not loaded.",
+      );
+    }
+    return STUB_SUBSCRIPTION_PLANS;
+  }
 
   const query = `*[_type == "subscriptionPlan" && isActive == true] | order(displayOrder asc) {
     _id,
@@ -350,9 +439,22 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
   }`;
 
   try {
-    const result = await client.fetch(query) as SubscriptionPlan[] | null;
-    return result?.length ? result.map(normalizeSubscriptionPlan) : STUB_SUBSCRIPTION_PLANS;
-  } catch {
+    const result = (await client.fetch(query)) as SubscriptionPlan[] | null;
+    if (result?.length) {
+      return result.map(normalizeSubscriptionPlan);
+    }
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[sanity] getSubscriptionPlans: 0 active plans (check isActive, publish, or dataset). Using stub plan prices.",
+      );
+    }
+    return STUB_SUBSCRIPTION_PLANS;
+  } catch (e) {
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.warn("[sanity] getSubscriptionPlans fetch failed, using stub plans:", e);
+    }
     return STUB_SUBSCRIPTION_PLANS;
   }
 }

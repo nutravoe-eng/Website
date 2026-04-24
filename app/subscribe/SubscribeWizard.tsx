@@ -250,7 +250,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
       // Load default delivery address from Supabase
       const { data: addresses } = await supabase
         .from('addresses')
-        .select('line1, line2, pincode, is_default, lat, lng')
+        .select('line1, line2, pincode, is_default, lat, lng, distance_km')
         .eq('user_id', authUser.id)
         .order('is_default', { ascending: false })
         .limit(5);
@@ -262,15 +262,19 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
           setDeliveryLat(typeof def.lat === "number" ? def.lat : undefined);
           setDeliveryLng(typeof def.lng === "number" ? def.lng : undefined);
           setDeliveryPincode(def.pincode);
-          // Determine delivery zone for distance-based pricing (saved pin → hub when lat/lng exist)
-          const coords = await resolveDeliveryCoords(def.pincode, def.lat, def.lng);
-          if (coords) {
-            const res = await fetch(
-              `/api/delivery-distance?lat=${encodeURIComponent(String(coords.lat))}&lng=${encodeURIComponent(String(coords.lng))}`,
-            );
-            if (res.ok) {
-              const data = (await res.json()) as { distanceKm: number; deliveryFee: number };
-              setDeliveryDistanceKm(Math.round(data.distanceKm * 10) / 10);
+          // Prefer stored route distance (synced on address save) to avoid duplicate Ola on load
+          if (typeof def.distance_km === "number" && Number.isFinite(def.distance_km)) {
+            setDeliveryDistanceKm(Math.round(def.distance_km * 10) / 10);
+          } else {
+            const coords = await resolveDeliveryCoords(def.pincode, def.lat, def.lng);
+            if (coords) {
+              const res = await fetch(
+                `/api/delivery-distance?lat=${encodeURIComponent(String(coords.lat))}&lng=${encodeURIComponent(String(coords.lng))}`,
+              );
+              if (res.ok) {
+                const d = (await res.json()) as { distanceKm: number; deliveryFee: number };
+                setDeliveryDistanceKm(Math.round(d.distanceKm * 10) / 10);
+              }
             }
           }
         }
