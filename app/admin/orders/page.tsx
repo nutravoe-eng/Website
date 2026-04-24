@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import OrdersTable, { type AdminOrder } from '../components/OrdersTable';
+import CreateForCustomerModal from '../components/CreateForCustomerModal';
 
 type Filter = { date: string; payment_status: string; status: string };
 
@@ -10,6 +11,7 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [filters, setFilters] = useState<Filter>({ date: '', payment_status: '', status: '' });
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -36,12 +38,20 @@ export default function AdminOrdersPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-display text-2xl text-ink">All Orders</h1>
-        <button
-          onClick={fetchOrders}
-          className="font-body text-[12px] font-bold uppercase tracking-wider text-stone hover:text-ink border border-black/10 rounded-lg px-3 py-2 hover:bg-black/5 transition-colors"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="font-body text-[12px] font-bold uppercase tracking-wider text-white bg-ink border border-ink rounded-lg px-3 py-2 hover:bg-black transition-colors"
+          >
+            + Create for Customer
+          </button>
+          <button
+            onClick={fetchOrders}
+            className="font-body text-[12px] font-bold uppercase tracking-wider text-stone hover:text-ink border border-black/10 rounded-lg px-3 py-2 hover:bg-black/5 transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -96,6 +106,13 @@ export default function AdminOrdersPage() {
           setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o))
         }
         showDate={true}
+      />
+
+      <CreateForCustomerModal
+        open={showCreateModal}
+        defaultMode="order"
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => { setShowCreateModal(false); fetchOrders(); }}
       />
     </div>
   );
