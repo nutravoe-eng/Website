@@ -452,8 +452,9 @@ export default function CreateForCustomerModal({ open, defaultMode, onClose, onS
         <div className="flex px-6 pt-3 pb-1 gap-1">
           {stepLabels.map((label, i) => {
             const s = (i + 1) as Step;
-            const active = step === s;
-            const done = step > s;
+            const displayStep = step === 1 && showNewForm ? 2 : step;
+            const active = displayStep === s;
+            const done = displayStep > s;
             return (
               <div key={s} className="flex-1 text-center">
                 <div className={`h-1 rounded-full mb-1 ${done ? 'bg-ink' : active ? 'bg-ink/40' : 'bg-black/10'}`} />
