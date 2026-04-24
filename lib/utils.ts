@@ -34,6 +34,8 @@ export function buildCartOrderWhatsAppMessage(input: {
   customerPhone?: string;
   customerEmail?: string;
   deliveryAddress?: string;
+  lat?: number;
+  lng?: number;
   deliverySlot: string;
   items: {
     bowlName: string;
@@ -95,6 +97,9 @@ export function buildCartOrderWhatsAppMessage(input: {
     `Phone: ${input.customerPhone || "NA"}`,
     `Email: ${input.customerEmail || "NA"}`,
     `Address: ${input.deliveryAddress || "NA"}`,
+    typeof input.lat === "number" && typeof input.lng === "number" && Number.isFinite(input.lat) && Number.isFinite(input.lng)
+      ? `Location: https://www.google.com/maps/search/?api=1&query=${input.lat},${input.lng}`
+      : null,
     `Delivery slot: ${input.deliverySlot}`,
     "",
     "Order details:",
@@ -105,7 +110,7 @@ export function buildCartOrderWhatsAppMessage(input: {
     "",
     input.orderRef ? `Order Ref: #NV-${input.orderRef}` : "",
     "Please confirm this order on WhatsApp. Thank you!",
-  ].filter(line => line !== undefined).join("\n");
+  ].filter(line => line !== undefined && line !== null).join("\n");
 }
 
 export function buildSubscriptionWhatsAppMessage(input: {
@@ -117,6 +122,8 @@ export function buildSubscriptionWhatsAppMessage(input: {
   customisationSurcharge?: number;
   weeklyDeliveryFeeRs?: number;
   deliveryAddress: string;
+  lat?: number;
+  lng?: number;
   deliveryStyle: string;
   deliveryTimeSlot?: string;
   configurationLines: string[];
@@ -142,13 +149,16 @@ export function buildSubscriptionWhatsAppMessage(input: {
     `Delivery style: ${input.deliveryStyle}`,
     `Delivery slot: ${input.deliveryTimeSlot || "NA"}`,
     `Address: ${input.deliveryAddress || "NA"}`,
+    typeof input.lat === "number" && typeof input.lng === "number" && Number.isFinite(input.lat) && Number.isFinite(input.lng)
+      ? `Location: https://www.google.com/maps/search/?api=1&query=${input.lat},${input.lng}`
+      : null,
     "",
     "Subscription configuration:",
     ...input.configurationLines,
     "",
     input.subscriptionRef ? `Subscription Ref: #NV-SUB-${input.subscriptionRef}` : "",
     "Please confirm and activate this subscription on WhatsApp. Thank you!",
-  ].filter(line => line !== undefined).join("\n");
+  ].filter(line => line !== undefined && line !== null).join("\n");
 }
 
 export function generateReceiptId(): string {
