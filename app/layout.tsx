@@ -1,3 +1,4 @@
+import { GoogleAnalytics } from "@next/third-parties/google";
 import type { Metadata } from "next";
 import "@/styles/globals.css";
 import { CartProvider } from "@/components/CartContext";
@@ -34,6 +35,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
   return (
     <html lang="en">
       <head>
@@ -62,6 +64,7 @@ export default function RootLayout({
           <Navbar />
           <main className="flex-1 pt-16">{children}</main>
           <Footer />
+          {gaId ? <GoogleAnalytics gaId={gaId} /> : null}
           <WhatsAppButton />
         </CartProvider>
       </body>
