@@ -366,6 +366,22 @@ export default function Navbar() {
         </div>
       </nav>
 
+      {itemCount > 0 && pathname !== "/cart" && (
+        <div className="fixed inset-x-0 bottom-0 z-[95] px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:hidden pointer-events-none">
+          <div className="mx-auto max-w-md pointer-events-auto">
+            <Link
+              href="/cart"
+              className="w-full flex items-center justify-between rounded-md bg-sage-dark text-white px-4 py-3 shadow-[0_8px_25px_rgba(0,0,0,0.22)]"
+            >
+              <span className="font-body text-sm font-bold tracking-wide">Go to cart</span>
+              <span className="font-body text-[12px] font-medium bg-white/15 px-2 py-1 rounded-full">
+                {itemCount} {itemCount === 1 ? "item" : "items"}
+              </span>
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Mobile drawer */}
       {menuOpen && (
         <div

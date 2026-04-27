@@ -545,7 +545,7 @@ export default function CartPage() {
   return (
     <>
       <DeliveryMarquee variant="light" />
-      <section className="pt-16 pb-20 px-6 lg:px-16 min-h-[80vh]">
+      <section className={`pt-16 px-6 lg:px-16 min-h-[80vh] ${items.length > 0 ? "pb-32 sm:pb-20" : "pb-20"}`}>
         <div className="max-w-2xl mx-auto">
           {/* Cart summary */}
           <div>
@@ -584,14 +584,14 @@ export default function CartPage() {
                     return (
                       <div
                         key={item.instanceId}
-                        className="flex items-start gap-4 bg-[#F9F8F6] p-4 rounded-lg"
+                        className="flex flex-col gap-3 bg-[#F9F8F6] p-4 rounded-lg sm:flex-row sm:items-start sm:gap-4"
                       >
                         <div className="flex-1 min-w-0">
-                          <p className="font-display text-lg font-medium text-ink">
+                          <p className="font-display text-lg font-medium text-ink leading-snug break-words">
                             {item.bowl.name}
                           </p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <p className="font-body text-[13px] text-stone">
+                          <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                            <p className="font-body text-[13px] text-stone whitespace-nowrap">
                               Base price - {formatCurrency(basePrice)}
                             </p>
                             {isDiscounted && (
@@ -604,11 +604,11 @@ export default function CartPage() {
                           {/* Customization summary */}
                           {(removed.length > 0 || extras.length > 0) && (
                             <div className="mt-1.5 space-y-0.5">
-                              <p className="font-body text-[11px] text-stone">
+                              <p className="font-body text-[11px] text-stone leading-relaxed break-words">
                                 Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} · Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
                               </p>
                               {item.presetOptions.noSugar && (
-                                <p className="font-body text-[11px] text-terracotta">
+                                <p className="font-body text-[11px] text-terracotta leading-relaxed break-words">
                                   No sugar: exclude banana, honey, dates
                                 </p>
                               )}
@@ -634,11 +634,11 @@ export default function CartPage() {
                           )}
                           {removed.length === 0 && extras.length === 0 && (
                             <div className="mt-1.5 space-y-0.5">
-                              <p className="font-body text-[11px] text-stone">
+                              <p className="font-body text-[11px] text-stone leading-relaxed break-words">
                                 Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} · Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
                               </p>
                               {item.presetOptions.noSugar && (
-                                <p className="font-body text-[11px] text-terracotta">
+                                <p className="font-body text-[11px] text-terracotta leading-relaxed break-words">
                                   No sugar: exclude banana, honey, dates
                                 </p>
                               )}
@@ -650,7 +650,7 @@ export default function CartPage() {
                             </p>
                           )}
                         </div>
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center justify-between gap-2 shrink-0 w-full sm:w-auto sm:justify-start sm:gap-3">
                           <div className="flex items-center gap-2 bg-white rounded-md border border-black/10 px-2 py-1">
                             <button
                               aria-label={`Decrease quantity of ${item.bowl.name}`}
@@ -671,7 +671,7 @@ export default function CartPage() {
                               +
                             </button>
                           </div>
-                          <span className="font-display text-lg text-sage-dark w-[80px] text-right">
+                          <span className="font-display text-lg text-sage-dark min-w-[72px] text-right">
                             {formatCurrency(effectiveUnitPrice * item.quantity)}
                           </span>
                           <button
@@ -887,7 +887,7 @@ export default function CartPage() {
                 <button
                   onClick={handlePlaceOrder}
                   disabled={submitting || hasOutOfStockItems}
-                  className={`w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 hover:bg-black/30 text-ink" : "bg-terracotta hover:bg-[#D55F43]"}`}
+                  className={`hidden sm:block w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 hover:bg-black/30 text-ink" : "bg-terracotta hover:bg-[#D55F43]"}`}
                 >
                   {canPayFromWallet ? "Order via WhatsApp instead" : "Place an order"}
                 </button>
@@ -914,6 +914,28 @@ export default function CartPage() {
           </div>
         </div>
       </section>
+
+      {items.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-black/10 bg-white/95 backdrop-blur sm:hidden">
+          <div className="mx-auto max-w-2xl px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-body text-[11px] font-bold uppercase tracking-wider text-ink/70">
+                Grand Total
+              </span>
+              <span className="font-display text-xl font-medium text-sage-dark">
+                {formatCurrency(grandTotal)}
+              </span>
+            </div>
+            <button
+              onClick={handlePlaceOrder}
+              disabled={submitting || hasOutOfStockItems}
+              className={`w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 text-ink" : "bg-terracotta"}`}
+            >
+              {canPayFromWallet ? "Order via WhatsApp instead" : "Place an order"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {showAddressPicker && (
         <div className="fixed inset-0 z-[120] flex items-end md:items-center justify-center p-0 md:p-4 bg-ink/70 backdrop-blur-sm animate-in fade-in duration-300">
