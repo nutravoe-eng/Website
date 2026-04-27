@@ -8,6 +8,12 @@ import { STUB_PLANS as PLANS } from "../../subscribe/PlanCard";
 import ManageModal from "./ManageModal";
 import CancelModal from "./CancelModal";
 import { createClient } from "@/lib/supabase/client";
+import {
+  NUTRAVOE_TIMEZONE,
+  calendarDaysBetweenIst,
+  formatIstYmd,
+  getTodayIstYmd,
+} from "@/lib/datetime-ist";
 import { getUserWithRetry } from "@/lib/supabase/auth-client";
 import TopupModal from "./TopupModal";
 import { isPaidFlexibleWalletEligible } from "@/lib/flexible-subscription";
@@ -93,12 +99,18 @@ function customizationsSummary(config: DayBowlConfig): string {
 
 function nextDeliveryLabel(iso: string): string {
   const d = new Date(iso);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (Number.isNaN(d.getTime())) return "—";
+  const deliveryYmd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: NUTRAVOE_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  const todayYmd = getTodayIstYmd();
+  const diff = calendarDaysBetweenIst(todayYmd, deliveryYmd);
   if (diff <= 0) return "Today";
   if (diff === 1) return "Tomorrow";
-  return d.toLocaleDateString("en-IN", { weekday: "short", month: "short", day: "numeric" });
+  return formatIstYmd(deliveryYmd, { weekday: "short", month: "short", day: "numeric" });
 }
 
 interface Props {
@@ -400,7 +412,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
                         <p className="font-body text-[13px] text-ink leading-relaxed max-w-md">
                           This cycle&apos;s bowl quota is complete. You can still spend any remaining wallet balance until{" "}
                           <span className="font-semibold">
-                            {new Date(sub.periodEndDate).toLocaleDateString("en-IN", {
+                            {formatIstYmd(sub.periodEndDate, {
                               weekday: "short",
                               day: "numeric",
                               month: "short",

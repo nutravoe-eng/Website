@@ -24,6 +24,7 @@ import { resolveDeliveryCoords } from "@/lib/geocodeCache";
 import { FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
 import { getSubscriberBaseFromPlanConfig } from "@/lib/subscription-pricing";
 import { DELIVERY_TIME_SLOTS } from "@/lib/delivery-slots";
+import { addCalendarDaysIst, formatIstYmd } from "@/lib/datetime-ist";
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 type Day = typeof DAYS[number];
@@ -565,7 +566,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
           presetOptions: config.presetOptions ?? DEFAULT_PRESET_OPTIONS,
           deliveryTimeSlot: config.deliveryTimeSlot,
         })),
-        startDate: activeSubEndDate ? new Date(new Date(activeSubEndDate).getTime() + 86400000).toISOString().split('T')[0] : null,
+        startDate: activeSubEndDate ? addCalendarDaysIst(activeSubEndDate, 1) : null,
         notes: notes.trim() || undefined,
       }),
     });
@@ -724,7 +725,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
               <div>
                 <h3 className="font-display text-lg font-medium text-sage-dark mb-1">Plan Transition Mode</h3>
                 <p className="font-body text-[13px] text-stone leading-relaxed">
-                  You have an active plan ending on <strong className="text-ink">{activeSubEndDate}</strong>. 
+                  You have an active plan ending on <strong className="text-ink">{activeSubEndDate ? formatIstYmd(activeSubEndDate, { day: "numeric", month: "long", year: "numeric" }) : ""}</strong>. 
                   Your new selection will be scheduled to start automatically the very next day.
                 </p>
               </div>
@@ -804,7 +805,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
                 <div>
                   <p className="font-body text-[13px] font-bold text-sage-dark">Transitioning to next cycle</p>
                   <p className="font-body text-[11px] text-stone leading-relaxed">
-                    Setting up your next plan to start on <strong className="text-ink">{activeSubEndDate ? new Date(new Date(activeSubEndDate).getTime() + 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '...'}</strong>.
+                    Setting up your next plan to start on <strong className="text-ink">{activeSubEndDate ? formatIstYmd(addCalendarDaysIst(activeSubEndDate, 1), { day: "numeric", month: "short" }) : "..."}</strong>.
                   </p>
                 </div>
               </div>

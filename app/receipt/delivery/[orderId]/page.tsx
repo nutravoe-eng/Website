@@ -5,6 +5,7 @@ import Image from 'next/image';
 import PrintTrigger from '../../../invoice/[orderId]/PrintTrigger';
 import PrintButton from '../../../invoice/[orderId]/PrintButton';
 import '../../../invoice/[orderId]/invoice-print.css';
+import { formatIstYmd } from '@/lib/datetime-ist';
 
 interface Customizations {
   removed?: string[];
@@ -58,8 +59,11 @@ export default async function DeliveryReceiptPage({
     ? `NV-SUB-${o.subscription_id.slice(-8).toUpperCase()}`
     : null;
 
-  const deliveryDate = new Date(o.delivery_date).toLocaleDateString('en-IN', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  const deliveryDate = formatIstYmd(o.delivery_date, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
   });
 
   const userInfo = o.users as any;

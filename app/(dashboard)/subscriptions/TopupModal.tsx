@@ -6,6 +6,7 @@ import { buildTopupWhatsAppMessage } from '@/lib/utils';
 import { useDialogAccessibility } from '@/lib/use-dialog-accessibility';
 import { getWhatsAppHref } from '@/lib/contact';
 import { STUB_PLANS } from '@/app/subscribe/PlanCard';
+import { formatIstYmd } from '@/lib/datetime-ist';
 
 interface Props {
   sub: Subscription;
@@ -24,7 +25,7 @@ export default function TopupModal({ sub, onClose, onCreated }: Props) {
   const isValid = numericAmount > 0;
 
   const expiryDate = sub.periodEndDate
-    ? new Date(sub.periodEndDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    ? formatIstYmd(sub.periodEndDate, { day: 'numeric', month: 'short', year: 'numeric' })
     : 'the end of your cycle';
 
   const planLabel = STUB_PLANS.find((p) => p.id === sub.planId)?.name ?? sub.planId;

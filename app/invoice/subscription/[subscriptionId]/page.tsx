@@ -5,6 +5,7 @@ import Image from 'next/image';
 import PrintTrigger from '../../[orderId]/PrintTrigger';
 import PrintButton from '../../[orderId]/PrintButton';
 import '../../[orderId]/invoice-print.css';
+import { formatInstantIstDate, formatIstYmd } from '@/lib/datetime-ist';
 
 const DAY_LABELS: Record<string, string> = {
   monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday',
@@ -53,14 +54,12 @@ export default async function SubscriptionInvoicePage({
 
   const s = sub as any;
   const invoiceNumber = `NV-SUB-${s.id.slice(-8).toUpperCase()}`;
-  const paidOn = new Date(s.created_at).toLocaleDateString('en-IN', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  });
+  const paidOn = formatInstantIstDate(s.created_at);
   const periodStart = s.start_date
-    ? new Date(s.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+    ? formatIstYmd(s.start_date, { day: 'numeric', month: 'long', year: 'numeric' })
     : '—';
   const periodEnd = s.period_end_date
-    ? new Date(s.period_end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+    ? formatIstYmd(s.period_end_date, { day: 'numeric', month: 'long', year: 'numeric' })
     : '—';
 
   const plan = s.subscription_plans as any;

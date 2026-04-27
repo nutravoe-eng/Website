@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { parseIstYmd, NUTRAVOE_TIMEZONE } from '@/lib/datetime-ist';
 
 export interface AdminOrder {
   id: string;
@@ -402,7 +403,11 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                 <tr key={order.id} className="hover:bg-[#F9F8F6]/60 transition-colors">
                   {showDate && (
                     <td className="px-4 py-3 font-body text-[12px] text-stone whitespace-nowrap">
-                      {new Date(order.delivery_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      {parseIstYmd(order.delivery_date).toLocaleDateString('en-IN', {
+                        timeZone: NUTRAVOE_TIMEZONE,
+                        day: 'numeric',
+                        month: 'short',
+                      })}
                     </td>
                   )}
                   <td className="px-4 py-3 font-body text-[12px] text-stone whitespace-nowrap">

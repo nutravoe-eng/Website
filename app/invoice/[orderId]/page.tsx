@@ -5,6 +5,7 @@ import Image from 'next/image';
 import PrintTrigger from './PrintTrigger';
 import PrintButton from './PrintButton';
 import './invoice-print.css';
+import { formatInstantIstDate, formatIstYmd } from '@/lib/datetime-ist';
 
 interface Customizations {
   removed?: string[];
@@ -79,12 +80,8 @@ export default async function InvoicePage({
   const o = order as unknown as OrderData;
 
   const invoiceNumber = `NV-INV-${o.id.slice(-8).toUpperCase()}`;
-  const orderDate = new Date(o.created_at).toLocaleDateString('en-IN', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  });
-  const deliveredOn = new Date(o.delivery_date).toLocaleDateString('en-IN', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  });
+  const orderDate = formatInstantIstDate(o.created_at);
+  const deliveredOn = formatIstYmd(o.delivery_date, { day: 'numeric', month: 'long', year: 'numeric' });
 
   const paymentLabel: Record<string, string> = {
     whatsapp_cod: 'WhatsApp / UPI',

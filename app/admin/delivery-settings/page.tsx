@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminTopNav from "../components/AdminTopNav";
 import type { DeliveryPolicy } from "@/lib/delivery-policy";
+import { getTodayIstYmd, NUTRAVOE_TIMEZONE } from "@/lib/datetime-ist";
 
 interface SlotEntry {
   key: string;
@@ -30,13 +31,7 @@ export default function AdminDeliverySettingsPage() {
   const [success, setSuccess] = useState("");
   const [policy, setPolicy] = useState<DeliveryPolicy>(DEFAULT_FORM);
   const [slots, setSlots] = useState<SlotEntry[]>([]);
-  const [blackoutFilterDate, setBlackoutFilterDate] = useState<string>(() => {
-    const nowIst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-    const y = nowIst.getFullYear();
-    const m = String(nowIst.getMonth() + 1).padStart(2, "0");
-    const d = String(nowIst.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  });
+  const [blackoutFilterDate, setBlackoutFilterDate] = useState<string>(getTodayIstYmd);
 
   useEffect(() => {
     const load = async () => {
@@ -302,8 +297,23 @@ function formatSlotLabelFromKey(key: string): string {
   const start = new Date(`${dateIso}T${String(hour).padStart(2, "0")}:00:00+05:30`);
   const end = new Date(start);
   end.setHours(end.getHours() + 1);
-  const dateLabel = start.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
-  const startLabel = start.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
-  const endLabel = end.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+  const dateLabel = start.toLocaleDateString("en-IN", {
+    timeZone: NUTRAVOE_TIMEZONE,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+  const startLabel = start.toLocaleTimeString("en-IN", {
+    timeZone: NUTRAVOE_TIMEZONE,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const endLabel = end.toLocaleTimeString("en-IN", {
+    timeZone: NUTRAVOE_TIMEZONE,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
   return `${dateLabel}, ${startLabel} - ${endLabel}`;
 }

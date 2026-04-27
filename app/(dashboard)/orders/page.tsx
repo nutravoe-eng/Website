@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils";
+import { formatInstantIst } from "@/lib/datetime-ist";
 
 interface DisplayOrder {
   id: string;
@@ -122,10 +123,10 @@ export default function OrdersPage() {
         id: o.id,
         status: o.status ?? 'pending',
         payment_status: o.payment_status ?? 'pending',
-        date: new Date(o.created_at).toLocaleDateString('en-IN', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
+        date: formatInstantIst(o.created_at, {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
         }),
         slot: o.delivery_time_slot ?? null,
         items: (itemsByOrder[o.id] ?? []).join(', ') || '—',

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { formatInstantIst } from '@/lib/datetime-ist';
 
 type StatusFilter = 'pending' | 'all' | 'approved' | 'rejected' | 'cancelled';
 
@@ -183,7 +184,7 @@ export default function AdminWalletTopupsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 font-body text-[12px] text-stone">
-                    {new Date(r.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                    {formatInstantIst(r.created_at, { dateStyle: 'medium', timeStyle: 'short' })}
                   </td>
                   <td className="px-4 py-3">
                     {r.status === 'pending' ? (

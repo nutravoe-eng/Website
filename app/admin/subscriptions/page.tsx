@@ -3,6 +3,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import AdminTopNav from '../components/AdminTopNav';
 import CreateForCustomerModal from '../components/CreateForCustomerModal';
+import {
+  NUTRAVOE_TIMEZONE,
+  getTodayIstYmd,
+  formatIstYmd,
+  parseIstYmd,
+  calendarDaysBetweenIst,
+} from '@/lib/datetime-ist';
 
 interface DayConfig {
   id: string;
@@ -69,6 +76,37 @@ function formatIngredientLabel(rawId: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function formatShortScheduleDate(iso: string): string {
+  return parseIstYmd(iso).toLocaleDateString('en-IN', {
+    timeZone: NUTRAVOE_TIMEZONE,
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
+function displayBowlLabel(slug: string, name: string | null | undefined): string {
+  const n = name?.trim();
+  if (n && (/\s/.test(n) || /bowl/i.test(n))) return n;
+  return formatIngredientLabel(slug);
+}
+
+type ScheduleOrderItem = {
+  id: string;
+  bowl_slug: string;
+  bowl_name: string | null;
+  quantity: number;
+  customizations: unknown;
+};
+
+type ScheduleOrder = {
+  id: string;
+  delivery_date: string;
+  delivery_time_slot: string | null;
+  status: string;
+  order_items: ScheduleOrderItem[] | null;
+};
+
 interface AdminSubscription {
   id: string;
   style: string;
@@ -84,6 +122,8 @@ interface AdminSubscription {
   notes: string | null;
   created_at: string;
   deliveries_completed: number;
+  first_scheduled_delivery_date: string | null;
+  subscription_delivery_schedule: ScheduleOrder[];
   users: { id: string; full_name: string; phone: string; email: string };
   subscription_plans: { name: string; slug: string; price_per_bowl: number; price_per_bowl_premium: number | null } | null;
   addresses: { line1: string; line2: string | null; city: string; pincode: string; lat: number; lng: number } | null;
@@ -141,6 +181,8 @@ export default function AdminSubscriptionsPage() {
       const data = await res.json();
       const normalized: AdminSubscription[] = (data.subscriptions ?? []).map((sub: AdminSubscription) => ({
         ...sub,
+        first_scheduled_delivery_date: sub.first_scheduled_delivery_date ?? null,
+        subscription_delivery_schedule: sub.subscription_delivery_schedule ?? [],
         subscription_day_configs: (sub.subscription_day_configs ?? []).map((dc) => ({
           ...dc,
           customizations: normalizeCustomizations(dc.customizations),
@@ -217,7 +259,7 @@ export default function AdminSubscriptionsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          delivery_date: deliverDate || new Date().toISOString().split('T')[0],
+          delivery_date: deliverDate || getTodayIstYmd(),
           delivery_time_slot: deliverSlot || deliverModal.delivery_time_slot,
           bowls,
         }),
@@ -435,7 +477,10 @@ export default function AdminSubscriptionsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {subs.map(sub => (
+          {subs.map(sub => {
+            const displayStartIso = sub.first_scheduled_delivery_date ?? sub.start_date;
+            const displayStartDate = parseIstYmd(displayStartIso);
+            return (
             <div key={sub.id} className="bg-white rounded-xl border border-black/10 p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 {/* Customer info */}
@@ -489,7 +534,7 @@ export default function AdminSubscriptionsPage() {
                     <p className="font-body text-[12px] font-semibold text-ink">
                       {sub.subscription_plans?.name ?? (sub.subscription_plans?.slug === 'daily' ? 'Daily' : sub.subscription_plans?.slug ?? 'Manual')}
                     </p>
-                    {new Date(sub.start_date) > new Date(Date.now() + 86400000) && (
+                    {displayStartDate > new Date(Date.now() + 86400000) && (
                       <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-body text-[9px] font-bold uppercase tracking-wider border border-blue-100">
                         Future Plan
                       </span>
@@ -507,20 +552,41 @@ export default function AdminSubscriptionsPage() {
                 <Stat label="Amount" value={sub.total_amount_rs ? `₹${Number(sub.total_amount_rs).toLocaleString('en-IN')}` : '—'} />
                 <Stat label="Deliveries" value={String(sub.deliveries_completed)} />
                 <Stat 
-                  label="Start Date" 
-                  value={new Date(sub.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} 
-                  highlight={new Date(sub.start_date) > new Date(Date.now() + 86400000)}
+                  label={sub.first_scheduled_delivery_date ? 'First delivery' : 'Start Date'}
+                  value={formatIstYmd(displayStartIso, { day: 'numeric', month: 'short' })}
+                  highlight={displayStartDate.getTime() > new Date().getTime() + 86400000}
                 />
                 {sub.period_end_date && sub.status === 'active' && (() => {
-                  const daysLeft = Math.ceil((new Date(sub.period_end_date).getTime() - Date.now()) / 86_400_000);
-                  const color = daysLeft <= 0 ? 'text-terracotta bg-terracotta/10' : daysLeft <= 2 ? 'text-amber-700 bg-amber-50' : 'text-sage-dark bg-sage/10';
-                  const label = daysLeft <= 0 ? 'Cycle Ended' : daysLeft === 1 ? 'Ends tomorrow' : `Ends in ${daysLeft}d`;
+                  const endYmd = String(sub.period_end_date).split('T')[0] ?? '';
+                  const todayYmd = getTodayIstYmd();
+                  const diff = calendarDaysBetweenIst(todayYmd, endYmd);
+                  const color =
+                    diff < 0
+                      ? 'text-terracotta bg-terracotta/10'
+                      : diff <= 2
+                        ? 'text-amber-700 bg-amber-50'
+                        : 'text-sage-dark bg-sage/10';
+                  const label =
+                    diff < 0
+                      ? 'Cycle over'
+                      : diff === 0
+                        ? 'Ends today'
+                        : diff === 1
+                          ? 'Ends tomorrow'
+                          : `${diff} days to period end`;
+                  const detail =
+                    diff < 0
+                      ? `Period ended ${formatIstYmd(endYmd, { day: 'numeric', month: 'short', year: 'numeric' })} · ${Math.abs(diff)}d past end (IST vs today)`
+                      : `Period ends ${formatIstYmd(endYmd, { day: 'numeric', month: 'short', year: 'numeric' })} · ${diff}d from today to end (IST calendar)`;
                   return (
                     <div>
                       <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone mb-1">Current Cycle</p>
                       <span className={`inline-flex items-center font-body text-[11px] font-bold px-2 py-0.5 rounded-full ${color}`}>
                         {label}
                       </span>
+                      <p className="font-body text-[10px] text-stone/90 leading-snug mt-1 max-w-[280px]">
+                        Today (IST) {formatIstYmd(todayYmd, { day: 'numeric', month: 'short', year: 'numeric' })} · {detail}
+                      </p>
                     </div>
                   );
                 })()}
@@ -537,57 +603,127 @@ export default function AdminSubscriptionsPage() {
                 </div>
               </div>
 
-              {/* Day configs */}
-              {sub.subscription_day_configs.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {sub.subscription_day_configs.map(dc => {
-                    const perInstance = customizationsByInstance(dc.customizations, Math.max(1, dc.quantity || 1));
-                    return perInstance.map((instanceCustomizations, idx) => {
-                      const choices = readPresetChoices(instanceCustomizations);
-                      const removedIngredients = instanceCustomizations
-                        .filter(c =>
-                          c.option === 'remove' &&
-                          typeof c.ingredientId === 'string' &&
-                          !c.ingredientId.startsWith("__preset_")
-                        )
-                        .map(c => formatIngredientLabel(c.ingredientId));
-                      const addedIngredients = instanceCustomizations
-                        .filter(c =>
-                          c.option === 'extra' &&
-                          typeof c.ingredientId === 'string' &&
-                          !c.ingredientId.startsWith("__preset_")
-                        )
-                        .map(c => formatIngredientLabel(c.ingredientId));
-                      const instanceTag = (dc.quantity ?? 1) > 1 ? ` #${idx + 1}` : "";
-                      return (
-                        <span key={`${dc.id}-${idx}`} className="bg-[#F9F8F6] border border-black/5 rounded-md px-2 py-1 font-body text-[11px] text-stone capitalize flex flex-col leading-tight">
-                          <span className="font-semibold text-ink">{dc.day_of_week} — {dc.bowl_slug} ×1{instanceTag}</span>
-                          <span className="text-[10px] text-stone/80 font-medium">
-                            Base: {choices.baseChoice === "milk" ? "Milk" : "Yogurt"}
-                          </span>
-                          <span className="text-[10px] text-stone/80 font-medium">
-                            Oats: {choices.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
-                          </span>
-                          <span className={`text-[10px] font-medium ${choices.noSugar ? "text-terracotta/80" : "text-stone/80"}`}>
-                            {choices.noSugar ? "No sugar" : "Regular sugar"}
-                          </span>
-                          {removedIngredients.length > 0 && (
-                            <span className="text-[10px] text-terracotta/80 font-medium">
-                              Removed: {removedIngredients.join(', ')}
+              {/* Delivery schedule: live orders (reschedules reflected) or planned day template */}
+              {sub.subscription_delivery_schedule.length > 0 && (
+                <div className="mt-3">
+                  <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone mb-1.5">Delivery schedule (from orders)</p>
+                  <div className="flex flex-wrap gap-2">
+                    {sub.subscription_delivery_schedule.flatMap((ord) => {
+                      const items = Array.isArray(ord.order_items) ? ord.order_items : [];
+                      return items.flatMap((it) => {
+                        const perInstance = customizationsByInstance(
+                          normalizeCustomizations(it.customizations),
+                          Math.max(1, it.quantity || 1),
+                        );
+                        return perInstance.map((instanceCustomizations, idx) => {
+                          const choices = readPresetChoices(instanceCustomizations);
+                          const removedIngredients = instanceCustomizations
+                            .filter(c =>
+                              c.option === 'remove' &&
+                              typeof c.ingredientId === 'string' &&
+                              !c.ingredientId.startsWith("__preset_")
+                            )
+                            .map(c => formatIngredientLabel(c.ingredientId));
+                          const addedIngredients = instanceCustomizations
+                            .filter(c =>
+                              c.option === 'extra' &&
+                              typeof c.ingredientId === 'string' &&
+                              !c.ingredientId.startsWith("__preset_")
+                            )
+                            .map(c => formatIngredientLabel(c.ingredientId));
+                          const instanceTag = (it.quantity ?? 1) > 1 ? ` #${idx + 1}` : '';
+                          return (
+                            <span
+                              key={`${ord.id}-${it.id}-${idx}`}
+                              className="bg-[#F9F8F6] border border-black/5 rounded-md px-2 py-1 font-body text-[11px] text-stone capitalize flex flex-col leading-tight"
+                            >
+                              <span className="font-semibold text-ink">
+                                {formatShortScheduleDate(ord.delivery_date)} — {displayBowlLabel(it.bowl_slug, it.bowl_name)} ×1{instanceTag}
+                              </span>
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-sage-dark">{ord.status.replace(/_/g, ' ')}</span>
+                              <span className="text-[10px] text-stone/80 font-medium">
+                                Base: {choices.baseChoice === 'milk' ? 'Milk' : 'Yogurt'}
+                              </span>
+                              <span className="text-[10px] text-stone/80 font-medium">
+                                Oats: {choices.oatsChoice === 'roasted' ? 'Roasted' : 'Soaked'}
+                              </span>
+                              <span className={`text-[10px] font-medium ${choices.noSugar ? 'text-terracotta/80' : 'text-stone/80'}`}>
+                                {choices.noSugar ? 'No sugar' : 'Regular sugar'}
+                              </span>
+                              {removedIngredients.length > 0 && (
+                                <span className="text-[10px] text-terracotta/80 font-medium">
+                                  Removed: {removedIngredients.join(', ')}
+                                </span>
+                              )}
+                              {addedIngredients.length > 0 && (
+                                <span className="text-[10px] text-sage-dark font-medium">
+                                  Added: {addedIngredients.join(', ')}
+                                </span>
+                              )}
+                              {ord.delivery_time_slot && (
+                                <span className="text-stone/70 text-[10px]">{ord.delivery_time_slot}</span>
+                              )}
                             </span>
-                          )}
-                          {addedIngredients.length > 0 && (
-                            <span className="text-[10px] text-sage-dark font-medium">
-                              Added: {addedIngredients.join(', ')}
+                          );
+                        });
+                      });
+                    })}
+                  </div>
+                </div>
+              )}
+              {sub.subscription_delivery_schedule.length === 0 && sub.subscription_day_configs.length > 0 && (
+                <div className="mt-3">
+                  <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone mb-1.5">Plan (no generated orders yet)</p>
+                  <div className="flex flex-wrap gap-2">
+                    {sub.subscription_day_configs.flatMap((dc) => {
+                      const perInstance = customizationsByInstance(dc.customizations, Math.max(1, dc.quantity || 1));
+                      return perInstance.map((instanceCustomizations, idx) => {
+                        const choices = readPresetChoices(instanceCustomizations);
+                        const removedIngredients = instanceCustomizations
+                          .filter(c =>
+                            c.option === 'remove' &&
+                            typeof c.ingredientId === 'string' &&
+                            !c.ingredientId.startsWith("__preset_")
+                          )
+                          .map(c => formatIngredientLabel(c.ingredientId));
+                        const addedIngredients = instanceCustomizations
+                          .filter(c =>
+                            c.option === 'extra' &&
+                            typeof c.ingredientId === 'string' &&
+                            !c.ingredientId.startsWith("__preset_")
+                          )
+                          .map(c => formatIngredientLabel(c.ingredientId));
+                        const instanceTag = (dc.quantity ?? 1) > 1 ? ` #${idx + 1}` : "";
+                        return (
+                          <span key={`${dc.id}-${idx}`} className="bg-[#F9F8F6] border border-black/5 rounded-md px-2 py-1 font-body text-[11px] text-stone capitalize flex flex-col leading-tight">
+                            <span className="font-semibold text-ink">{dc.day_of_week} — {dc.bowl_slug} ×1{instanceTag}</span>
+                            <span className="text-[10px] text-stone/80 font-medium">
+                              Base: {choices.baseChoice === "milk" ? "Milk" : "Yogurt"}
                             </span>
-                          )}
-                          {dc.delivery_time_slot && (
-                            <span className="text-stone/70 text-[10px]">{dc.delivery_time_slot}</span>
-                          )}
-                        </span>
-                      );
-                    });
-                  })}
+                            <span className="text-[10px] text-stone/80 font-medium">
+                              Oats: {choices.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                            </span>
+                            <span className={`text-[10px] font-medium ${choices.noSugar ? "text-terracotta/80" : "text-stone/80"}`}>
+                              {choices.noSugar ? "No sugar" : "Regular sugar"}
+                            </span>
+                            {removedIngredients.length > 0 && (
+                              <span className="text-[10px] text-terracotta/80 font-medium">
+                                Removed: {removedIngredients.join(', ')}
+                              </span>
+                            )}
+                            {addedIngredients.length > 0 && (
+                              <span className="text-[10px] text-sage-dark font-medium">
+                                Added: {addedIngredients.join(', ')}
+                              </span>
+                            )}
+                            {dc.delivery_time_slot && (
+                              <span className="text-stone/70 text-[10px]">{dc.delivery_time_slot}</span>
+                            )}
+                          </span>
+                        );
+                      });
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -616,7 +752,7 @@ export default function AdminSubscriptionsPage() {
                 {sub.payment_status === 'paid' && sub.status === 'active' && (
                   <Btn color="sage" onClick={() => {
                     setDeliverModal(sub);
-                    setDeliverDate(new Date().toISOString().split('T')[0]);
+                    setDeliverDate(getTodayIstYmd());
                     setDeliverSlot(sub.delivery_time_slot ?? '');
                   }}>
                     Record Delivery
@@ -644,7 +780,8 @@ export default function AdminSubscriptionsPage() {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

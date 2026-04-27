@@ -8,13 +8,10 @@ import type { WalletLoad, WalletTransaction, Subscription } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import TopupModal from '@/app/(dashboard)/subscriptions/TopupModal';
 import { isPaidFlexibleWalletEligible, preferActiveSubscription } from '@/lib/flexible-subscription';
+import { formatInstantIst } from '@/lib/datetime-ist';
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatInstantIst(iso, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function getExpiryLabel(expiresAt: string | null) {
@@ -172,7 +169,7 @@ export default function WalletPage() {
               ? getExpiryLabel(nextExpiryAt)
               : 'Wallet funds available'
             : nextExpiryAt && new Date(nextExpiryAt) < new Date()
-              ? `Your wallet balance expired on ${new Date(nextExpiryAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}. Contact Nutravoe to renew your subscription.`
+              ? `Your wallet balance expired on ${formatInstantIst(nextExpiryAt, { day: 'numeric', month: 'short', year: 'numeric' })}. Contact Nutravoe to renew your subscription.`
               : transactions.length > 0
                 ? 'Your subscription balance has been fully used. Contact Nutravoe to renew.'
                 : 'No funds yet — balance loads after Nutravoe approves your subscription payment.'

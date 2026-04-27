@@ -3,15 +3,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import AdminTopNav from './components/AdminTopNav';
 import OrdersTable, { type AdminOrder } from './components/OrdersTable';
+import { formatTodayIstLong } from '@/lib/datetime-ist';
 
 export default function AdminTodayPage() {
   const [orders, setOrders]   = useState<AdminOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
 
-  const today = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  });
+  const today = formatTodayIstLong();
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
