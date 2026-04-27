@@ -10,18 +10,15 @@ interface DayConfig {
   bowl_slug: string;
   quantity: number;
   delivery_time_slot: string | null;
-  customizations: { ingredientId: string; option: "default" | "remove" | "extra" }[];
+  customizations: { ingredientId: string; option: "default" | "remove" | "extra" }[] | { ingredientId: string; option: "default" | "remove" | "extra" }[][];
   customization_cost_rs: number;
 }
 
 type CustomizationChoice = { ingredientId: string; option: "default" | "remove" | "extra" };
 
-function flattenCustomizationPayload(customizations: unknown): CustomizationChoice[] {
+function normalizeFlatCustomizations(customizations: unknown): CustomizationChoice[] {
   if (!Array.isArray(customizations)) return [];
-  const first = customizations[0];
-  const raw = Array.isArray(first)
-    ? (customizations as unknown[]).flatMap((entry) => (Array.isArray(entry) ? entry : []))
-    : customizations;
+  const raw = customizations;
   return raw.filter(
     (item): item is CustomizationChoice =>
       Boolean(item) &&
@@ -33,8 +30,12 @@ function flattenCustomizationPayload(customizations: unknown): CustomizationChoi
 
 function normalizeCustomizations(
   customizations: unknown,
-): CustomizationChoice[] {
-  return flattenCustomizationPayload(customizations);
+): CustomizationChoice[] | CustomizationChoice[][] {
+  if (!Array.isArray(customizations)) return [];
+  if (Array.isArray(customizations[0])) {
+    return (customizations as unknown[]).map((entry) => normalizeFlatCustomizations(entry));
+  }
+  return normalizeFlatCustomizations(customizations);
 }
 
 function readPresetChoices(customizations: { ingredientId: string; option: "default" | "remove" | "extra" }[]) {
@@ -42,6 +43,22 @@ function readPresetChoices(customizations: { ingredientId: string; option: "defa
   const oatsChoice = customizations.some(c => c.ingredientId === "__preset_oats_roasted") ? "roasted" : "soaked";
   const noSugar = customizations.some(c => c.ingredientId === "__preset_no_sugar");
   return { baseChoice, oatsChoice, noSugar };
+}
+
+function customizationsByInstance(
+  customizations: CustomizationChoice[] | CustomizationChoice[][],
+  quantity: number,
+): CustomizationChoice[][] {
+  if (Array.isArray(customizations[0])) {
+    const nested = customizations as CustomizationChoice[][];
+    if (nested.length >= quantity) return nested.slice(0, quantity);
+    if (nested.length > 0) {
+      return Array.from({ length: quantity }, (_, idx) => nested[idx] ?? nested[nested.length - 1] ?? []);
+    }
+    return Array.from({ length: quantity }, () => []);
+  }
+  const flat = customizations as CustomizationChoice[];
+  return Array.from({ length: quantity }, () => flat);
 }
 
 function formatIngredientLabel(rawId: string): string {
@@ -523,54 +540,54 @@ export default function AdminSubscriptionsPage() {
               {/* Day configs */}
               {sub.subscription_day_configs.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {sub.subscription_day_configs.map(dc => (
-                    <span key={dc.id} className="bg-[#F9F8F6] border border-black/5 rounded-md px-2 py-1 font-body text-[11px] text-stone capitalize flex flex-col leading-tight">
-                      <span className="font-semibold text-ink">{dc.day_of_week} — {dc.bowl_slug} ×{dc.quantity}</span>
-                      {dc.customizations && (() => {
-                        const choices = readPresetChoices(dc.customizations);
-                        const removedIngredients = dc.customizations
-                          .filter(c =>
-                            c.option === 'remove' &&
-                            typeof c.ingredientId === 'string' &&
-                            !c.ingredientId.startsWith("__preset_")
-                          )
-                          .map(c => formatIngredientLabel(c.ingredientId));
-                        const addedIngredients = dc.customizations
-                          .filter(c =>
-                            c.option === 'extra' &&
-                            typeof c.ingredientId === 'string' &&
-                            !c.ingredientId.startsWith("__preset_")
-                          )
-                          .map(c => formatIngredientLabel(c.ingredientId));
-                        return (
-                          <>
-                            <span className="text-[10px] text-stone/80 font-medium">
-                              Base: {choices.baseChoice === "milk" ? "Milk" : "Yogurt"}
+                  {sub.subscription_day_configs.map(dc => {
+                    const perInstance = customizationsByInstance(dc.customizations, Math.max(1, dc.quantity || 1));
+                    return perInstance.map((instanceCustomizations, idx) => {
+                      const choices = readPresetChoices(instanceCustomizations);
+                      const removedIngredients = instanceCustomizations
+                        .filter(c =>
+                          c.option === 'remove' &&
+                          typeof c.ingredientId === 'string' &&
+                          !c.ingredientId.startsWith("__preset_")
+                        )
+                        .map(c => formatIngredientLabel(c.ingredientId));
+                      const addedIngredients = instanceCustomizations
+                        .filter(c =>
+                          c.option === 'extra' &&
+                          typeof c.ingredientId === 'string' &&
+                          !c.ingredientId.startsWith("__preset_")
+                        )
+                        .map(c => formatIngredientLabel(c.ingredientId));
+                      const instanceTag = (dc.quantity ?? 1) > 1 ? ` #${idx + 1}` : "";
+                      return (
+                        <span key={`${dc.id}-${idx}`} className="bg-[#F9F8F6] border border-black/5 rounded-md px-2 py-1 font-body text-[11px] text-stone capitalize flex flex-col leading-tight">
+                          <span className="font-semibold text-ink">{dc.day_of_week} — {dc.bowl_slug} ×1{instanceTag}</span>
+                          <span className="text-[10px] text-stone/80 font-medium">
+                            Base: {choices.baseChoice === "milk" ? "Milk" : "Yogurt"}
+                          </span>
+                          <span className="text-[10px] text-stone/80 font-medium">
+                            Oats: {choices.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                          </span>
+                          <span className={`text-[10px] font-medium ${choices.noSugar ? "text-terracotta/80" : "text-stone/80"}`}>
+                            {choices.noSugar ? "No sugar" : "Regular sugar"}
+                          </span>
+                          {removedIngredients.length > 0 && (
+                            <span className="text-[10px] text-terracotta/80 font-medium">
+                              Removed: {removedIngredients.join(', ')}
                             </span>
-                            <span className="text-[10px] text-stone/80 font-medium">
-                              Oats: {choices.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                          )}
+                          {addedIngredients.length > 0 && (
+                            <span className="text-[10px] text-sage-dark font-medium">
+                              Added: {addedIngredients.join(', ')}
                             </span>
-                            <span className={`text-[10px] font-medium ${choices.noSugar ? "text-terracotta/80" : "text-stone/80"}`}>
-                              {choices.noSugar ? "No sugar" : "Regular sugar"}
-                            </span>
-                            {removedIngredients.length > 0 && (
-                              <span className="text-[10px] text-terracotta/80 font-medium">
-                                Removed: {removedIngredients.join(', ')}
-                              </span>
-                            )}
-                            {addedIngredients.length > 0 && (
-                              <span className="text-[10px] text-sage-dark font-medium">
-                                Added: {addedIngredients.join(', ')}
-                              </span>
-                            )}
-                          </>
-                        );
-                      })()}
-                      {dc.delivery_time_slot && (
-                        <span className="text-stone/70 text-[10px]">{dc.delivery_time_slot}</span>
-                      )}
-                    </span>
-                  ))}
+                          )}
+                          {dc.delivery_time_slot && (
+                            <span className="text-stone/70 text-[10px]">{dc.delivery_time_slot}</span>
+                          )}
+                        </span>
+                      );
+                    });
+                  })}
                 </div>
               )}
 

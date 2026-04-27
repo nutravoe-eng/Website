@@ -26,6 +26,7 @@ export default function ProfilePage() {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwError, setPwError] = useState("");
   const [pwSuccess, setPwSuccess] = useState(false);
+  const [pwEmailWarning, setPwEmailWarning] = useState("");
   const passwordDialogRef = useRef<HTMLDivElement>(null);
   useDialogAccessibility(passwordDialogRef, () => { setShowPasswordModal(false); setPwForm({ current: "", next: "", confirm: "" }); setPwError(""); setPwSuccess(false); });
 
@@ -87,8 +88,21 @@ export default function ProfilePage() {
     const { error: updateError } = await supabase.auth.updateUser({ password: pwForm.next });
     if (updateError) { setPwError("Failed to update password. Please try again."); setPwSaving(false); return; }
     
-    // Trigger automated email
-    await fetch("/api/account/email/password-changed", { method: "POST" });
+    // Trigger automated email and surface warning if trigger fails.
+    try {
+      const emailRes = await fetch("/api/account/email/password-changed", { method: "POST" });
+      if (!emailRes.ok) {
+        const payload = await emailRes.json().catch(() => null);
+        const msg = typeof payload?.error === "string" ? payload.error : "Password changed email could not be sent.";
+        setPwEmailWarning(msg);
+        console.warn("[profile] password changed email trigger failed:", msg);
+      } else {
+        setPwEmailWarning("");
+      }
+    } catch (err) {
+      setPwEmailWarning("Password changed, but confirmation email could not be sent.");
+      console.warn("[profile] password changed email trigger errored:", err);
+    }
     
     setPwSaving(false);
     setPwSuccess(true);
@@ -295,6 +309,9 @@ export default function ProfilePage() {
 
                 {pwError && (
                   <p role="alert" className="font-body text-[12px] text-terracotta">{pwError}</p>
+                )}
+                {pwEmailWarning && (
+                  <p role="status" className="font-body text-[12px] text-amber-700">{pwEmailWarning}</p>
                 )}
 
                 <div className="flex gap-3 pt-1">

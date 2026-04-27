@@ -122,6 +122,21 @@ function toOrderCustomizationView(value: unknown): LegacyOrderCustomization {
   };
 }
 
+function toOrderCustomizationInstances(value: unknown, quantity: number): LegacyOrderCustomization[] {
+  const safeQty = Math.max(1, quantity || 1);
+  if (Array.isArray(value) && Array.isArray(value[0])) {
+    const nested = value as unknown[];
+    const parsed = nested.map((entry) => toOrderCustomizationView(entry));
+    if (parsed.length >= safeQty) return parsed.slice(0, safeQty);
+    if (parsed.length > 0) {
+      return Array.from({ length: safeQty }, (_, idx) => parsed[idx] ?? parsed[parsed.length - 1]);
+    }
+    return Array.from({ length: safeQty }, () => ({}));
+  }
+  const single = toOrderCustomizationView(value);
+  return Array.from({ length: safeQty }, () => single);
+}
+
 interface Props {
   orders: AdminOrder[];
   loading: boolean;
@@ -467,39 +482,46 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                       )}
                     </div>
                     {order.order_items.map(item => {
-                      const customizations = toOrderCustomizationView(item.customizations);
+                      const perInstance = toOrderCustomizationInstances(item.customizations, item.quantity);
                       return (
-                      <div key={item.id}>
-                        <p className="font-body text-[12px] text-ink">{item.bowl_name} ×{item.quantity}</p>
-                        {customizations.removed && customizations.removed.length > 0 && (
-                          <p className="font-body text-[10px] text-terracotta">
-                            Removed: {customizations.removed.map(formatIngredientLabel).join(', ')}
-                          </p>
-                        )}
-                        {customizations.added && customizations.added.length > 0 && (
-                          <p className="font-body text-[10px] text-sage-dark">
-                            Added: {customizations.added.map(formatIngredientLabel).join(', ')}
-                          </p>
-                        )}
-                        {customizations.baseChoice && (
-                          <p className="font-body text-[10px] text-stone">
-                            Base: {customizations.baseChoice === "milk" ? "Milk" : "Yogurt"}
-                          </p>
-                        )}
-                        {customizations.oatsChoice && (
-                          <p className="font-body text-[10px] text-stone">
-                            Oats: {customizations.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
-                          </p>
-                        )}
-                        {typeof customizations.noSugar === "boolean" && (
-                          <p className={`font-body text-[10px] ${customizations.noSugar ? "text-terracotta" : "text-stone"}`}>
-                            {customizations.noSugar
-                              ? `No sugar (${customizations.noSugarNote ?? "Exclude banana, honey, dates"})`
-                              : "Regular sugar"}
-                          </p>
-                        )}
-                      </div>
-                    )})}
+                        <div key={item.id} className="mb-1.5">
+                          {perInstance.map((instance, idx) => (
+                            <div key={`${item.id}-${idx}`} className="mb-1">
+                              <p className="font-body text-[12px] text-ink">
+                                {item.bowl_name} ×1{item.quantity > 1 ? ` #${idx + 1}` : ""}
+                              </p>
+                              {instance.removed && instance.removed.length > 0 && (
+                                <p className="font-body text-[10px] text-terracotta">
+                                  Removed: {instance.removed.map(formatIngredientLabel).join(', ')}
+                                </p>
+                              )}
+                              {instance.added && instance.added.length > 0 && (
+                                <p className="font-body text-[10px] text-sage-dark">
+                                  Added: {instance.added.map(formatIngredientLabel).join(', ')}
+                                </p>
+                              )}
+                              {instance.baseChoice && (
+                                <p className="font-body text-[10px] text-stone">
+                                  Base: {instance.baseChoice === "milk" ? "Milk" : "Yogurt"}
+                                </p>
+                              )}
+                              {instance.oatsChoice && (
+                                <p className="font-body text-[10px] text-stone">
+                                  Oats: {instance.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                                </p>
+                              )}
+                              {typeof instance.noSugar === "boolean" && (
+                                <p className={`font-body text-[10px] ${instance.noSugar ? "text-terracotta" : "text-stone"}`}>
+                                  {instance.noSugar
+                                    ? `No sugar (${instance.noSugarNote ?? "Exclude banana, honey, dates"})`
+                                    : "Regular sugar"}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
                     {order.notes && (
                       <p className="font-body text-[10px] text-stone/70 mt-1 italic">{order.notes}</p>
                     )}

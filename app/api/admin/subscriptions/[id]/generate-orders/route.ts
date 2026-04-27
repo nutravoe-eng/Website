@@ -39,6 +39,9 @@ export async function POST(
   }
 
   const unitPrice = (sub.subscription_plans as any)?.price_per_bowl ?? 0;
+  const customerNote = typeof sub.notes === "string" && sub.notes.trim().length > 0
+    ? `Customer: ${sub.notes.trim()}`
+    : null;
 
   const daySlugList = sub.subscription_day_configs.map((c: { day_of_week: string; delivery_time_slot: string | null }) => ({
     day: c.day_of_week,
@@ -68,13 +71,23 @@ export async function POST(
     }));
     const deliveryTimeSlot = (dayConfigs as any[])[0].delivery_time_slot ?? sub.delivery_time_slot;
 
-    const { error: rpcError } = await adminSupabase.rpc('create_subscription_delivery', {
+    const { data: rpcData, error: rpcError } = await adminSupabase.rpc('create_subscription_delivery', {
       p_subscription_id: id,
       p_delivery_date: deliveryDate,
       p_delivery_time_slot: deliveryTimeSlot,
       p_bowls: bowls,
       p_status: 'confirmed',
     });
+
+    if (!rpcError && customerNote) {
+      const orderId = Array.isArray(rpcData) ? rpcData[0]?.order_id : (rpcData as any)?.order_id;
+      if (orderId) {
+        await adminSupabase
+          .from("orders")
+          .update({ notes: customerNote })
+          .eq("id", orderId);
+      }
+    }
 
     results.push({
       day: daySlug,

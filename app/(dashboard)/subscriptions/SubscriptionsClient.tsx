@@ -8,6 +8,7 @@ import { STUB_PLANS as PLANS } from "../../subscribe/PlanCard";
 import ManageModal from "./ManageModal";
 import CancelModal from "./CancelModal";
 import { createClient } from "@/lib/supabase/client";
+import { getUserWithRetry } from "@/lib/supabase/auth-client";
 import TopupModal from "./TopupModal";
 import { isPaidFlexibleWalletEligible } from "@/lib/flexible-subscription";
 
@@ -47,11 +48,47 @@ function getNextDeliveryDate(dayConfigs: DayBowlConfig[]): string {
   return next.toISOString();
 }
 
-function deliverySummary(sub: Subscription): string {
-  if (sub.dayConfigs?.length) {
-    return sub.dayConfigs.map(d => `${d.day}: ${d.bowlName}`).join(" · ");
-  }
-  return "—";
+function flattenCustomizations(value: unknown): { ingredientId: string; option: "default" | "remove" | "extra" }[] {
+  if (!Array.isArray(value)) return [];
+  const first = value[0];
+  const raw = Array.isArray(first)
+    ? (value as unknown[]).flatMap((entry) => (Array.isArray(entry) ? entry : []))
+    : value;
+  return raw.filter(
+    (item): item is { ingredientId: string; option: "default" | "remove" | "extra" } =>
+      Boolean(item) &&
+      typeof item === "object" &&
+      typeof (item as { ingredientId?: unknown }).ingredientId === "string" &&
+      ["default", "remove", "extra"].includes(String((item as { option?: unknown }).option)),
+  );
+}
+
+function formatIngredientLabel(rawId: string): string {
+  return rawId
+    .replace(/^ingredient[-_]/i, "")
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function customizationsSummary(config: DayBowlConfig): string {
+  const list = flattenCustomizations(config.customizations);
+  if (list.length === 0) return "";
+
+  const base = list.some((c) => c.ingredientId === "__preset_base_milk") ? "Milk" : "Yogurt";
+  const oats = list.some((c) => c.ingredientId === "__preset_oats_roasted") ? "Roasted" : "Soaked";
+  const sugar = list.some((c) => c.ingredientId === "__preset_no_sugar") ? "No sugar" : "Regular sugar";
+  const added = list
+    .filter((c) => c.option === "extra" && !c.ingredientId.startsWith("__preset_"))
+    .map((c) => formatIngredientLabel(c.ingredientId));
+  const removed = list
+    .filter((c) => c.option === "remove" && !c.ingredientId.startsWith("__preset_"))
+    .map((c) => formatIngredientLabel(c.ingredientId));
+
+  const parts = [`Base: ${base}`, `Oats: ${oats}`, sugar];
+  if (added.length) parts.push(`Added: ${added.join(", ")}`);
+  if (removed.length) parts.push(`Removed: ${removed.join(", ")}`);
+  return parts.join(" · ");
 }
 
 function nextDeliveryLabel(iso: string): string {
@@ -79,7 +116,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
   const supabase = createClient();
 
   const fetchSubscriptions = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getUserWithRetry(supabase);
     if (DEBUG_SUBSCRIPTIONS) {
       console.info("[subscriptions/client] session_user_id", user?.id ?? null);
     }
@@ -90,7 +127,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
 
     const { data: subRows, error: subError } = await supabase
       .from('subscriptions')
-      .select('*, subscription_plans ( slug )')
+      .select('*, subscription_plans ( slug, name, price_per_bowl )')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -143,10 +180,13 @@ export default function SubscriptionsClient({ bowls }: Props) {
         bowlId: row.bowl_slug,
         bowlName: row.bowl_slug,
         quantity: row.quantity,
+        customizations: row.customizations,
       }));
 
       const planSlug = sub.subscription_plans?.slug ?? sub.plan_id;
       const plan = PLANS.find(p => p.id === planSlug);
+      const weeklyFromPlan = plan?.weeklyPrice ?? 0;
+      const weeklyFromQuote = typeof sub.total_amount_rs === "number" ? sub.total_amount_rs : 0;
 
       return {
         id: sub.id,
@@ -155,7 +195,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
         billingCycle: sub.billing_cycle ?? 'weekly',
         status: sub.status,
         paymentStatus: sub.payment_status ?? 'pending',
-        weeklyPrice: plan?.weeklyPrice ?? 0,
+        weeklyPrice: weeklyFromPlan > 0 ? weeklyFromPlan : weeklyFromQuote,
         nextDelivery: getNextDeliveryDate(dayConfigs),
         startDate: sub.start_date,
         deliveryTimeSlot: sub.delivery_time_slot ?? undefined,
@@ -343,9 +383,19 @@ export default function SubscriptionsClient({ bowls }: Props) {
                       <p className="font-body text-[13px] text-stone mb-1">
                         {formatCurrency(sub.weeklyPrice)}/week
                       </p>
-                      <p className="font-body text-[12px] text-stone mb-2 max-w-sm leading-relaxed">
-                        {deliverySummary(sub)}
-                      </p>
+                      {sub.dayConfigs?.length > 0 && (
+                        <div className="space-y-1 mb-2">
+                          {sub.dayConfigs.map((dc, idx) => {
+                            const details = customizationsSummary(dc);
+                            return (
+                              <p key={`${sub.id}-${dc.day}-${idx}`} className="font-body text-[11px] text-stone/90 leading-relaxed">
+                                {dc.day}: {formatIngredientLabel(dc.bowlName)} ×{dc.quantity}
+                                {details ? ` (${details})` : ""}
+                              </p>
+                            );
+                          })}
+                        </div>
+                      )}
                       {completedFlex && sub.periodEndDate ? (
                         <p className="font-body text-[13px] text-ink leading-relaxed max-w-md">
                           This cycle&apos;s bowl quota is complete. You can still spend any remaining wallet balance until{" "}
@@ -385,31 +435,7 @@ export default function SubscriptionsClient({ bowls }: Props) {
                   </div>
 
                   <div className="flex flex-col gap-2 min-w-[150px]">
-                    {sub.status === 'pending' ? (
-                      <button
-                        onClick={() => {
-                          const ref = sub.id.slice(-6).toUpperCase();
-                          const planName = PLAN_LABELS[sub.planId] ?? sub.planId;
-                          const lines = [
-                            `Hi Nutravoe! Resending my subscription request for activation.`,
-                            ``,
-                            `Plan: ${planName}`,
-                            `Delivery style: ${sub.deliveryStyle}`,
-                            sub.deliveryTimeSlot ? `Delivery slot: ${sub.deliveryTimeSlot}` : null,
-                            `Subscription Ref: #NV-SUB-${ref}`,
-                            ``,
-                            `Please activate my subscription. Thank you!`,
-                          ].filter(Boolean).join('\n');
-                          window.open(`https://wa.me/${getWhatsAppNumber()}?text=${encodeURIComponent(lines)}`, "_blank");
-                        }}
-                        className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-body text-[13px] font-bold py-2.5 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                        </svg>
-                        Resend WhatsApp
-                      </button>
-                    ) : isCompleted ? (
+                    {sub.status === 'pending' ? null : isCompleted ? (
                       <div className="space-y-2">
                         <div className="w-full border border-black/10 bg-[#F9F8F6] text-stone font-body text-[13px] font-medium py-2.5 rounded-md text-center">
                           Plan Completed
@@ -460,12 +486,16 @@ export default function SubscriptionsClient({ bowls }: Props) {
                         Invoice
                       </a>
                     )}
-                    {sub.status !== 'completed' && (
+                    {/*
+                      Temporarily disable customer-facing "Cancel Plan" action for non-pending subscriptions.
+                      Keep pending discard visible so users can remove unapproved requests.
+                    */}
+                    {sub.status === 'pending' && (
                       <button
-                        onClick={() => sub.status === 'pending' ? handleDiscard(sub.id) : setCancellingId(sub.id)}
-                        className="text-stone hover:text-terracotta font-body text-[12px] font-medium transition-colors mt-1 text-left"
+                        onClick={() => handleDiscard(sub.id)}
+                        className="w-full mt-1 border border-terracotta/30 text-terracotta hover:bg-terracotta/5 font-body text-[12px] font-bold py-2 rounded-md transition-colors"
                       >
-                        {sub.status === 'pending' ? 'Discard Request' : 'Cancel Plan'}
+                        Discard Request
                       </button>
                     )}
                   </div>

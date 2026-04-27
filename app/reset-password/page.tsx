@@ -51,8 +51,19 @@ function ResetPasswordForm() {
       return;
     }
 
-    // Trigger automated email silently in the background
-    await fetch("/api/account/email/password-changed", { method: "POST" });
+    // Trigger automated email and log failures for easier debugging.
+    try {
+      const emailRes = await fetch("/api/account/email/password-changed", { method: "POST" });
+      if (!emailRes.ok) {
+        const payload = await emailRes.json().catch(() => null);
+        console.warn(
+          "[reset-password] password changed email trigger failed:",
+          typeof payload?.error === "string" ? payload.error : "Unknown error",
+        );
+      }
+    } catch (err) {
+      console.warn("[reset-password] password changed email trigger errored:", err);
+    }
 
     // Since the password changed, we may want to ensure they sign in fresh with the new password,
     // so we sign them out to clear the temporary recovery session.

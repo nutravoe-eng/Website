@@ -193,6 +193,9 @@ export async function PATCH(
     // --- SPREAD AUTOGENERATION LOGIC ---
     if (oldSub.style === 'spread' && Array.isArray(oldSub.subscription_day_configs) && oldSub.subscription_day_configs.length > 0) {
       const unitPrice = (oldSub.subscription_plans as any)?.price_per_bowl ?? 0;
+      const customerNote = typeof oldSub.notes === "string" && oldSub.notes.trim().length > 0
+        ? `Customer: ${oldSub.notes.trim()}`
+        : null;
 
       // Compute all delivery dates together with rolling-window cutoff logic.
       const daySlugList = oldSub.subscription_day_configs.map((c: { day_of_week: string; delivery_time_slot: string | null }) => ({
@@ -224,7 +227,7 @@ export async function PATCH(
         // Use time slot from first config for this day (they share a day so same slot)
         const deliveryTimeSlot = dayConfigs[0].delivery_time_slot ?? oldSub.delivery_time_slot;
 
-        const { error: rpcError } = await adminSupabase.rpc('create_subscription_delivery', {
+        const { data: rpcData, error: rpcError } = await adminSupabase.rpc('create_subscription_delivery', {
           p_subscription_id: id,
           p_delivery_date: deliveryDate,
           p_delivery_time_slot: deliveryTimeSlot,
@@ -235,6 +238,14 @@ export async function PATCH(
         if (rpcError) {
           console.error(`Auto-gen failed for ${daySlug} (${deliveryDate}): ${rpcError.message}`);
           // Non-fatal — continue creating other days
+        } else if (customerNote) {
+          const orderId = Array.isArray(rpcData) ? rpcData[0]?.order_id : (rpcData as any)?.order_id;
+          if (orderId) {
+            await adminSupabase
+              .from("orders")
+              .update({ notes: customerNote })
+              .eq("id", orderId);
+          }
         }
       }
     }

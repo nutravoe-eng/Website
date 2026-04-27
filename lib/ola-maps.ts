@@ -449,7 +449,9 @@ async function nominatimPincode(pincode: string): Promise<{ lat: number; lng: nu
 }
 
 async function nominatimSearch(q: string): Promise<GeocodeHit[]> {
-  const query = q.toLowerCase().includes("bengaluru") ? q : `${q}, Bengaluru, India`;
+  const trimmed = q.trim();
+  if (!trimmed) return [];
+  const query = /\bindia\b/i.test(trimmed) ? trimmed : `${trimmed}, India`;
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=in`;
 
   try {
@@ -526,14 +528,13 @@ function coordsFromPrediction(p: unknown): { lat: number; lng: number } | null {
 /**
  * Map search: Ola autocomplete (+ geocode when needed), then forward geocode, else Nominatim.
  */
-export async function geocodeSearchBangalore(q: string, preferredReferrer?: string | null): Promise<GeocodeHit[]> {
-  const query = q.toLowerCase().includes("bengaluru") ? q : `${q} Bengaluru India`;
+export async function geocodeSearchIndia(q: string, preferredReferrer?: string | null): Promise<GeocodeHit[]> {
+  const trimmed = q.trim();
+  if (!trimmed) return [];
+  const query = /\bindia\b/i.test(trimmed) ? trimmed : `${trimmed} India`;
   if (getOlaMapsApiKey()) {
-    const preds = await olaAutocompletePredictions(
-      query,
-      { location: "12.9716,77.5946", radius: 50_000 },
-      preferredReferrer,
-    );
+    // India-wide search (no Bengaluru bias). Serviceability is enforced elsewhere.
+    const preds = await olaAutocompletePredictions(query, undefined, preferredReferrer);
 
     const direct: GeocodeHit[] = [];
     const seen = new Set<string>();
@@ -580,3 +581,6 @@ export async function geocodeSearchBangalore(q: string, preferredReferrer?: stri
   }
   return nominatimSearch(q);
 }
+
+// Backward-compatible export name used by existing imports/routes.
+export const geocodeSearchBangalore = geocodeSearchIndia;
