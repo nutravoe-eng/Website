@@ -10,6 +10,7 @@ import {
   preferActiveSubscription,
 } from "@/lib/flexible-subscription";
 import { resolveRequestedDelivery } from "@/lib/order-delivery";
+import { BENGALURU_NOT_SERVICEABLE_MESSAGE, isBengaluruServiceableAddress } from "@/lib/serviceability";
 
 export async function POST(req: NextRequest) {
   const limited = await enforceRateLimit(req, "whatsapp-order-create", 10, 60);
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
 
   const { data: address, error: addressError } = await adminSupabase
     .from("addresses")
-    .select("id, pincode, lat, lng, distance_km")
+    .select("id, pincode, city, state, lat, lng, distance_km")
     .eq("user_id", user.id)
     .order("is_default", { ascending: false })
     .limit(1)
@@ -65,6 +66,9 @@ export async function POST(req: NextRequest) {
 
   if (addressError || !address) {
     return NextResponse.json({ error: "A delivery address is required before ordering" }, { status: 400, headers: limited.headers });
+  }
+  if (!isBengaluruServiceableAddress(address)) {
+    return NextResponse.json({ error: BENGALURU_NOT_SERVICEABLE_MESSAGE }, { status: 422, headers: limited.headers });
   }
 
   const { data: subRows } = await adminSupabase

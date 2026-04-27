@@ -12,6 +12,7 @@ import { HUBS } from "@/lib/delivery";
 import { createClient } from "@/lib/supabase/client";
 import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
 import { isPaidFlexibleWalletEligible } from "@/lib/flexible-subscription";
+import { BENGALURU_NOT_SERVICEABLE_MESSAGE, isBengaluruServiceableAddress } from "@/lib/serviceability";
 import DeliveryMarquee from "@/components/DeliveryMarquee";
 import { GUEST_DELIVERY_CONTEXT_EVENT, readGuestDeliveryContext } from "@/lib/guest-delivery";
 import { getSubscriberBaseFromPlanConfig } from "@/lib/subscription-pricing";
@@ -99,6 +100,7 @@ export default function CartPage() {
   const [savedAddresses, setSavedAddresses] = useState<DeliveryAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [savingAddressId, setSavingAddressId] = useState<string | null>(null);
+  const [addressServiceabilityError, setAddressServiceabilityError] = useState<string>("");
 
   const formatAddressSingleLine = (address: DeliveryAddress | null) => {
     if (!address) return "No delivery address selected";
@@ -112,6 +114,7 @@ export default function CartPage() {
     savedAddresses.find((addr) => addr.is_default) ??
     savedAddresses[0] ??
     null;
+  const isSelectedAddressServiceable = selectedAddress ? isBengaluruServiceableAddress(selectedAddress) : false;
 
   const syncAddressCache = (addresses: DeliveryAddress[]) => {
     const legacy = addresses.map((a) => ({
@@ -207,7 +210,18 @@ export default function CartPage() {
         setSavedAddresses(normalized);
         const row = normalized.find((a) => a.is_default) ?? normalized[0];
         if (row?.id) setSelectedAddressId(row.id);
-        if (row?.pincode) addrPick = { pincode: row.pincode, lat: row.lat, lng: row.lng };
+        if (row?.pincode) {
+          if (!isBengaluruServiceableAddress(row)) {
+            setAddressServiceabilityError(BENGALURU_NOT_SERVICEABLE_MESSAGE);
+            setDeliveryBreakdown(null);
+            setDeliveryDistanceKm(null);
+            setDeliveryFee(0);
+            setDeliveryFeeLoading(false);
+            return;
+          }
+          setAddressServiceabilityError("");
+          addrPick = { pincode: row.pincode, lat: row.lat, lng: row.lng };
+        }
       }
       if (!addrPick) {
         const cached = localStorage.getItem("nutravoe_addresses");
@@ -326,6 +340,7 @@ export default function CartPage() {
     if (deliveryMode === "asap" && !asapSlot) { setError("Delivery in 60 min is not available right now."); return; }
     if (!user) { router.push("/signin?next=/cart"); return; }
     if (!selectedAddress) { setError("Please select a delivery address before placing an order."); return; }
+    if (!isSelectedAddressServiceable) { setError(BENGALURU_NOT_SERVICEABLE_MESSAGE); return; }
 
     setSubmitting(true);
     setError("");
@@ -386,6 +401,10 @@ export default function CartPage() {
     }
     if (!selectedAddress) {
       setError("Please select a delivery address before placing an order.");
+      return;
+    }
+    if (!isSelectedAddressServiceable) {
+      setError(BENGALURU_NOT_SERVICEABLE_MESSAGE);
       return;
     }
 
@@ -571,6 +590,11 @@ export default function CartPage() {
                     </div>
                   </div>
                 )}
+                {addressServiceabilityError && (
+                  <div className="mb-6 rounded-lg border border-terracotta/20 bg-terracotta/5 px-4 py-3">
+                    <p className="font-body text-[12px] font-medium text-terracotta">{addressServiceabilityError}</p>
+                  </div>
+                )}
 
                 <div className="border-t border-black/5 pt-6 mb-6 space-y-2">
                   {subscriberDiscount > 0 && (
@@ -735,7 +759,7 @@ export default function CartPage() {
                   <div className="mb-3">
                     <button
                       onClick={handlePayFromWallet}
-                      disabled={submitting || !canPayFromWallet || hasOutOfStockItems}
+                      disabled={submitting || !canPayFromWallet || hasOutOfStockItems || !isSelectedAddressServiceable}
                       className="w-full bg-sage hover:bg-sage-dark disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>
@@ -751,7 +775,7 @@ export default function CartPage() {
 
                 <button
                   onClick={handlePlaceOrder}
-                  disabled={submitting || hasOutOfStockItems}
+                  disabled={submitting || hasOutOfStockItems || !isSelectedAddressServiceable}
                   className={`hidden sm:block w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 hover:bg-black/30 text-ink" : "bg-terracotta hover:bg-[#D55F43]"}`}
                 >
                   {canPayFromWallet ? "Place order instead" : "Place order"}
@@ -793,7 +817,7 @@ export default function CartPage() {
             </div>
             <button
               onClick={handlePlaceOrder}
-              disabled={submitting || hasOutOfStockItems}
+              disabled={submitting || hasOutOfStockItems || !isSelectedAddressServiceable}
               className={`w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 text-ink" : "bg-terracotta"}`}
             >
               {canPayFromWallet ? "Place order instead" : "Place order"}
