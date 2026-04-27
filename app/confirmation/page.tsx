@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { getWhatsAppHref } from "@/lib/contact";
 
 export const metadata = {
   title: "Order Received — Nutravoe",
-  description: "Your Nutravoe order has been received. We'll confirm via WhatsApp shortly.",
+  description: "Your Nutravoe order request has been received. We'll confirm it shortly.",
 };
 
 export default function ConfirmationPage({
@@ -29,7 +28,7 @@ export default function ConfirmationPage({
           {isWallet ? (
             <>Your bowl is<br /><em className="text-sage">on its way.</em></>
           ) : (
-            <>Almost<br /><em className="text-sage">there!</em></>
+            <>Request<br /><em className="text-sage">received.</em></>
           )}
         </h1>
 
@@ -40,9 +39,7 @@ export default function ConfirmationPage({
           </p>
         ) : (
           <p className="font-body text-[15px] font-light text-stone leading-loose mb-10 max-w-sm mx-auto">
-            Your bowl is one tap away. A WhatsApp message has been drafted for you — just
-            hit Send to confirm. Once we get it, we&apos;ll prepare your bowl fresh and
-            deliver it the same day.
+            Your order request has been placed successfully. Our team will reach out to confirm payment and then process your order.
           </p>
         )}
 
@@ -50,24 +47,13 @@ export default function ConfirmationPage({
           <Link href="/menu" className="btn-primary text-xs tracking-widest">
             Order Again
           </Link>
-          {isWallet ? (
-            <Link href="/orders" className="btn-ghost text-xs tracking-widest">
-              View Orders
-            </Link>
-          ) : (
-            <a
-              href={getWhatsAppHref()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-ghost text-xs tracking-widest"
-            >
-              Chat with Us
-            </a>
-          )}
+          <Link href="/orders" className="btn-ghost text-xs tracking-widest">
+            View Orders
+          </Link>
         </div>
 
         <p className="font-body text-xs text-stone mt-10 tracking-wide">
-          Questions? WhatsApp us at +91 78998 58374 or email nutravoe@gmail.com
+          Questions? Reach us at +91 78998 58374 or nutravoe@gmail.com
         </p>
       </div>
     </section>

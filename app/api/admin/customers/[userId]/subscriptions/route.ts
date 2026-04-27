@@ -37,6 +37,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
 
   if (!targetUser) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
+  // Ensure this customer id is a real auth account id (same id must exist in auth.users).
+  const { data: authUserResult, error: authUserError } = await adminSupabase.auth.admin.getUserById(userId);
+  if (authUserError || !authUserResult?.user) {
+    return NextResponse.json(
+      { error: 'Selected customer account is not linked to a login account. Please use a valid customer profile.' },
+      { status: 409 },
+    );
+  }
+
   const body = await req.json().catch(() => null);
   const planId = typeof body?.planId === 'string' ? body.planId : '';
   const deliveryStyle = typeof body?.deliveryStyle === 'string' ? body.deliveryStyle : '';
@@ -135,6 +144,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
     bowlId: bowlIdentifierToSlug.get(c.bowlId) ?? c.bowlId,
   }));
 
+  const unresolvedBowl = normalizedDayConfigs.find((c) => !bowlIdentifierToSlug.has(c.bowlId));
+  if (unresolvedBowl) {
+    return NextResponse.json(
+      { error: `Invalid bowl selection: "${unresolvedBowl.bowlId}". Please reselect bowls and try again.` },
+      { status: 400 },
+    );
+  }
+
   let quote;
   try {
     quote = await buildSubscriptionQuote(planId, address, normalizedDayConfigs, {
@@ -197,7 +214,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
         day_of_week: DAY_NAME_TO_ENUM[config.day],
         bowl_slug: canonicalSlug,
         quantity: Math.max(1, Math.trunc(config.quantity)),
-        delivery_time_slot: config.deliveryTimeSlot ?? null,
+        // Persist per-day slot when provided, else inherit global slot.
+        delivery_time_slot: (config.deliveryTimeSlot ?? deliveryTimeSlot) || null,
         customizations: customsRaw ?? [],
         customization_cost_rs: extraCost,
       };
@@ -208,8 +226,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
       .insert(configRows);
 
     if (configError) {
-      await adminSupabase.from('subscriptions').delete().eq('id', subscription.id);
-      return NextResponse.json({ error: configError.message }, { status: 500 });
+      const { error: cleanupDeleteError } = await adminSupabase
+        .from('subscriptions')
+        .delete()
+        .eq('id', subscription.id);
+
+      if (cleanupDeleteError) {
+        // Last-resort safeguard: never leave this row appearing as actionable pending.
+        await adminSupabase
+          .from('subscriptions')
+          .update({
+            status: 'cancelled',
+            payment_status: 'failed',
+            admin_notes: `Auto-cancelled after config save failure: ${configError.message}`,
+          })
+          .eq('id', subscription.id);
+      }
+
+      return NextResponse.json(
+        { error: `Failed to save subscription day configuration: ${configError.message}` },
+        { status: 500 },
+      );
     }
   }
 

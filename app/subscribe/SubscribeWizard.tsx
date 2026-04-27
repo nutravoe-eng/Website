@@ -14,7 +14,7 @@ import type {
   IngredientCustomization,
   SubscriptionPlan,
 } from "@/types";
-import { buildSubscriptionWhatsAppMessage, formatCurrency, getWhatsAppUrl } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import PlanCard, { STUB_PLANS } from "./PlanCard";
 import type { PlanConfig } from "./PlanCard";
 import BowlPicker from "./BowlPicker";
@@ -61,7 +61,6 @@ const DEFAULT_PRESET_OPTIONS: BowlPresetOptions = {
 
 interface Props {
   bowls: Bowl[];
-  whatsappNumber: string;
   plans?: SubscriptionPlan[];
 }
 
@@ -122,7 +121,7 @@ function encodePresetIntoCustomizations(
   return [...filtered, ...presetEntries];
 }
 
-export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPlans }: Props) {
+export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
   const [state, setState] = useState<WizardState>(INITIAL_WIZARD_STATE);
   const step2TopRef = useRef<HTMLDivElement | null>(null);
   const spreadDaysRef = useRef<HTMLDivElement | null>(null);
@@ -166,9 +165,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [notes, setNotes] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [pendingApproval, setPendingApproval] = useState(false);
-  const [flexibleWhatsAppUrl, setFlexibleWhatsAppUrl] = useState<string | null>(null);
+  const [requestSubmitted, setRequestSubmitted] = useState(false);
   const [hasActiveSub, setHasActiveSub] = useState(false);
   const [activeSubEndDate, setActiveSubEndDate] = useState<string | null>(null);
   const [isRenewalFlow, setIsRenewalFlow] = useState(false);
@@ -214,13 +211,17 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
         email: authUser.email ?? '',
       });
 
-      // Check for active or pending subscription
-      const { data: activeSub } = await supabase
+      // Check for active or pending subscription.
+      // Use a list query instead of maybeSingle to avoid singular-read edge cases.
+      const { data: activeSubs } = await supabase
         .from('subscriptions')
         .select('id, status, period_end_date')
         .eq('user_id', authUser.id)
         .in('status', ['active', 'pending'])
-        .maybeSingle();
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      const activeSub = (activeSubs ?? [])[0] ?? null;
 
       if (activeSub) {
         if (activeSub.status === 'pending') {
@@ -492,50 +493,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     return lines.length > 0 ? ` (${lines.join(" | ")})` : "";
   };
 
-  const buildSubscriptionConfigLines = (currentPlanName: string): string[] => {
-    const scenario = getScenario();
-    if (scenario === "D") {
-      return [
-        `- Flexible wallet plan: ${currentPlanName}`,
-        `- Funds are loaded only after payment approval and expire in ${currentPlan?.billingCycle === 'monthly' ? '1 month' : '7 days'}.`,
-        "- Bowls are scheduled later from dashboard.",
-      ];
-    }
-    if (scenario === "A") {
-      return DAYS.filter(d => state.selectedDays.includes(d)).flatMap(day => {
-        const dayCounts = state.dayBowlCounts[day] ?? {};
-        const lines = Object.entries(dayCounts)
-          .filter(([, qty]) => qty > 0)
-          .flatMap(([bowlId, qty]) => {
-            const bowl = findBowlByIdentifier(bowls, bowlId);
-            const instances = state.dayBowlCustomMap[day]?.[bowlId] ?? [];
-            const presetInstances = state.dayBowlPresetMap[day]?.[bowlId] ?? [];
-            const slot = state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot;
-            const s = slot ? ` [${slot}]` : "";
-            // If all instances share the same customizations, collapse into one line
-            const allSame = instances.length <= 1 || instances.every((inst, i) =>
-              i === 0 || JSON.stringify(inst) === JSON.stringify(instances[0])
-            );
-            const allPresetSame = presetInstances.length <= 1 || presetInstances.every((inst, i) =>
-              i === 0 || JSON.stringify(inst) === JSON.stringify(presetInstances[0])
-            );
-            if (qty === 1 || (allSame && allPresetSame)) {
-              const c = describeCustomizations(instances[0] ?? [], bowl, presetInstances[0] ?? DEFAULT_PRESET_OPTIONS);
-              return [`- ${day}: ${qty} x ${bowl?.name ?? bowlId}${c}${s}`];
-            }
-            // Different customizations per instance — list each bowl separately
-            return instances.map((inst, i) => {
-              const c = describeCustomizations(inst, bowl, presetInstances[i] ?? DEFAULT_PRESET_OPTIONS);
-              return `- ${day}: 1 x ${bowl?.name ?? bowlId} [Bowl ${i + 1}]${c}${s}`;
-            });
-          });
-        return lines.length > 0 ? lines : [`- ${day}: no bowls assigned`];
-      });
-    }
-    return [];
-  };
-
-  // ─── Order request via WhatsApp ──────────────────────────────────────────────
+  // ─── Save subscription request ───────────────────────────────────────────────
 
   async function handlePayment() {
     if (!user || !currentPlan) return;
@@ -543,34 +501,12 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     setError('');
 
     try {
-      const subRef = await saveSubscription();
-      if (!subRef) {
+      const saved = await saveSubscription();
+      if (!saved) {
         return; // saveSubscription already set the specific error
       }
-      const message = buildSubscriptionWhatsAppMessage({
-        customerName: user.name,
-        customerPhone: user.phone,
-        customerEmail: user.email,
-        planName: currentPlan.name,
-        weeklyPrice: totalWeeklyPrice,
-        weeklyDeliveryFeeRs: weeklyDeliveryFeeRs > 0 ? weeklyDeliveryFeeRs : undefined,
-        deliveryAddress,
-        lat: deliveryLat,
-        lng: deliveryLng,
-        deliveryStyle:
-          getScenario() === "D"
-            ? "Flexible wallet"
-            : (state.deliveryStyle ?? "spread"),
-        deliveryTimeSlot: getScenario() !== "D" ? state.deliveryTimeSlot : undefined,
-        configurationLines: buildSubscriptionConfigLines(currentPlan.name),
-        subscriptionRef: subRef,
-        notes: notes.trim() || undefined,
-      });
-      const waUrl = getWhatsAppUrl(whatsappNumber, message);
       try { sessionStorage.removeItem(WIZARD_SESSION_KEY); } catch { /* ignore */ }
-      // Store the URL and let the user click it directly for all plans
-      // (window.open after async/await is blocked by pop-up blockers)
-      setFlexibleWhatsAppUrl(waUrl);
+      setRequestSubmitted(true);
     } catch {
       setError('Something went wrong while creating your subscription. Please try again.');
     } finally {
@@ -578,8 +514,8 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     }
   }
 
-  async function saveSubscription(): Promise<string | null> {
-    if (!currentPlan || !user) return null;
+  async function saveSubscription(): Promise<boolean> {
+    if (!currentPlan || !user) return false;
     const scenario = getScenario();
 
     // Build day_configs for spread/daily scenarios
@@ -637,17 +573,16 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     if (!res.ok) {
       const payload = await res.json().catch(() => null);
       setError(typeof payload?.error === 'string' ? payload.error : 'Failed to save subscription. Please contact support.');
-      return null;
+      return false;
     }
 
     const newSub = await res.json() as { id?: string };
     if (!newSub.id) {
       setError('Failed to save subscription. Please contact support.');
-      return null;
+      return false;
     }
 
-    // Return short ref for WhatsApp message (caller sets success/pending state)
-    return newSub.id.slice(-6).toUpperCase();
+    return true;
   }
 
   // ─── Customization Pricing ───────────────────────────────────────────────────
@@ -695,7 +630,7 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
 
   // ─── Active subscription blocker ──────────────────────────────────────────────
 
-  if (hasActiveSub && !success && !pendingApproval) {
+  if (hasActiveSub && !requestSubmitted) {
     return (
       <div className="max-w-lg mx-auto">
         <div className="bg-white rounded-2xl border border-black/8 p-10 text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
@@ -720,38 +655,21 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
     );
   }
 
-  // ─── Pending approval screen ─────────────────────────────────────────────────
-  // Shown after user clicks "Send on WhatsApp" on the send screen below.
-  // pendingApproval is checked first so it takes priority over the send screen.
-
-  if (pendingApproval && currentPlan) {
-    const waUrl = flexibleWhatsAppUrl;
+  if (requestSubmitted && currentPlan) {
     return (
       <div className="max-w-lg mx-auto">
         <div className="bg-white rounded-2xl border border-black/10 p-10 text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] animate-in zoom-in-95 duration-400">
           <div className="w-16 h-16 rounded-full bg-terracotta/10 flex items-center justify-center mx-auto mb-6">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C4714A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 2L11 13"/><path d="m22 2-7 20-4-9-9-4Z"/>
+              <path d="M20 6 9 17l-5-5" />
             </svg>
           </div>
           <h2 className="font-display text-3xl font-medium text-ink mb-3">Request Sent!</h2>
           <p className="font-body text-[14px] text-stone leading-relaxed mb-6">
-            Your <strong className="text-ink">{currentPlan.name}</strong> request is waiting for activation. Please send the WhatsApp message to our team to confirm your subscription.
+            Your <strong className="text-ink">{currentPlan.name}</strong> subscription request has been received. Our team will review it and confirm once payment is completed.
           </p>
-          
-          <div className="space-y-4">
-            {waUrl && (
-              <button
-                onClick={() => window.open(waUrl, "_blank")}
-                className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                </svg>
-                Send Request on WhatsApp
-              </button>
-            )}
 
+          <div className="space-y-4">
             <Link
               href="/subscriptions"
               className="block w-full text-stone hover:text-ink font-body text-[13px] font-medium py-2 transition-colors border border-black/5 rounded-md hover:bg-black/5"
@@ -759,49 +677,9 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
               Go to My Subscriptions →
             </Link>
           </div>
-          
           <p className="font-body text-[12px] text-stone mt-6 italic">
-            Once approved, your plan will appear as "Active" in your dashboard.
+            You can track this request as pending in your dashboard.
           </p>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── WhatsApp send screen (all plans) ────────────────────────────────────────
-  // Shown after subscription is saved. User must click the link directly —
-  // window.open after async/await is blocked by browsers as a pop-up.
-
-  if (flexibleWhatsAppUrl && currentPlan) {
-    return (
-      <div className="max-w-lg mx-auto">
-        <div className="bg-white rounded-2xl border border-black/10 p-10 text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] animate-in zoom-in-95 duration-400">
-          <div className="w-16 h-16 rounded-full bg-[#25D366]/10 flex items-center justify-center mx-auto mb-6">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="#25D366">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-              <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.533 5.849L.057 23.886a.5.5 0 0 0 .611.61l6.101-1.456A11.932 11.932 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.793 9.793 0 0 1-4.98-1.364l-.357-.212-3.698.883.934-3.613-.232-.371A9.793 9.793 0 0 1 2.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
-            </svg>
-          </div>
-          <h2 className="font-display text-3xl font-medium text-ink mb-3">Almost there!</h2>
-          <p className="font-body text-[14px] text-stone leading-relaxed mb-2">
-            Your <strong className="text-ink">{currentPlan.name}</strong> subscription is ready. Tap below to send your request on WhatsApp — we&apos;ll activate your plan once confirmed.
-          </p>
-          <p className="font-body text-[13px] text-stone mb-8">
-            Your subscription details will be pre-filled in the message.
-          </p>
-          <a
-            href={flexibleWhatsAppUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => { try { sessionStorage.removeItem(WIZARD_SESSION_KEY); } catch { /* ignore */ } setTimeout(() => setPendingApproval(true), 500); }}
-            className="bg-[#25D366] hover:bg-[#1ebe5d] text-white font-body text-sm font-bold tracking-wide px-8 py-3.5 rounded-md transition-colors shadow-sm inline-flex items-center gap-2"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-              <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.533 5.849L.057 23.886a.5.5 0 0 0 .611.61l6.101-1.456A11.932 11.932 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.793 9.793 0 0 1-4.98-1.364l-.357-.212-3.698.883.934-3.613-.232-.371A9.793 9.793 0 0 1 2.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
-            </svg>
-            Send on WhatsApp
-          </a>
         </div>
       </div>
     );
@@ -1584,11 +1462,11 @@ export default function SubscribeWizard({ bowls, whatsappNumber, plans: sanityPl
               className="w-full bg-terracotta hover:bg-[#D55F43] disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm"
             >
               {submitting
-                ? 'Preparing WhatsApp message...'
-                : `Send Subscription Request on WhatsApp`}
+                ? 'Submitting request...'
+                : 'Start subscription'}
             </button>
             <p className="font-body text-[11px] text-stone text-center mt-3">
-              Your full subscription summary will open in WhatsApp for confirmation.
+              Your request will be reviewed by our team and confirmed after payment.
             </p>
           </>
         )}

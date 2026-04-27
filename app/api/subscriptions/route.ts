@@ -171,6 +171,14 @@ export async function POST(req: NextRequest) {
     bowlId: resolveCanonicalBowlSlug(config.bowlId, bowlIdentifierToSlug) ?? config.bowlId,
   }));
 
+  const unresolvedBowl = normalizedDayConfigs.find((config) => !bowlIdentifierToSlug.has(config.bowlId));
+  if (unresolvedBowl) {
+    return NextResponse.json(
+      { error: `Invalid bowl selection: "${unresolvedBowl.bowlId}". Please reselect bowls and try again.` },
+      { status: 400, headers: limited.headers },
+    );
+  }
+
   let quote;
   try {
     quote = await buildSubscriptionQuote(planId, address, normalizedDayConfigs, {
@@ -197,7 +205,6 @@ export async function POST(req: NextRequest) {
           )
         : DELIVERY_FEE_RS;
 
-  const nowIso = new Date().toISOString();
   const { data: subscription, error: subscriptionError } = await adminSupabase
     .from("subscriptions")
     .insert({
@@ -248,7 +255,8 @@ export async function POST(req: NextRequest) {
         day_of_week: normalizedDay,
         bowl_slug: canonicalSlug,
         quantity: Math.max(1, Math.trunc(config.quantity)),
-        delivery_time_slot: config.deliveryTimeSlot ?? null,
+        // Persist per-day slot when provided, else inherit global slot.
+        delivery_time_slot: (config.deliveryTimeSlot ?? deliveryTimeSlot) || null,
         customizations: customsRaw ?? [],
         customization_cost_rs: extraCost,
       };
@@ -259,8 +267,27 @@ export async function POST(req: NextRequest) {
       .insert(configRows);
 
     if (configError) {
-      await adminSupabase.from("subscriptions").delete().eq("id", subscription.id);
-      return NextResponse.json({ error: configError.message }, { status: 500, headers: limited.headers });
+      const { error: cleanupDeleteError } = await adminSupabase
+        .from("subscriptions")
+        .delete()
+        .eq("id", subscription.id);
+
+      if (cleanupDeleteError) {
+        // Last-resort safeguard: never leave this row appearing as actionable pending.
+        await adminSupabase
+          .from("subscriptions")
+          .update({
+            status: "cancelled",
+            payment_status: "failed",
+            admin_notes: `Auto-cancelled after config save failure: ${configError.message}`,
+          })
+          .eq("id", subscription.id);
+      }
+
+      return NextResponse.json(
+        { error: `Failed to save subscription day configuration: ${configError.message}` },
+        { status: 500, headers: limited.headers },
+      );
     }
   }
 

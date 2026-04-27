@@ -11,6 +11,8 @@ import { createClient } from "@/lib/supabase/client";
 import TopupModal from "./TopupModal";
 import { isPaidFlexibleWalletEligible } from "@/lib/flexible-subscription";
 
+const DEBUG_SUBSCRIPTIONS = process.env.NEXT_PUBLIC_SUBS_DEBUG === "1";
+
 const PLAN_LABELS = Object.fromEntries(PLANS.map(p => [p.id, p.name]));
 
 function mapDay(d: string): DayBowlConfig['day'] {
@@ -78,6 +80,9 @@ export default function SubscriptionsClient({ bowls }: Props) {
 
   const fetchSubscriptions = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
+    if (DEBUG_SUBSCRIPTIONS) {
+      console.info("[subscriptions/client] session_user_id", user?.id ?? null);
+    }
     if (!user) {
       setLoaded(true);
       return;
@@ -90,9 +95,17 @@ export default function SubscriptionsClient({ bowls }: Props) {
       .order('created_at', { ascending: false });
 
     if (subError) {
+      if (DEBUG_SUBSCRIPTIONS) {
+        console.info("[subscriptions/client] query_error", subError.message);
+      }
       setError('Failed to load subscriptions. Please refresh the page.');
       setLoaded(true);
       return;
+    }
+
+    if (DEBUG_SUBSCRIPTIONS) {
+      console.info("[subscriptions/client] raw_rows_count", subRows?.length ?? 0);
+      console.info("[subscriptions/client] raw_rows", subRows ?? []);
     }
 
     if (!subRows || subRows.length === 0) {

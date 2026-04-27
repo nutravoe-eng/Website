@@ -20,10 +20,17 @@ export async function GET(req: NextRequest) {
       .from('users')
       .select('id, full_name, email, phone')
       .eq('email', normalised)
-      .maybeSingle();
+      .limit(2);
 
     if (error) return NextResponse.json({ error: 'Lookup failed' }, { status: 500 });
-    return NextResponse.json({ user: data ?? null });
+    if (!data || data.length === 0) return NextResponse.json({ user: null });
+    if (data.length > 1) {
+      return NextResponse.json(
+        { error: 'Multiple customer records found for this email. Resolve duplicates before creating orders/subscriptions.' },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({ user: data[0] });
   }
 
   // phone
@@ -36,8 +43,15 @@ export async function GET(req: NextRequest) {
     .from('users')
     .select('id, full_name, email, phone')
     .eq('phone', digits)
-    .maybeSingle();
+    .limit(2);
 
   if (error) return NextResponse.json({ error: 'Lookup failed' }, { status: 500 });
-  return NextResponse.json({ user: data ?? null });
+  if (!data || data.length === 0) return NextResponse.json({ user: null });
+  if (data.length > 1) {
+    return NextResponse.json(
+      { error: 'Multiple customer records found for this phone number. Resolve duplicates before creating orders/subscriptions.' },
+      { status: 409 },
+    );
+  }
+  return NextResponse.json({ user: data[0] });
 }

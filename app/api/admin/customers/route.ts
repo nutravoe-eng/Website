@@ -49,6 +49,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
   }
 
+  // Prevent duplicate customer identities (same email or phone) from being created.
+  const [{ data: existingByEmail, error: existingByEmailError }, { data: existingByPhone, error: existingByPhoneError }] = await Promise.all([
+    adminSupabase
+      .from('users')
+      .select('id, full_name, email, phone')
+      .eq('email', email)
+      .limit(2),
+    adminSupabase
+      .from('users')
+      .select('id, full_name, email, phone')
+      .eq('phone', phone)
+      .limit(2),
+  ]);
+
+  if (existingByEmailError || existingByPhoneError) {
+    return NextResponse.json({ error: 'Could not validate existing customer accounts' }, { status: 500 });
+  }
+
+  const emailMatches = existingByEmail ?? [];
+  const phoneMatches = existingByPhone ?? [];
+
+  if (emailMatches.length > 1 || phoneMatches.length > 1) {
+    return NextResponse.json(
+      { error: 'Duplicate customer records already exist for this email/phone. Resolve duplicates before creating a new account.' },
+      { status: 409 },
+    );
+  }
+
+  const existingUser = emailMatches[0] ?? phoneMatches[0];
+  if (existingUser) {
+    return NextResponse.json(
+      {
+        error: 'Customer already exists. Use lookup and continue with the existing account.',
+        existingUser: {
+          id: existingUser.id,
+          full_name: existingUser.full_name,
+          email: existingUser.email,
+          phone: existingUser.phone,
+        },
+      },
+      { status: 409 },
+    );
+  }
+
   const tempPassword = generatePassword();
 
   // Create Supabase auth user — the DB trigger handle_new_user() auto-creates public.users row

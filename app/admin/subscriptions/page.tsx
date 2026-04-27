@@ -14,12 +14,16 @@ interface DayConfig {
   customization_cost_rs: number;
 }
 
-function normalizeCustomizations(
-  customizations: unknown,
-): { ingredientId: string; option: "default" | "remove" | "extra" }[] {
+type CustomizationChoice = { ingredientId: string; option: "default" | "remove" | "extra" };
+
+function flattenCustomizationPayload(customizations: unknown): CustomizationChoice[] {
   if (!Array.isArray(customizations)) return [];
-  return customizations.filter(
-    (item): item is { ingredientId: string; option: "default" | "remove" | "extra" } =>
+  const first = customizations[0];
+  const raw = Array.isArray(first)
+    ? (customizations as unknown[]).flatMap((entry) => (Array.isArray(entry) ? entry : []))
+    : customizations;
+  return raw.filter(
+    (item): item is CustomizationChoice =>
       Boolean(item) &&
       typeof item === "object" &&
       typeof (item as { ingredientId?: unknown }).ingredientId === "string" &&
@@ -27,11 +31,25 @@ function normalizeCustomizations(
   );
 }
 
+function normalizeCustomizations(
+  customizations: unknown,
+): CustomizationChoice[] {
+  return flattenCustomizationPayload(customizations);
+}
+
 function readPresetChoices(customizations: { ingredientId: string; option: "default" | "remove" | "extra" }[]) {
   const baseChoice = customizations.some(c => c.ingredientId === "__preset_base_milk") ? "milk" : "yogurt";
   const oatsChoice = customizations.some(c => c.ingredientId === "__preset_oats_roasted") ? "roasted" : "soaked";
   const noSugar = customizations.some(c => c.ingredientId === "__preset_no_sugar");
   return { baseChoice, oatsChoice, noSugar };
+}
+
+function formatIngredientLabel(rawId: string): string {
+  return rawId
+    .replace(/^ingredient[-_]/i, "")
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 interface AdminSubscription {
@@ -510,28 +528,44 @@ export default function AdminSubscriptionsPage() {
                       <span className="font-semibold text-ink">{dc.day_of_week} — {dc.bowl_slug} ×{dc.quantity}</span>
                       {dc.customizations && (() => {
                         const choices = readPresetChoices(dc.customizations);
+                        const removedIngredients = dc.customizations
+                          .filter(c =>
+                            c.option === 'remove' &&
+                            typeof c.ingredientId === 'string' &&
+                            !c.ingredientId.startsWith("__preset_")
+                          )
+                          .map(c => formatIngredientLabel(c.ingredientId));
+                        const addedIngredients = dc.customizations
+                          .filter(c =>
+                            c.option === 'extra' &&
+                            typeof c.ingredientId === 'string' &&
+                            !c.ingredientId.startsWith("__preset_")
+                          )
+                          .map(c => formatIngredientLabel(c.ingredientId));
                         return (
-                          <span className="text-[10px] text-stone/80 font-medium">
-                            base: {choices.baseChoice} · oats: {choices.oatsChoice}{choices.noSugar ? " · no sugar" : ""}
-                          </span>
+                          <>
+                            <span className="text-[10px] text-stone/80 font-medium">
+                              Base: {choices.baseChoice === "milk" ? "Milk" : "Yogurt"}
+                            </span>
+                            <span className="text-[10px] text-stone/80 font-medium">
+                              Oats: {choices.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                            </span>
+                            <span className={`text-[10px] font-medium ${choices.noSugar ? "text-terracotta/80" : "text-stone/80"}`}>
+                              {choices.noSugar ? "No sugar" : "Regular sugar"}
+                            </span>
+                            {removedIngredients.length > 0 && (
+                              <span className="text-[10px] text-terracotta/80 font-medium">
+                                Removed: {removedIngredients.join(', ')}
+                              </span>
+                            )}
+                            {addedIngredients.length > 0 && (
+                              <span className="text-[10px] text-sage-dark font-medium">
+                                Added: {addedIngredients.join(', ')}
+                              </span>
+                            )}
+                          </>
                         );
                       })()}
-                      {dc.customizations && dc.customizations.some(c =>
-                        c.option !== 'default' &&
-                        typeof c.ingredientId === 'string' &&
-                        !c.ingredientId.startsWith("__preset_")
-                      ) && (
-                        <span className="text-[10px] text-terracotta/80 font-medium">
-                          {dc.customizations
-                            .filter(c =>
-                              c.option !== 'default' &&
-                              typeof c.ingredientId === 'string' &&
-                              !c.ingredientId.startsWith("__preset_")
-                            )
-                            .map(c => `${c.option === 'remove' ? '-' : '+'}${c.ingredientId}`)
-                            .join(', ')}
-                        </span>
-                      )}
                       {dc.delivery_time_slot && (
                         <span className="text-stone/70 text-[10px]">{dc.delivery_time_slot}</span>
                       )}

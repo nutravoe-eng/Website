@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartContext";
-import { buildCartOrderWhatsAppMessage, formatCurrency, getWhatsAppUrl } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { getActivePlanConfig } from "@/lib/subscription";
 import { getWallet } from "@/lib/wallet";
 import { resolveDeliveryCoords } from "@/lib/geocodeCache";
@@ -11,7 +11,6 @@ import type { DeliveryPriceBreakdown } from "@/lib/delivery";
 import { HUBS } from "@/lib/delivery";
 import { createClient } from "@/lib/supabase/client";
 import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
-import { getWhatsAppNumber } from "@/lib/contact";
 import { isPaidFlexibleWalletEligible } from "@/lib/flexible-subscription";
 import DeliveryMarquee from "@/components/DeliveryMarquee";
 import { GUEST_DELIVERY_CONTEXT_EVENT, readGuestDeliveryContext } from "@/lib/guest-delivery";
@@ -180,11 +179,11 @@ export default function CartPage() {
           .eq("user_id", authUser.id)
           .eq("style", "flexible")
           .eq("payment_status", "paid");
-        const eligible = (flexRows ?? []).some((r) =>
+        const eligible = (flexRows ?? []).some((r: { style: string | null; status: string | null; payment_status: string | null; period_end_date: string | null }) =>
           isPaidFlexibleWalletEligible({
-            style: r.style,
-            status: r.status,
-            payment_status: r.payment_status,
+            style: r.style ?? "",
+            status: r.status ?? "",
+            payment_status: r.payment_status ?? "",
             period_end_date: r.period_end_date,
           }),
         );
@@ -297,10 +296,7 @@ export default function CartPage() {
     const parsed = parseSlotKey(selectedSlot);
     return parsed ? formatCalendarSlotLabel(parsed.dateIso, parsed.startHour) : selectedSlot;
   })();
-  const activeDeliverySlot = deliveryMode === "asap" ? (asapSlot?.label ?? "") : selectedSlotLabel;
-
-  // Record order in Supabase — returns short order ref on success
-  const recordOrder = async (): Promise<string | null> => {
+  const recordOrder = async (): Promise<boolean> => {
     const res = await fetch("/api/orders/whatsapp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -317,10 +313,7 @@ export default function CartPage() {
       }),
     });
 
-    if (!res.ok) return null;
-
-    const order = await res.json() as { id?: string };
-    return order.id ? order.id.slice(-6).toUpperCase() : null;
+    return res.ok;
   };
 
   async function handlePayFromWallet() {
@@ -396,147 +389,19 @@ export default function CartPage() {
       return;
     }
 
-    // Open immediately in click handler context to avoid popup blockers
-    // after async order-preparation work completes.
-    const whatsappWindow = window.open("", "_blank");
-    if (!whatsappWindow) {
-      setError("Please allow popups for Nutravoe to open WhatsApp, then resend from your Orders page.");
-      return;
-    }
-    whatsappWindow.document.write(`<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Preparing WhatsApp</title>
-    <style>
-      :root { color-scheme: light; }
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        background: #f8f4ee;
-        color: #262626;
-      }
-      .card {
-        text-align: center;
-        padding: 24px 20px;
-      }
-      .dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 999px;
-        margin: 0 auto 14px;
-        background: #c86f4f;
-        animation: pulse 1.2s ease-in-out infinite;
-      }
-      p {
-        margin: 0;
-        font-size: 14px;
-        opacity: 0.85;
-      }
-      @keyframes pulse {
-        0%, 100% { transform: scale(1); opacity: 0.6; }
-        50% { transform: scale(1.35); opacity: 1; }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <div class="dot"></div>
-      <p>Preparing your WhatsApp order message...</p>
-    </div>
-  </body>
-</html>`);
-    whatsappWindow.document.close();
     setSubmitting(true);
     setError("");
 
     try {
-      const supabase = createClient();
-      let deliveryAddress = "";
-      let deliveryLat: number | undefined;
-      let deliveryLng: number | undefined;
-      if (selectedAddress) {
-        deliveryAddress = formatAddressSingleLine(selectedAddress);
-        deliveryLat = typeof selectedAddress.lat === "number" ? selectedAddress.lat : undefined;
-        deliveryLng = typeof selectedAddress.lng === "number" ? selectedAddress.lng : undefined;
-      } else {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser) {
-          const { data: addrs } = await supabase
-            .from("addresses")
-            .select("line1, line2, city, pincode, is_default, lat, lng")
-            .eq("user_id", authUser.id)
-            .order("is_default", { ascending: false })
-            .limit(1);
-          const a = addrs?.[0];
-          if (a) {
-            deliveryAddress = [a.line1, a.line2, `${a.city}, ${a.pincode}`].filter(Boolean).join(", ");
-            deliveryLat = typeof a.lat === "number" ? a.lat : undefined;
-            deliveryLng = typeof a.lng === "number" ? a.lng : undefined;
-          }
-        }
+      const ok = await recordOrder();
+      if (!ok) {
+        setError("Failed to place order. Please try again.");
+        return;
       }
-
-      const detailedItems = items.map((item) => {
-        const removedIngredients = item.customizations
-          .filter(c => c.option === "remove")
-          .map(c => item.bowl.customizableIngredients?.find(i => i.id === c.ingredientId)?.name)
-          .filter(Boolean) as string[];
-        const extraIngredients = item.customizations
-          .filter(c => c.option === "extra")
-          .map(c => item.bowl.customizableIngredients?.find(i => i.id === c.ingredientId)?.name)
-          .filter(Boolean) as string[];
-        return {
-          bowlName: item.bowl.name,
-          quantity: item.quantity,
-          basePrice: subPlanConfig
-            ? getSubscriberBaseFromPlanConfig(item.bowl, subPlanConfig)
-            : item.bowl.price,
-          customizationCost: item.customizationCost,
-          baseChoice: item.presetOptions.baseChoice,
-          oatsChoice: item.presetOptions.oatsChoice,
-          noSugar: item.presetOptions.noSugar,
-          removedIngredients,
-          extraIngredients,
-        };
-      });
-
-      const orderRef = await recordOrder();
-
-      const message = buildCartOrderWhatsAppMessage({
-        customerName: user.name,
-        customerPhone: user.phone,
-        customerEmail: user.email,
-        deliveryAddress,
-        lat: deliveryLat,
-        lng: deliveryLng,
-        deliverySlot: activeDeliverySlot,
-        items: detailedItems,
-        subtotal: total,
-        subscriberDiscount,
-        deliveryFee,
-        deliveryBreakdown: deliveryBreakdown && !deliveryBreakdown.isFree
-          ? { totalCostRs: deliveryBreakdown.totalCostRs, nutravoeCoverageRs: deliveryBreakdown.nutravoeCoverageRs }
-          : null,
-        grandTotal,
-        orderRef: orderRef ?? undefined,
-        notes: notes.trim() || undefined,
-      });
-
-      const whatsappNumber = getWhatsAppNumber();
-      const whatsappUrl = getWhatsAppUrl(whatsappNumber, message);
       clearCart();
-      whatsappWindow.location.href = whatsappUrl;
-      window.location.href = "/confirmation?payment_id=whatsapp";
+      window.location.href = "/confirmation";
     } catch {
-      if (whatsappWindow && !whatsappWindow.closed) {
-        whatsappWindow.close();
-      }
-      setError("Something went wrong while preparing your WhatsApp order.");
+      setError("Something went wrong while placing your order.");
     } finally {
       setSubmitting(false);
     }
@@ -889,11 +754,11 @@ export default function CartPage() {
                   disabled={submitting || hasOutOfStockItems}
                   className={`hidden sm:block w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 hover:bg-black/30 text-ink" : "bg-terracotta hover:bg-[#D55F43]"}`}
                 >
-                  {canPayFromWallet ? "Order via WhatsApp instead" : "Place an order"}
+                  {canPayFromWallet ? "Place order instead" : "Place order"}
                 </button>
 
                 <p className="font-body text-[11px] text-stone text-center mt-4">
-                  {user ? (canPayFromWallet ? "" : "Your full order details will open in WhatsApp for confirmation.") : "You will be asked to sign in to your Nutravoe account to continue."}
+                  {user ? (canPayFromWallet ? "" : "Your order request will be sent directly to our team for confirmation.") : "You will be asked to sign in to your Nutravoe account to continue."}
                 </p>
               </div>
             )}
@@ -931,7 +796,7 @@ export default function CartPage() {
               disabled={submitting || hasOutOfStockItems}
               className={`w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 text-ink" : "bg-terracotta"}`}
             >
-              {canPayFromWallet ? "Order via WhatsApp instead" : "Place an order"}
+              {canPayFromWallet ? "Place order instead" : "Place order"}
             </button>
           </div>
         </div>

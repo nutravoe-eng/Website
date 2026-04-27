@@ -29,6 +29,8 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [searching, setSearching] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
@@ -186,10 +188,69 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
     }
   }, []);
 
+  const handleLocateMe = useCallback(() => {
+    setLocationError(null);
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocationError("Location is not supported on this device/browser.");
+      return;
+    }
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        const pos: [number, number] = [lng, lat];
+
+        initialCenterRef.current = pos;
+        setShowSuggestions(false);
+        setSuggestions([]);
+
+        try {
+          mapRef.current?.setCenter?.(pos);
+          markerRef.current?.setLngLat?.(pos);
+        } catch {
+          // Ignore map move errors; coordinates are still saved via onChange.
+        }
+
+        onChangeRef.current(lat, lng);
+        setLocating(false);
+      },
+      (err) => {
+        let message = "Could not fetch your location. Try search or move the pin manually.";
+        if (err.code === err.PERMISSION_DENIED) message = "Location permission denied. Use search or move the pin manually.";
+        if (err.code === err.TIMEOUT) message = "Location lookup timed out. Please try again.";
+        setLocationError(message);
+        setLocating(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 30000,
+      },
+    );
+  }, []);
+
   return (
     <div className="flex flex-col gap-2">
       <div className="relative">
-        <div className="relative flex items-center">
+        <div className="relative flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleLocateMe}
+            disabled={locating}
+            className="h-[38px] w-[38px] shrink-0 rounded-md border border-black/15 bg-white text-stone hover:text-ink hover:border-sage transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            aria-label="Locate me"
+            title="Locate me"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v3" />
+              <path d="M12 19v3" />
+              <path d="M2 12h3" />
+              <path d="M19 12h3" />
+            </svg>
+          </button>
           <svg
             width="15"
             height="15"
@@ -234,6 +295,11 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
             </button>
           )}
         </div>
+        {locationError && (
+          <p className="font-body text-[11px] text-terracotta mt-1">
+            {locationError}
+          </p>
+        )}
 
         {showSuggestions && suggestions.length > 0 && (
           <ul className="absolute z-[1000] top-full left-0 right-0 mt-1 bg-white border border-black/10 rounded-lg shadow-lg overflow-hidden max-h-52 overflow-y-auto">

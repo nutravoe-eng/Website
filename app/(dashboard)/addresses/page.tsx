@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, FormEvent } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { getUserWithRetry } from "@/lib/supabase/auth-client";
 
 const MapPicker = dynamic(() => import("@/components/MapPicker"), { ssr: false });
 
@@ -207,7 +208,7 @@ export default function AddressesPage() {
 
 
   async function loadAddresses() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getUserWithRetry(supabase);
     if (!user) { setLoading(false); return; }
     const { data } = await supabase
       .from("addresses")
@@ -314,7 +315,7 @@ export default function AddressesPage() {
       return;
     }
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getUserWithRetry(supabase);
     if (!user) { setSaving(false); return; }
     const { data, error } = await supabase
       .from("addresses")
@@ -352,7 +353,7 @@ export default function AddressesPage() {
   };
 
   const setDefault = async (id: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getUserWithRetry(supabase);
     if (!user) return;
     await supabase.from("addresses").update({ is_default: false }).eq("user_id", user.id);
     await supabase.from("addresses").update({ is_default: true }).eq("id", id);

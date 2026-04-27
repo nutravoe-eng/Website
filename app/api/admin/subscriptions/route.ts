@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       users!inner ( id, full_name, phone, email ),
       subscription_plans ( id, name, slug, price_per_bowl ),
       addresses ( id, line1, line2, city, pincode, lat, lng ),
-      subscription_day_configs ( id, day_of_week, bowl_slug, quantity, customizations, customization_cost_rs )
+      subscription_day_configs ( id, day_of_week, bowl_slug, quantity, delivery_time_slot, customizations, customization_cost_rs )
     `)
     .order('created_at', { ascending: false });
 

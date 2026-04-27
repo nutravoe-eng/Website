@@ -33,8 +33,93 @@ export interface AdminOrder {
       oatsChoice?: "soaked" | "roasted";
       noSugar?: boolean;
       noSugarNote?: string;
-    } | null
+    } | Array<{ ingredientId: string; option: "default" | "remove" | "extra" }> | Array<Array<{ ingredientId: string; option: "default" | "remove" | "extra" }>> | null
   }[];
+}
+
+type LegacyOrderCustomization = {
+  removed?: string[];
+  added?: string[];
+  baseChoice?: "yogurt" | "milk";
+  oatsChoice?: "soaked" | "roasted";
+  noSugar?: boolean;
+  noSugarNote?: string;
+};
+
+type IngredientCustomization = { ingredientId: string; option: "default" | "remove" | "extra" };
+
+function formatIngredientLabel(rawId: string): string {
+  return rawId
+    .replace(/^ingredient[-_]/i, "")
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function isLegacyOrderCustomization(value: unknown): value is LegacyOrderCustomization {
+  return Boolean(value) && typeof value === "object" && (
+    Array.isArray((value as LegacyOrderCustomization).removed) ||
+    Array.isArray((value as LegacyOrderCustomization).added) ||
+    typeof (value as LegacyOrderCustomization).baseChoice === "string" ||
+    typeof (value as LegacyOrderCustomization).oatsChoice === "string" ||
+    typeof (value as LegacyOrderCustomization).noSugar === "boolean"
+  );
+}
+
+function flattenIngredientCustomizations(value: unknown): IngredientCustomization[] {
+  if (!Array.isArray(value)) return [];
+  const first = value[0];
+  const raw = Array.isArray(first)
+    ? (value as unknown[]).flatMap((entry) => (Array.isArray(entry) ? entry : []))
+    : value;
+  return raw.filter(
+    (item): item is IngredientCustomization =>
+      Boolean(item) &&
+      typeof item === "object" &&
+      typeof (item as { ingredientId?: unknown }).ingredientId === "string" &&
+      ["default", "remove", "extra"].includes(String((item as { option?: unknown }).option)),
+  );
+}
+
+function toOrderCustomizationView(value: unknown): LegacyOrderCustomization {
+  if (isLegacyOrderCustomization(value)) return value;
+
+  const list = flattenIngredientCustomizations(value);
+  if (list.length === 0) return {};
+
+  const removed: string[] = [];
+  const added: string[] = [];
+  let baseChoice: "yogurt" | "milk" | undefined;
+  let oatsChoice: "soaked" | "roasted" | undefined;
+  let noSugar = false;
+
+  for (const item of list) {
+    const id = item.ingredientId;
+    if (id === "__preset_base_milk") {
+      baseChoice = "milk";
+      continue;
+    }
+    if (id === "__preset_oats_roasted") {
+      oatsChoice = "roasted";
+      continue;
+    }
+    if (id === "__preset_no_sugar") {
+      noSugar = true;
+      continue;
+    }
+    if (id.startsWith("__preset_")) continue;
+
+    if (item.option === "remove") removed.push(id);
+    if (item.option === "extra") added.push(id);
+  }
+
+  return {
+    removed: removed.length ? removed : undefined,
+    added: added.length ? added : undefined,
+    baseChoice: baseChoice ?? "yogurt",
+    oatsChoice: oatsChoice ?? "soaked",
+    noSugar,
+  };
 }
 
 interface Props {
@@ -381,32 +466,40 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                         <span className="font-body text-[9px] font-bold uppercase tracking-wider bg-black/5 text-stone px-1.5 py-0.5 rounded-sm">One-Off Order</span>
                       )}
                     </div>
-                    {order.order_items.map(item => (
+                    {order.order_items.map(item => {
+                      const customizations = toOrderCustomizationView(item.customizations);
+                      return (
                       <div key={item.id}>
                         <p className="font-body text-[12px] text-ink">{item.bowl_name} ×{item.quantity}</p>
-                        {item.customizations?.removed && item.customizations.removed.length > 0 && (
-                          <p className="font-body text-[10px] text-terracotta">−{item.customizations.removed.join(', ')}</p>
-                        )}
-                        {item.customizations?.added && item.customizations.added.length > 0 && (
-                          <p className="font-body text-[10px] text-sage-dark">+{item.customizations.added.join(', ')}</p>
-                        )}
-                        {item.customizations?.baseChoice && (
-                          <p className="font-body text-[10px] text-stone">
-                            Base: {item.customizations.baseChoice === "milk" ? "Milk" : "Yogurt"}
-                          </p>
-                        )}
-                        {item.customizations?.oatsChoice && (
-                          <p className="font-body text-[10px] text-stone">
-                            Oats: {item.customizations.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
-                          </p>
-                        )}
-                        {item.customizations?.noSugar && (
+                        {customizations.removed && customizations.removed.length > 0 && (
                           <p className="font-body text-[10px] text-terracotta">
-                            No sugar ({item.customizations.noSugarNote ?? "Exclude banana, honey, dates"})
+                            Removed: {customizations.removed.map(formatIngredientLabel).join(', ')}
+                          </p>
+                        )}
+                        {customizations.added && customizations.added.length > 0 && (
+                          <p className="font-body text-[10px] text-sage-dark">
+                            Added: {customizations.added.map(formatIngredientLabel).join(', ')}
+                          </p>
+                        )}
+                        {customizations.baseChoice && (
+                          <p className="font-body text-[10px] text-stone">
+                            Base: {customizations.baseChoice === "milk" ? "Milk" : "Yogurt"}
+                          </p>
+                        )}
+                        {customizations.oatsChoice && (
+                          <p className="font-body text-[10px] text-stone">
+                            Oats: {customizations.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                          </p>
+                        )}
+                        {typeof customizations.noSugar === "boolean" && (
+                          <p className={`font-body text-[10px] ${customizations.noSugar ? "text-terracotta" : "text-stone"}`}>
+                            {customizations.noSugar
+                              ? `No sugar (${customizations.noSugarNote ?? "Exclude banana, honey, dates"})`
+                              : "Regular sugar"}
                           </p>
                         )}
                       </div>
-                    ))}
+                    )})}
                     {order.notes && (
                       <p className="font-body text-[10px] text-stone/70 mt-1 italic">{order.notes}</p>
                     )}

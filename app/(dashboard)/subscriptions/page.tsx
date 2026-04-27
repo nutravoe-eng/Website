@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { getUserWithRetry } from "@/lib/supabase/auth-client";
 import { getAllBowls, getSubscriptionPlans } from "@/lib/sanity";
 import { formatCurrency } from "@/lib/utils";
 import type { PlanId } from "@/types";
@@ -16,6 +17,8 @@ import {
 import { findBowlByIdentifier } from "@/lib/bowl-customization";
 import type { Bowl } from "@/types";
 
+const DEBUG_SUBSCRIPTIONS = process.env.NEXT_PUBLIC_SUBS_DEBUG === "1";
+
 type SubRow = {
   id: string;
   style: "spread" | "bulk" | "flexible";
@@ -23,7 +26,7 @@ type SubRow = {
   start_date: string | null;
   total_amount_rs: number | null;
   delivery_fee: number | null;
-  subscription_plans: { slug: string; name: string; price_per_bowl: number; price_per_bowl_premium: number | null } | null;
+  subscription_plans: { slug: string; name: string; price_per_bowl: number } | null;
   subscription_day_configs: { day_of_week: string; bowl_slug: string; quantity: number | null }[];
 };
 
@@ -54,12 +57,13 @@ export default function SubscriptionsPage() {
   const [bowls, setBowls] = useState<Bowl[] | null>(null);
   const [planConfigs, setPlanConfigs] = useState<PlanConfig[] | null>(null);
   const [err, setErr] = useState("");
+  const [discarding, setDiscarding] = useState(false);
 
   useEffect(() => {
     (async () => {
       setErr("");
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getUserWithRetry(supabase);
       if (!user) {
         setLoading(false);
         return;
@@ -69,7 +73,7 @@ export default function SubscriptionsPage() {
           supabase
             .from("subscriptions")
             .select(
-              "id, style, status, start_date, total_amount_rs, delivery_fee, subscription_plans ( slug, name, price_per_bowl, price_per_bowl_premium ), subscription_day_configs ( day_of_week, bowl_slug, quantity )",
+              "id, style, status, start_date, total_amount_rs, delivery_fee, subscription_plans ( slug, name, price_per_bowl ), subscription_day_configs ( day_of_week, bowl_slug, quantity )",
             )
             .eq("user_id", user.id)
             .in("status", ["active", "pending"])
@@ -79,6 +83,11 @@ export default function SubscriptionsPage() {
           getAllBowls(),
           getSubscriptionPlans(),
         ]);
+        if (DEBUG_SUBSCRIPTIONS) {
+          console.info("[subscriptions/page] session_user_id", user.id);
+          console.info("[subscriptions/page] query_error", pRes.error?.message ?? null);
+          console.info("[subscriptions/page] query_row", pRes.data ?? null);
+        }
         if (pRes.error) setErr("Could not load your subscription.");
         setSub(pRes.data as SubRow | null);
         setBowls(b);
@@ -131,6 +140,27 @@ export default function SubscriptionsPage() {
     );
   }, [plan, bowls, sub]);
 
+  async function handleDiscardPending() {
+    if (!sub || sub.status !== "pending" || discarding) return;
+    const ok = window.confirm("Discard this pending subscription request? You can create a new plan right after this.");
+    if (!ok) return;
+
+    setDiscarding(true);
+    setErr("");
+    try {
+      const res = await fetch(`/api/subscriptions/${sub.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        setErr("Failed to discard pending subscription. Please try again.");
+        return;
+      }
+      setSub(null);
+    } catch {
+      setErr("Failed to discard pending subscription. Please try again.");
+    } finally {
+      setDiscarding(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -175,10 +205,18 @@ export default function SubscriptionsPage() {
         {sub.start_date && (
           <p className="font-body text-[12px] text-stone">Started {sub.start_date}</p>
         )}
+        {sub.status === "pending" && (
+          <div className="pt-2">
+            <button
+              onClick={handleDiscardPending}
+              disabled={discarding}
+              className="font-body text-[12px] font-semibold text-terracotta hover:underline disabled:opacity-50 disabled:no-underline"
+            >
+              {discarding ? "Discarding..." : "Discard pending request"}
+            </button>
+          </div>
+        )}
       </div>
-      <Link href="/subscribe" className="font-body text-[13px] font-bold text-sage-dark hover:underline">
-        Change plan on the subscribe page →
-      </Link>
     </div>
   );
 }

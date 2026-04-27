@@ -1,9 +1,9 @@
 import Image from "next/image";
-import { getAllBowls, getGlobalSettings, getSubscriptionPlans } from "@/lib/sanity";
+import { getAllBowls, getSubscriptionPlans } from "@/lib/sanity";
 import SubscribeWizard from "./SubscribeWizard";
 
 export default async function SubscribePage() {
-  const [bowls, settings, plans] = await Promise.all([getAllBowls(), getGlobalSettings(), getSubscriptionPlans()]);
+  const [bowls, plans] = await Promise.all([getAllBowls(), getSubscriptionPlans()]);
   return (
     <main className="min-h-[calc(100vh-64px)] bg-[#F9F8F6]">
 
@@ -38,7 +38,7 @@ export default async function SubscribePage() {
 
       {/* Wizard */}
       <div className="pt-8 pb-16 px-6">
-        <SubscribeWizard bowls={bowls} whatsappNumber={settings.whatsappNumber} plans={plans} />
+        <SubscribeWizard bowls={bowls} plans={plans} />
       </div>
     </main>
   );
