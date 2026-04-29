@@ -115,6 +115,7 @@ export default function CartPage() {
     savedAddresses[0] ??
     null;
   const isSelectedAddressServiceable = selectedAddress ? isBengaluruServiceableAddress(selectedAddress) : false;
+  const hasUnserviceableSelectedAddress = Boolean(selectedAddress) && !isSelectedAddressServiceable;
 
   const syncAddressCache = (addresses: DeliveryAddress[]) => {
     const legacy = addresses.map((a) => ({
@@ -759,7 +760,7 @@ export default function CartPage() {
                   <div className="mb-3">
                     <button
                       onClick={handlePayFromWallet}
-                      disabled={submitting || !canPayFromWallet || hasOutOfStockItems || !isSelectedAddressServiceable}
+                      disabled={submitting || !canPayFromWallet || hasOutOfStockItems || hasUnserviceableSelectedAddress}
                       className="w-full bg-sage hover:bg-sage-dark disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>
@@ -775,7 +776,7 @@ export default function CartPage() {
 
                 <button
                   onClick={handlePlaceOrder}
-                  disabled={submitting || hasOutOfStockItems || !isSelectedAddressServiceable}
+                  disabled={submitting || hasOutOfStockItems || hasUnserviceableSelectedAddress}
                   className={`hidden sm:block w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 hover:bg-black/30 text-ink" : "bg-terracotta hover:bg-[#D55F43]"}`}
                 >
                   {canPayFromWallet ? "Place order instead" : "Place order"}
@@ -817,7 +818,7 @@ export default function CartPage() {
             </div>
             <button
               onClick={handlePlaceOrder}
-              disabled={submitting || hasOutOfStockItems || !isSelectedAddressServiceable}
+              disabled={submitting || hasOutOfStockItems || hasUnserviceableSelectedAddress}
               className={`w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 text-ink" : "bg-terracotta"}`}
             >
               {canPayFromWallet ? "Place order instead" : "Place order"}
