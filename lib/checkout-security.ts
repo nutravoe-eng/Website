@@ -161,12 +161,36 @@ function getPlanBySlug(plans: SubscriptionPlan[], slug: string): SubscriptionPla
   return plans.find((plan) => plan.slug === slug) ?? null;
 }
 
+function normalizeLegacyBowlKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, "-")
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function addBowlLookupEntry(map: Map<string, Bowl>, key: string | undefined, bowl: Bowl) {
+  if (!key) return;
+  const normalized = normalizeLegacyBowlKey(key);
+  if (!normalized) return;
+  map.set(normalized, bowl);
+  if (normalized.endsWith("-bowl")) {
+    map.set(normalized.slice(0, -5), bowl);
+  }
+  if (normalized.endsWith("-oatmeal")) {
+    map.set(normalized.slice(0, -8), bowl);
+  }
+}
+
 function buildBowlLookupMap(bowls: Bowl[]): Map<string, Bowl> {
   const map = new Map<string, Bowl>();
   for (const bowl of bowls) {
-    map.set(bowl.slug, bowl);
-    map.set(bowl._id, bowl);
-    map.set(`bowl-${bowl.slug}`, bowl);
+    addBowlLookupEntry(map, bowl.slug, bowl);
+    addBowlLookupEntry(map, bowl._id, bowl);
+    addBowlLookupEntry(map, `bowl-${bowl.slug}`, bowl);
+    addBowlLookupEntry(map, bowl.name, bowl);
   }
   return map;
 }
@@ -207,7 +231,7 @@ export async function buildAuthoritativeOrder(
   const bowlMap = buildBowlLookupMap(bowls);
 
   const lineItems = items.map((item) => {
-    const bowl = bowlMap.get(item.bowlSlug);
+    const bowl = bowlMap.get(normalizeLegacyBowlKey(item.bowlSlug));
     if (!bowl) {
       throw new Error(`Unknown bowl: ${item.bowlSlug}`);
     }
@@ -276,7 +300,7 @@ export async function buildSubscriptionQuote(
   let bowlsBaseFromConfigsRs = 0;
 
   for (const config of dayConfigs) {
-    const bowl = bowlMap.get(config.bowlId);
+    const bowl = bowlMap.get(normalizeLegacyBowlKey(config.bowlId));
     if (!bowl) {
       throw new Error(`Unknown bowl: ${config.bowlId}`);
     }

@@ -311,13 +311,14 @@ export default function CartPage() {
     const parsed = parseSlotKey(selectedSlot);
     return parsed ? formatCalendarSlotLabel(parsed.dateIso, parsed.startHour) : selectedSlot;
   })();
-  const recordOrder = async (): Promise<boolean> => {
-    const res = await fetch("/api/orders/whatsapp", {
+  const recordOrder = async (): Promise<{ ok: true } | { ok: false; error: string }> => {
+    const res = await fetch("/api/orders/request", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         deliveryMode,
         selectedSlot: deliveryMode === "scheduled" ? selectedSlot : undefined,
+        addressId: selectedAddress?.id,
         items: items.map((item) => ({
           bowlSlug: item.bowl.slug,
           quantity: item.quantity,
@@ -328,7 +329,13 @@ export default function CartPage() {
       }),
     });
 
-    return res.ok;
+    if (res.ok) return { ok: true };
+
+    const data = await res.json().catch(() => null);
+    return {
+      ok: false,
+      error: typeof data?.error === "string" ? data.error : "Failed to place order. Please try again.",
+    };
   };
 
   async function handlePayFromWallet() {
@@ -353,6 +360,7 @@ export default function CartPage() {
         body: JSON.stringify({
           deliveryMode,
           selectedSlot: deliveryMode === "scheduled" ? selectedSlot : undefined,
+          addressId: selectedAddress?.id,
           items: items.map((item) => ({
             bowlSlug: item.bowl.slug,
             quantity: item.quantity,
@@ -413,9 +421,9 @@ export default function CartPage() {
     setError("");
 
     try {
-      const ok = await recordOrder();
-      if (!ok) {
-        setError("Failed to place order. Please try again.");
+      const result = await recordOrder();
+      if (!result.ok) {
+        setError(result.error);
         return;
       }
       clearCart();
@@ -490,7 +498,7 @@ export default function CartPage() {
                           {(removed.length > 0 || extras.length > 0) && (
                             <div className="mt-1.5 space-y-0.5">
                               <p className="font-body text-[11px] text-stone leading-relaxed break-words">
-                                Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} · Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                                Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} | Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
                               </p>
                               {item.presetOptions.noSugar && (
                                 <p className="font-body text-[11px] text-terracotta leading-relaxed break-words">
@@ -520,7 +528,7 @@ export default function CartPage() {
                           {removed.length === 0 && extras.length === 0 && (
                             <div className="mt-1.5 space-y-0.5">
                               <p className="font-body text-[11px] text-stone leading-relaxed break-words">
-                                Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} · Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                                Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} | Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
                               </p>
                               {item.presetOptions.noSugar && (
                                 <p className="font-body text-[11px] text-terracotta leading-relaxed break-words">
@@ -531,7 +539,7 @@ export default function CartPage() {
                           )}
                           {item.bowl.inStock === false && (
                             <p className="font-body text-[11px] font-medium text-terracotta mt-2">
-                              Out of stock — please remove to continue.
+                              Out of stock - please remove to continue.
                             </p>
                           )}
                         </div>
@@ -606,7 +614,7 @@ export default function CartPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="font-body text-[13px] text-sage-dark font-medium">Subscriber discount</span>
-                        <span className="font-body text-[13px] text-sage-dark font-bold">− {formatCurrency(subscriberDiscount)}</span>
+                        <span className="font-body text-[13px] text-sage-dark font-bold">- {formatCurrency(subscriberDiscount)}</span>
                       </div>
                     </>
                   )}
@@ -619,7 +627,7 @@ export default function CartPage() {
                         )}
                       </div>
                       {deliveryFeeLoading ? (
-                        <span className="font-body text-[12px] text-stone animate-pulse">Checking…</span>
+                        <span className="font-body text-[12px] text-stone animate-pulse">Checking...</span>
                       ) : deliveryFee === 0 ? (
                         <span className="font-body text-[13px] font-bold text-sage-dark">Free</span>
                       ) : (
@@ -634,7 +642,7 @@ export default function CartPage() {
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="font-body text-[11px] text-sage-dark font-medium">Nutravoe covers</span>
-                          <span className="font-body text-[11px] text-sage-dark font-medium">− {formatCurrency(deliveryBreakdown.nutravoeCoverageRs)}</span>
+                          <span className="font-body text-[11px] text-sage-dark font-medium">- {formatCurrency(deliveryBreakdown.nutravoeCoverageRs)}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="font-body text-[11px] font-bold text-ink">You pay</span>

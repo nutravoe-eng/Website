@@ -7,6 +7,7 @@ import { requestOriginReferrer } from "@/lib/ola-maps";
 import { resolveDeliveryDistanceKm } from "@/lib/road-distance";
 import { getAllBowls } from "@/lib/sanity";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { sendSubscriptionRequestNotificationEmail } from "@/lib/request-notification-email";
 
 type SingleCustomization = { ingredientId: string; option: "default" | "remove" | "extra" };
 type DayConfigInput = {
@@ -139,7 +140,7 @@ export async function POST(req: NextRequest) {
 
   const { data: address, error: addressError } = await adminSupabase
     .from("addresses")
-    .select("id, pincode, lat, lng, distance_km")
+    .select("id, line1, line2, city, state, pincode, lat, lng, distance_km")
     .eq("user_id", user.id)
     .order("is_default", { ascending: false })
     .limit(1)
@@ -149,9 +150,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A default delivery address is required" }, { status: 400, headers: limited.headers });
   }
 
+  const { data: customer, error: customerError } = await adminSupabase
+    .from("users")
+    .select("full_name, phone, email")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (customerError || !customer) {
+    return NextResponse.json({ error: "Unable to load customer profile" }, { status: 500, headers: limited.headers });
+  }
+
   const { data: dbPlan, error: planFetchError } = await adminSupabase
     .from("subscription_plans")
-    .select("id")
+    .select("id, name")
     .eq("slug", planId)
     .single();
 
@@ -222,7 +233,7 @@ export async function POST(req: NextRequest) {
       delivery_address_id: address.id,
       notes: customerNotes,
     })
-    .select("id")
+    .select("id, created_at")
     .single();
 
   if (subscriptionError || !subscription) {
@@ -290,6 +301,35 @@ export async function POST(req: NextRequest) {
       );
     }
   }
+
+  await sendSubscriptionRequestNotificationEmail({
+    requestId: subscription.id,
+    createdAt: subscription.created_at,
+    customer: {
+      name: customer.full_name || user.user_metadata?.full_name || user.email?.split("@")[0] || "Customer",
+      phone: customer.phone || user.user_metadata?.phone || "NA",
+      email: customer.email || user.email,
+    },
+    address,
+    planName: dbPlan.name,
+    deliveryStyle,
+    startDate: finalStartDate,
+    defaultDeliveryTimeSlot: deliveryStyle !== "flexible" ? deliveryTimeSlot : null,
+    totalAmountRs: quote.totalAmountRs,
+    bowlsPerCycle: quote.bowlsPerCycle,
+    billingCycle: quote.billingCycle,
+    weeklyDeliveryFeeRs: quote.weeklyDeliveryFeeRs,
+    totalIngredientExtrasRs: quote.totalIngredientExtrasRs,
+    dayConfigs: normalizedDayConfigs.map((config) => ({
+      day: config.day,
+      bowlId: config.bowlId,
+      quantity: config.quantity,
+      customizations: config.customizations,
+      deliveryTimeSlot: config.deliveryTimeSlot,
+    })),
+    bowls: allBowls,
+    notes: customerNotes,
+  });
 
   return NextResponse.json({
     id: subscription.id,

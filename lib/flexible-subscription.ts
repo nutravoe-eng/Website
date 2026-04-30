@@ -5,7 +5,7 @@ export function todayISTDateString(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 
-/** Row shape for per-bowl subscriber vs retail pricing (wallet + WhatsApp/COD). */
+/** Row shape for per-bowl subscriber vs retail pricing (wallet + order requests). */
 export type PricedSubscriptionRow = {
   id: string;
   style: string;

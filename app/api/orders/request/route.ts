@@ -14,7 +14,7 @@ import { BENGALURU_NOT_SERVICEABLE_MESSAGE, isBengaluruServiceableAddress } from
 import { sendOrderRequestNotificationEmail } from "@/lib/request-notification-email";
 
 export async function POST(req: NextRequest) {
-  const limited = await enforceRateLimit(req, "wallet-order-create", 10, 60);
+  const limited = await enforceRateLimit(req, "order-request-create", 10, 60);
   if (!limited.ok) return limited.response;
 
   const supabase = await createClient();
@@ -46,9 +46,7 @@ export async function POST(req: NextRequest) {
     return {
       bowlSlug: typeof item?.bowlSlug === "string" ? item.bowlSlug : "",
       quantity: Number.isFinite(item?.quantity) ? Number(item.quantity) : 0,
-      customizations: Array.isArray(item?.customizations)
-        ? (item.customizations as CheckoutItemInput["customizations"])
-        : [],
+      customizations: Array.isArray(item?.customizations) ? (item.customizations as CheckoutItemInput["customizations"]) : [],
       presetOptions:
         item?.presetOptions && typeof item.presetOptions === "object"
           ? (item.presetOptions as CheckoutItemInput["presetOptions"])
@@ -60,60 +58,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid order items" }, { status: 400, headers: limited.headers });
   }
 
-  const todayIst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-
-  const { data: subRows, error: subscriptionError } = await adminSupabase
-    .from("subscriptions")
-    .select(
-      "id, billing_cycle, start_date, period_end_date, status, created_at, style, payment_status, subscription_plans ( slug, min_bowls )",
-    )
-    .eq("user_id", user.id)
-    .eq("style", "flexible")
-    .eq("payment_status", "paid")
-    .or(`status.eq.active,and(status.eq.completed,period_end_date.gte.${todayIst})`)
-    .order("created_at", { ascending: false });
-
-  if (subscriptionError) {
-    console.error("[wallet-order] subscription fetch failed", subscriptionError.message);
-    return NextResponse.json({ error: "Failed to verify subscription" }, { status: 500, headers: limited.headers });
-  }
-
-  const eligible = (subRows ?? []).filter((r) =>
-    isPaidFlexibleWalletEligible({
-      style: r.style as string,
-      status: r.status as string,
-      payment_status: r.payment_status as string,
-      period_end_date: r.period_end_date as string | null,
-    }),
-  );
-
-  const subscription = preferActiveSubscription(eligible);
-
-  if (!subscription) {
-    return NextResponse.json(
-      { error: "An active subscription with wallet funds is required to pay from wallet" },
-      { status: 400, headers: limited.headers }
-    );
-  }
-
-  // Get delivery address
   const addressQuery = adminSupabase
     .from("addresses")
     .select("id, line1, line2, pincode, city, state, lat, lng, distance_km")
     .eq("user_id", user.id);
 
-  const { data: address, error: addressError } = await (addressId
+  const { data: resolvedAddress, error: resolvedAddressError } = await (addressId
     ? addressQuery.eq("id", addressId)
     : addressQuery.order("is_default", { ascending: false }).limit(1))
     .maybeSingle();
 
-  if (addressError || !address) {
-    return NextResponse.json(
-      { error: "A delivery address is required before ordering" },
-      { status: 400, headers: limited.headers }
-    );
+  if (resolvedAddressError || !resolvedAddress) {
+    return NextResponse.json({ error: "A delivery address is required before ordering" }, { status: 400, headers: limited.headers });
   }
-  if (!isBengaluruServiceableAddress(address)) {
+  if (!isBengaluruServiceableAddress(resolvedAddress)) {
     return NextResponse.json({ error: BENGALURU_NOT_SERVICEABLE_MESSAGE }, { status: 422, headers: limited.headers });
   }
 
@@ -127,11 +85,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unable to load customer profile" }, { status: 500, headers: limited.headers });
   }
 
-  // Build authoritative pricing (same flexible quota / completed rules as request checkout)
+  const { data: subRows } = await adminSupabase
+    .from("subscriptions")
+    .select(
+      "id, status, style, billing_cycle, start_date, period_end_date, payment_status, created_at, subscription_plans ( slug, min_bowls )",
+    )
+    .eq("user_id", user.id)
+    .eq("payment_status", "paid")
+    .order("created_at", { ascending: false });
+
+  const pricedCandidates = (subRows ?? []).filter(
+    (s) =>
+      s.status === "active" ||
+      (s.style === "flexible" &&
+        isPaidFlexibleWalletEligible({
+          style: s.style,
+          status: s.status,
+          payment_status: s.payment_status,
+          period_end_date: s.period_end_date,
+        })),
+  );
+  const pricedSub = preferActiveSubscription(pricedCandidates);
+
   let quote;
   try {
-    const planSlug = await planSlugForCheckoutPricing(adminSupabase, subscription);
-    quote = await buildAuthoritativeOrder(items, address, planSlug, {
+    const activePlanSlug = await planSlugForCheckoutPricing(adminSupabase, pricedSub ?? undefined);
+    quote = await buildAuthoritativeOrder(items, resolvedAddress, activePlanSlug, {
       httpReferrer: requestOriginReferrer(req),
     });
   } catch (err) {
@@ -139,9 +118,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400, headers: limited.headers });
   }
 
-  // Balance check is done inside consume_wallet_balance (refreshes from credit lots first).
-
-  // Create order (confirmed + paid immediately)
   let resolvedDelivery;
   try {
     resolvedDelivery = await resolveRequestedDelivery(deliveryMode, selectedSlot);
@@ -154,34 +130,25 @@ export async function POST(req: NextRequest) {
     .from("orders")
     .insert({
       user_id: user.id,
-      subscription_id: subscription.id,
-      order_type: "subscription",
-      status: "confirmed",
+      order_type: "one_time",
+      status: "pending",
       delivery_date: resolvedDelivery.deliveryDate,
       delivery_time_slot: resolvedDelivery.selectedSlot,
-      delivery_address_id: address.id,
+      delivery_address_id: resolvedAddress.id,
       delivery_fee: quote.deliveryFee,
       subtotal: quote.subtotal,
       total: quote.total,
-      payment_method: "wallet",
-      payment_status: "paid",
+      payment_method: "whatsapp_cod",
+      payment_status: "pending",
       notes,
     })
     .select("id, created_at")
     .single();
 
-  if (orderError) {
-    // Unique constraint violation = already ordered for this date on this subscription
-    if (orderError.code === "23505") {
-      return NextResponse.json(
-        { error: "You already have a wallet order for this delivery slot. Choose a different time slot." },
-        { status: 409, headers: limited.headers }
-      );
-    }
+  if (orderError || !order) {
     return NextResponse.json({ error: "Failed to create order" }, { status: 500, headers: limited.headers });
   }
 
-  // Insert order items
   const { error: itemsError } = await adminSupabase
     .from("order_items")
     .insert(quote.lineItems.map((item) => ({ order_id: order.id, ...item })));
@@ -189,31 +156,6 @@ export async function POST(req: NextRequest) {
   if (itemsError) {
     await adminSupabase.from("orders").delete().eq("id", order.id);
     return NextResponse.json({ error: "Failed to save order items" }, { status: 500, headers: limited.headers });
-  }
-
-  // Debit wallet — rollback order if this fails
-  const { error: walletError } = await adminSupabase.rpc("consume_wallet_balance", {
-    p_user_id: user.id,
-    p_amount_rs: quote.total,
-    p_reason: "order_payment",
-    p_reference_id: order.id,
-    p_note: `Self-served order on ${resolvedDelivery.deliveryDate}, ${resolvedDelivery.selectedSlot}`,
-  });
-
-  if (walletError) {
-    await adminSupabase.from("order_items").delete().eq("order_id", order.id);
-    await adminSupabase.from("orders").delete().eq("id", order.id);
-    return NextResponse.json(
-      { error: walletError.message.includes("insufficient") ? "Insufficient wallet balance" : "Failed to debit wallet. Please try again." },
-      { status: 400, headers: limited.headers }
-    );
-  }
-
-  const { error: completeErr } = await adminSupabase.rpc("maybe_complete_flexible_subscription", {
-    p_subscription_id: subscription.id,
-  });
-  if (completeErr) {
-    console.error("[wallet-order] maybe_complete_flexible_subscription", completeErr.message);
   }
 
   await sendOrderRequestNotificationEmail({
@@ -224,8 +166,8 @@ export async function POST(req: NextRequest) {
       phone: customer.phone || user.user_metadata?.phone || "NA",
       email: customer.email || user.email,
     },
-    address,
-    orderLabel: "Wallet order",
+    address: resolvedAddress,
+    orderLabel: "Order request",
     deliveryDate: resolvedDelivery.deliveryDate,
     deliveryTimeSlot: resolvedDelivery.selectedSlot,
     subtotal: quote.subtotal,
@@ -235,8 +177,5 @@ export async function POST(req: NextRequest) {
     notes,
   });
 
-  return NextResponse.json(
-    { id: order.id, subtotal: quote.subtotal, total: quote.total },
-    { headers: limited.headers }
-  );
+  return NextResponse.json({ id: order.id, subtotal: quote.subtotal, total: quote.total }, { headers: limited.headers });
 }
