@@ -1,3 +1,13 @@
+import type { Metadata } from "next";
+import { buildPageMetadata } from "@/lib/seo";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "Conditions of Use - Nutravoe",
+  description:
+    "Read Nutravoe's conditions of use for ordering, subscriptions, wallet usage, cancellations, refunds, and account terms.",
+  path: "/terms",
+});
+
 export default function TermsPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-28 text-ink">

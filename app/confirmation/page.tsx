@@ -3,6 +3,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Order Received — Nutravoe",
   description: "Your Nutravoe order request has been received. We'll confirm it shortly.",
+  robots: { index: false, follow: false },
 };
 
 export default function ConfirmationPage({

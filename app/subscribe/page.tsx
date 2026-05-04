@@ -1,6 +1,15 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { getAllBowls, getSubscriptionPlans } from "@/lib/sanity";
+import { buildPageMetadata } from "@/lib/seo";
 import SubscribeWizard from "./SubscribeWizard";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "Subscribe - Nutravoe",
+  description:
+    "Set up a Nutravoe subscription for fresh probiotic yogurt bowls delivered on your schedule in Bangalore.",
+  path: "/subscribe",
+});
 
 export default async function SubscribePage() {
   const [bowls, plans] = await Promise.all([getAllBowls(), getSubscriptionPlans()]);

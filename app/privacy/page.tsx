@@ -1,3 +1,13 @@
+import type { Metadata } from "next";
+import { buildPageMetadata } from "@/lib/seo";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "Privacy Notice - Nutravoe",
+  description:
+    "Read Nutravoe's privacy notice covering what customer data we collect, how we use it, and your account choices.",
+  path: "/privacy",
+});
+
 export default function PrivacyPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-28 text-ink">
