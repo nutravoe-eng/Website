@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "Nutravoe - Fresh Yogurt Bowls Delivered in Bangalore",
   description:
-    "Premium protein yogurt bowls made fresh daily in Bangalore. No added sugar, probiotic base, delivered 7 AM-8 PM. Order via WhatsApp.",
+    "Premium protein yogurt bowls made fresh daily in Bangalore. No added sugar, probiotic base, delivered 7 AM-3 PM. Order via WhatsApp.",
   keywords: [
     "protein yoghurt bowl Bangalore",
     "yogurt bowl delivery",
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Nutravoe - Fresh Yogurt Bowls Delivered in Bangalore",
     description:
-      "Premium protein yogurt bowls made fresh daily in Bangalore. No added sugar, probiotic base, delivered 7 AM-8 PM.",
+      "Premium protein yogurt bowls made fresh daily in Bangalore. No added sugar, probiotic base, delivered 7 AM-3 PM.",
     url: siteUrl,
     siteName: "Nutravoe",
     locale: "en_IN",
@@ -65,7 +65,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Nutravoe - Fresh Yogurt Bowls Delivered in Bangalore",
     description:
-      "Premium protein yogurt bowls made fresh daily in Bangalore. No added sugar, probiotic base, delivered 7 AM-8 PM.",
+      "Premium protein yogurt bowls made fresh daily in Bangalore. No added sugar, probiotic base, delivered 7 AM-3 PM.",
     images: ["/hero-image.png"],
   },
 };

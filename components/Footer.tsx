@@ -23,7 +23,7 @@ export default function Footer() {
           </Link>
           <p className="font-body text-[13px] leading-relaxed text-[#9A9590] max-w-xs">
             Fresh protein yogurt bowls crafted daily and delivered to your door.
-            7 AM–9 PM. Bangalore, Karnataka.
+            7 AM–3 PM. Bangalore, Karnataka.
           </p>
         </div>
 

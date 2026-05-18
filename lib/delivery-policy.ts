@@ -16,15 +16,31 @@ export const DEFAULT_DELIVERY_POLICY: DeliveryPolicy = {
   blackoutExemptSlotKeys: [],
 };
 
-export const DELIVERY_POLICY_CONSTANTS = {
-  asapOpenHour: 9,
-  sameDayCutoffHour: 19,
-  firstSameDaySlotHour: 10,
-  lastDeliveryHour: 20,
-  tomorrowEarlySlotCutoffHour: 23,
-  tomorrowEarliestHour: 7,
+/** Nutravoe delivery window: 7 AM–3 PM IST (slots start at 7, last slot 2–3 PM). */
+export const BUSINESS_HOURS = {
+  firstSlotHour: 7,
+  lastHourExclusive: 15,
+  earlyMorningFirstHour: 7,
+  earlyMorningLastBookableHour: 9,
+  orderEarlyMorningByHour: 23,
   tomorrowLateEarliestHour: 10,
+  displayWindow: "7 AM–3 PM",
+  displayWindowPlain: "7 AM-3 PM",
+  earlyMorningWindow: "7–10 AM",
+  sameDayCutoffDisplay: "3 PM",
+} as const;
+
+export const DELIVERY_POLICY_CONSTANTS = {
+  asapOpenHour: BUSINESS_HOURS.firstSlotHour,
+  sameDayCutoffHour: BUSINESS_HOURS.lastHourExclusive,
+  firstSameDaySlotHour: BUSINESS_HOURS.firstSlotHour,
+  lastDeliveryHour: BUSINESS_HOURS.lastHourExclusive,
+  tomorrowEarlySlotCutoffHour: BUSINESS_HOURS.orderEarlyMorningByHour,
+  tomorrowEarliestHour: BUSINESS_HOURS.firstSlotHour,
+  tomorrowLateEarliestHour: BUSINESS_HOURS.tomorrowLateEarliestHour,
 };
+
+const SLOT_HOUR_COUNT = BUSINESS_HOURS.lastHourExclusive - BUSINESS_HOURS.firstSlotHour;
 
 export interface GeneratedSlot {
   label: string;
@@ -196,17 +212,22 @@ export function formatCalendarSlotLabel(dateIso: string, startHour: number): str
 }
 
 /**
- * 7–10 AM slots (hours 7, 8, 9) for delivery date D can only be booked on or before 11:00 PM
+ * 7–10 AM slots (hours 7–9) for delivery date D can only be booked on or before 11:00 PM
  * IST on D−1 (night before). After that, those hours for D are closed even if "today" at 1 AM.
  */
 function isEarlyMorningSlotBookableForDate(dateIso: string, startHour24: number, nowIst: Date): boolean {
-  if (startHour24 < 7 || startHour24 > 9) return true;
+  if (
+    startHour24 < BUSINESS_HOURS.earlyMorningFirstHour ||
+    startHour24 > BUSINESS_HOURS.earlyMorningLastBookableHour
+  ) {
+    return true;
+  }
   const prev = addDays(dateIso, -1);
   const deadlineMs = new Date(`${prev}T23:00:00+05:30`).getTime();
   return nowIst.getTime() <= deadlineMs;
 }
 
-/** Available hours (7–19) for a given date, respecting policy blackouts, same-day hour cutoff, and 7–10 AM “order by 11 PM previous day” rule. */
+/** Available hours (7–14) for a given date, respecting policy blackouts, same-day hour cutoff, and 7–10 AM “order by 11 PM previous day” rule. */
 export function getSlotAvailabilityForDate(
   policy: DeliveryPolicy,
   dateIso: string,
@@ -214,16 +235,19 @@ export function getSlotAvailabilityForDate(
 ): { hour: number; available: boolean }[] {
   const todayIso = getIstDateIso(nowIst);
   if (dateIso < todayIso) {
-    return Array.from({ length: 13 }, (_, i) => i + 7).map((hour) => ({ hour, available: false }));
+    return Array.from({ length: SLOT_HOUR_COUNT }, (_, i) => i + BUSINESS_HOURS.firstSlotHour).map((hour) => ({
+      hour,
+      available: false,
+    }));
   }
   const isToday = dateIso === todayIso;
-  const cutoff = isToday ? nowIst.getHours() + 1 : 7;
-  return Array.from({ length: 13 }, (_, i) => i + 7).map((hour) => {
+  const cutoff = isToday ? nowIst.getHours() + 1 : BUSINESS_HOURS.firstSlotHour;
+  return Array.from({ length: SLOT_HOUR_COUNT }, (_, i) => i + BUSINESS_HOURS.firstSlotHour).map((hour) => {
     if (!isEarlyMorningSlotBookableForDate(dateIso, hour, nowIst)) {
       return { hour, available: false };
     }
     const available =
-      hour >= (isToday ? Math.max(7, cutoff) : 7) &&
+      hour >= (isToday ? Math.max(BUSINESS_HOURS.firstSlotHour, cutoff) : BUSINESS_HOURS.firstSlotHour) &&
       !isBlockedByBlackout(policy, dateIso, hour) &&
       !isDisabled(policy, dateIso, hour);
     return { hour, available };

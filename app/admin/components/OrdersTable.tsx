@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { parseIstYmd, NUTRAVOE_TIMEZONE } from '@/lib/datetime-ist';
+import { DELIVERY_TIME_SLOTS } from '@/lib/delivery-slots';
 
 export interface AdminOrder {
   id: string;
@@ -838,7 +839,7 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                 className="w-full border border-black/10 rounded-lg px-4 py-3 font-body text-sm text-ink bg-[#F9F8F6] focus:outline-none focus:ring-2 focus:ring-sage/40"
               >
                 <option value="">— Keep existing —</option>
-                {['7:00 AM - 8:00 AM','8:00 AM - 9:00 AM','9:00 AM - 10:00 AM','10:00 AM - 11:00 AM','11:00 AM - 12:00 PM','12:00 PM - 1:00 PM','1:00 PM - 2:00 PM','2:00 PM - 3:00 PM','3:00 PM - 4:00 PM','4:00 PM - 5:00 PM','5:00 PM - 6:00 PM','6:00 PM - 7:00 PM','7:00 PM - 8:00 PM'].map(slot => (
+                {DELIVERY_TIME_SLOTS.map(slot => (
                   <option key={slot} value={slot}>{slot}</option>
                 ))}
               </select>

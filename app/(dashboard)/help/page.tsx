@@ -2,8 +2,8 @@
 import { useState } from "react";
 
 const faqs = [
-  {q: "What time do deliveries happen?", a: "All deliveries are completed between 7:00 AM and 8:00 PM. Our partners will leave the package at your door or with security if instructed."},
-  {q: "What are the cutoff times for ordering?", a: "For early morning deliveries (7:00–10:00 AM), please place your order before 11:00 PM the night before — this gives our kitchen overnight preparation time. Same-day orders close at 7:00 PM. Delivery in 60 min is available from 9:00 AM to 7:00 PM, and scheduled slots run through 8:00 PM. Orders placed before 9:00 AM are eligible from the 10:00 AM slot onwards."},
+  {q: "What time do deliveries happen?", a: "All deliveries are completed between 7:00 AM and 3:00 PM. Our partners will leave the package at your door or with security if instructed."},
+  {q: "What are the cutoff times for ordering?", a: "For early morning deliveries (7:00–10:00 AM), please place your order before 11:00 PM the night before — this gives our kitchen overnight preparation time. Same-day orders close at 3:00 PM. Delivery in 60 min is available from 7:00 AM to 3:00 PM, and scheduled slots run through 3:00 PM. Orders placed before 7:00 AM are eligible from the 7:00 AM slot onwards."},
   {q: "Can I order at midnight for a 7 AM delivery?", a: "Yes! As long as you place your order before 11:00 PM the previous night, your 7:00–10:00 AM delivery slot will be honoured. Orders placed after 11:00 PM will not show early morning slots for next-day delivery — the earliest available will be 10:00 AM."},
   {q: "Can I cancel my order?", a: "Once an order has been placed, cancellations are not processed through the website. If you need urgent help with an order, please contact Nutravoe support directly."},
   {q: "How do refunds work after cancellation?", a: "Refunds are not initiated through the website after an order has been placed. Any exceptional support cases are handled manually by the Nutravoe team."},

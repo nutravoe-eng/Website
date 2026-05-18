@@ -29,7 +29,7 @@ const commitments = [
   },
   {
     icon: "04",
-    title: "Delivered 7 AM-9 PM",
+    title: "Delivered 7 AM–3 PM",
     body: "Order anytime and your bowl arrives the same day, whenever you need it.",
   },
   {

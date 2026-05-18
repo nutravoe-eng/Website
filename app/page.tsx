@@ -43,7 +43,7 @@ export default async function HomePage() {
           <div className="max-w-7xl mx-auto w-full">
             <div className="max-w-2xl">
             <p className="font-body text-[11px] font-medium tracking-[0.25em] mb-5 text-sage-light" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}>
-              Bangalore · Fresh Daily · Delivered 7 AM–8 PM
+              Bangalore · Fresh Daily · Delivered 7 AM–3 PM
             </p>
             <h1 className="font-display text-white mb-7"
               style={{ fontSize: "clamp(46px, 6vw, 76px)", lineHeight: "1.05" }}>
@@ -88,7 +88,7 @@ export default async function HomePage() {
             },
             {
               icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-              title: "Delivered 7 AM–8 PM", sub: "Last same-day order by 7 PM"
+              title: "Delivered 7 AM–3 PM", sub: "Last same-day order by 3 PM"
             },
           ].map(({ icon, title, sub }) => (
             <div key={title} className="px-4 lg:px-8 py-2.5 text-center flex flex-col justify-center items-center text-inherit">
@@ -153,7 +153,7 @@ export default async function HomePage() {
       <section className="py-28 px-6 lg:px-16 text-center bg-cream">
         <div className="max-w-3xl mx-auto">
           <p className="font-body text-xs font-medium tracking-[0.22em] uppercase text-stone mb-8">
-            Delivered 7 AM–8 PM · Bangalore
+            Delivered 7 AM–3 PM · Bangalore
           </p>
           <h2 className="font-display text-ink mb-10"
             style={{ fontSize: "clamp(36px, 4vw, 60px)", lineHeight: "1.2" }}>

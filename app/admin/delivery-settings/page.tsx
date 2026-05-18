@@ -190,7 +190,7 @@ export default function AdminDeliverySettingsPage() {
             checked={policy.asapEnabled}
             onChange={(event) => setPolicy((prev) => ({ ...prev, asapEnabled: event.target.checked }))}
           />
-          <span className="font-body text-sm text-ink">Enable "Delivery in 60 min" (available only 9:00 AM-7:00 PM)</span>
+          <span className="font-body text-sm text-ink">Enable "Delivery in 60 min" (available only 7:00 AM–3:00 PM)</span>
         </label>
       </section>
 

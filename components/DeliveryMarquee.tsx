@@ -2,10 +2,21 @@
 // and at the top of the cart page (above cart items).
 // Animation defined in styles/globals.css as @keyframes marquee.
 
+import { BUSINESS_HOURS } from "@/lib/delivery-policy";
+
 const ITEMS = [
-  { icon: "🌅", text: "Want delivery between 7–10 AM? Place your order before 11 PM the night before" },
-  { icon: "⚡", text: "Delivery in 60 min is available from 9 AM to 7 PM" },
-  { icon: "🚚", text: "We deliver across Bangalore daily, any time between 7 AM and 8 PM" },
+  {
+    icon: "🌅",
+    text: `Want delivery between ${BUSINESS_HOURS.earlyMorningWindow}? Place your order before 11 PM the night before`,
+  },
+  {
+    icon: "⚡",
+    text: `Delivery in 60 min is available from ${BUSINESS_HOURS.displayWindow}`,
+  },
+  {
+    icon: "🚚",
+    text: `We deliver across Bangalore daily, any time between ${BUSINESS_HOURS.displayWindow}`,
+  },
 ];
 
 interface DeliveryMarqueeProps {
