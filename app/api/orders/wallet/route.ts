@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
   // Get delivery address
   const addressQuery = adminSupabase
     .from("addresses")
-    .select("id, line1, line2, pincode, city, state, lat, lng, distance_km")
+    .select("id, line1, line2, pincode, city, state, lat, lng, distance_km, distance_source")
     .eq("user_id", user.id);
 
   const { data: address, error: addressError } = await (addressId

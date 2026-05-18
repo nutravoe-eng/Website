@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
 
   const { data: address, error: addressError } = await adminSupabase
     .from('addresses')
-    .select('id, pincode, lat, lng, distance_km')
+    .select('id, pincode, lat, lng, distance_km, distance_source')
     .eq('user_id', userId)
     .order('is_default', { ascending: false })
     .limit(1)

@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
 
   const { data: address, error: addressError } = await adminSupabase
     .from("addresses")
-    .select("id, line1, line2, city, state, pincode, lat, lng, distance_km")
+    .select("id, line1, line2, city, state, pincode, lat, lng, distance_km, distance_source")
     .eq("user_id", user.id)
     .order("is_default", { ascending: false })
     .limit(1)
@@ -202,19 +202,24 @@ export async function POST(req: NextRequest) {
   }
 
   // Compute per-trip delivery fee to store in subscriptions.delivery_fee
-  // (used by create_subscription_delivery when generating individual delivery orders)
+  // (used by create_subscription_delivery when generating individual delivery orders).
+  // Only trust cached distance_km when the source is "road" — haversine straight-line is
+  // shorter than the actual road and can suppress the fee for near-threshold addresses.
   const addrCoords = (typeof address.lat === "number" && typeof address.lng === "number")
     ? { lat: address.lat, lng: address.lng }
     : null;
-  const perTripDeliveryFee =
-    typeof address.distance_km === "number" && Number.isFinite(address.distance_km)
-      ? deliveryFeeFromDistanceKm(address.distance_km)
-      : addrCoords
-        ? deliveryFeeFromDistanceKm(
-            (await resolveDeliveryDistanceKm(addrCoords.lat, addrCoords.lng, { httpReferrer: requestOriginReferrer(req) }))
-              .distanceKm,
-          )
-        : DELIVERY_FEE_RS;
+  const hasCachedRoadDistance =
+    typeof address.distance_km === "number" &&
+    Number.isFinite(address.distance_km) &&
+    address.distance_source === "road";
+  const perTripDeliveryFee = hasCachedRoadDistance
+    ? deliveryFeeFromDistanceKm(address.distance_km as number)
+    : addrCoords
+      ? deliveryFeeFromDistanceKm(
+          (await resolveDeliveryDistanceKm(addrCoords.lat, addrCoords.lng, { httpReferrer: requestOriginReferrer(req) }))
+            .distanceKm,
+        )
+      : DELIVERY_FEE_RS;
 
   const { data: subscription, error: subscriptionError } = await adminSupabase
     .from("subscriptions")

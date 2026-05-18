@@ -37,6 +37,7 @@ export async function syncAddressDeliveryMetadata(
     .update({
       nearest_hub_id: nearestHubId,
       distance_km: distanceRounded,
+      distance_source: source,
       delivery_fee: null,
     })
     .eq("id", addressId);

@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     .select("id, lat, lng")
     .not("lat", "is", null)
     .not("lng", "is", null)
-    .or("distance_km.is.null,nearest_hub_id.is.null")
+    .or("distance_km.is.null,nearest_hub_id.is.null,distance_source.is.null,distance_source.eq.straight_line")
     .limit(limit);
 
   if (error) {

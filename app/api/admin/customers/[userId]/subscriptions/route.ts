@@ -111,7 +111,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
 
   const { data: address, error: addressError } = await adminSupabase
     .from('addresses')
-    .select('id, pincode, lat, lng, distance_km')
+    .select('id, pincode, lat, lng, distance_km, distance_source')
     .eq('user_id', userId)
     .order('is_default', { ascending: false })
     .limit(1)
@@ -164,14 +164,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
 
   const addrCoords = (typeof address.lat === 'number' && typeof address.lng === 'number')
     ? { lat: address.lat, lng: address.lng } : null;
-  const perTripDeliveryFee =
-    typeof address.distance_km === 'number' && Number.isFinite(address.distance_km)
-      ? deliveryFeeFromDistanceKm(address.distance_km)
-      : addrCoords
-        ? deliveryFeeFromDistanceKm(
-            (await resolveDeliveryDistanceKm(addrCoords.lat, addrCoords.lng, { httpReferrer: requestOriginReferrer(req) })).distanceKm
-          )
-        : DELIVERY_FEE_RS;
+  const hasCachedRoadDistanceAdmin =
+    typeof address.distance_km === 'number' &&
+    Number.isFinite(address.distance_km) &&
+    address.distance_source === 'road';
+  const perTripDeliveryFee = hasCachedRoadDistanceAdmin
+    ? deliveryFeeFromDistanceKm(address.distance_km as number)
+    : addrCoords
+      ? deliveryFeeFromDistanceKm(
+          (await resolveDeliveryDistanceKm(addrCoords.lat, addrCoords.lng, { httpReferrer: requestOriginReferrer(req) })).distanceKm
+        )
+      : DELIVERY_FEE_RS;
 
   const { data: subscription, error: subError } = await adminSupabase
     .from('subscriptions')

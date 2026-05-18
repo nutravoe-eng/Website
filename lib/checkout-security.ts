@@ -18,6 +18,7 @@ export interface AddressForPricing {
   lat?: number | null;
   lng?: number | null;
   distance_km?: number | null;
+  distance_source?: "road" | "straight_line" | null;
 }
 
 interface PricingContextOptions {
@@ -60,33 +61,47 @@ async function resolveAddressCoordinates(address: AddressForPricing): Promise<{ 
 }
 
 /**
- * Distance (km) for delivery pricing. Prefer **stored** `distance_km` when set (saved at
- * address create/update via Ola + {@link resolveDeliveryDistanceKm}) so we do not call
- * routing on every checkout. Otherwise compute from lat/lng, then pincode geocode.
+ * Distance (km) for delivery pricing.
+ *
+ * Only trusts a cached `distance_km` when `distance_source === "road"` (OLA Maps driving
+ * distance). If the cached value came from a haversine fallback ("straight_line"), it
+ * under-estimates the actual road distance, which can suppress the delivery fee for
+ * addresses near the 10 km free-zone boundary. In that case we re-attempt OLA; if it
+ * still fails we keep the haversine value rather than blocking checkout.
  */
 async function resolveDistanceKmForDeliveryPricing(
   address: AddressForPricing,
   options?: PricingContextOptions,
 ): Promise<number | null> {
-  if (typeof address.distance_km === "number" && Number.isFinite(address.distance_km)) {
-    return address.distance_km;
+  const hasCachedRoadDistance =
+    typeof address.distance_km === "number" &&
+    Number.isFinite(address.distance_km) &&
+    address.distance_source === "road";
+
+  if (hasCachedRoadDistance) {
+    return address.distance_km as number;
   }
-  if (
+
+  const coords =
     typeof address.lat === "number" &&
     typeof address.lng === "number" &&
     Number.isFinite(address.lat) &&
     Number.isFinite(address.lng)
-  ) {
-    const { distanceKm } = await resolveDeliveryDistanceKm(address.lat, address.lng, {
-      httpReferrer: options?.httpReferrer,
-    });
-    return distanceKm;
-  }
-  const coords = await resolveAddressCoordinates(address);
+      ? { lat: address.lat, lng: address.lng }
+      : await resolveAddressCoordinates(address);
+
   if (!coords) return null;
-  const { distanceKm } = await resolveDeliveryDistanceKm(coords.lat, coords.lng, {
+
+  const { distanceKm, source } = await resolveDeliveryDistanceKm(coords.lat, coords.lng, {
     httpReferrer: options?.httpReferrer,
   });
+
+  // When OLA still unavailable, fall back to the cached haversine value (if any) rather
+  // than returning null and triggering the ₹60 hard fallback.
+  if (source === "straight_line" && typeof address.distance_km === "number" && Number.isFinite(address.distance_km)) {
+    return address.distance_km;
+  }
+
   return distanceKm;
 }
 
