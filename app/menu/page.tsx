@@ -11,13 +11,21 @@ export const metadata: Metadata = buildPageMetadata({
   path: "/menu",
 });
 
-export default async function MenuPage() {
+export default async function MenuPage({
+  searchParams,
+}: {
+  searchParams?: { tier?: string };
+}) {
   const bowls = await getAllBowls();
+  const initialTier =
+    searchParams?.tier === "standard" || searchParams?.tier === "premium"
+      ? searchParams.tier
+      : "all";
 
   return (
     <>
       <JsonLd data={getMenuSchema(bowls)} />
-      <MenuClient bowls={bowls} />
+      <MenuClient bowls={bowls} initialTier={initialTier} />
     </>
   );
 }

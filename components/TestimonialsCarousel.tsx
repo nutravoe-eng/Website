@@ -98,25 +98,25 @@ function WhatsAppIcon() {
 function ReviewCard({ review }: { review: Review }) {
   return (
     <div
-      className="flex-shrink-0 w-[300px] sm:w-[320px] bg-cream rounded-2xl shadow-sm border border-sage/10 border-l-4 px-5 py-4 mx-3 flex flex-col gap-3"
+      className="mx-2 flex w-[248px] flex-shrink-0 flex-col gap-2 rounded-[20px] border border-sage/10 border-l-4 bg-cream px-3.5 py-3 shadow-sm sm:mx-3 sm:w-[320px] sm:px-5 sm:py-4"
       style={{ borderLeftColor: "rgba(125, 155, 118, 0.35)" }}
       aria-label={`Review by ${review.name}`}
     >
       {/* Header row */}
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           {/* Initials avatar */}
           <div
-            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9"
             style={{ backgroundColor: review.avatarColor }}
             aria-hidden="true"
           >
-            <span className="font-body text-[11px] font-medium text-white leading-none">
+            <span className="font-body text-[10px] font-medium leading-none text-white sm:text-[11px]">
               {review.initials}
             </span>
           </div>
           <div className="flex flex-col">
-            <span className="font-body text-[13px] font-medium text-ink leading-tight">
+            <span className="font-body text-[11px] font-medium leading-tight text-ink sm:text-[13px]">
               {review.name}
             </span>
             <StarRating count={review.stars} />
@@ -126,7 +126,7 @@ function ReviewCard({ review }: { review: Review }) {
       </div>
 
       {/* Review text */}
-      <p className="font-body text-[13px] leading-relaxed text-stone italic">
+      <p className="font-body text-[11px] italic leading-relaxed text-stone sm:text-[13px]">
         "{review.text}"
       </p>
     </div>
@@ -138,15 +138,15 @@ const tripled = [...reviews, ...reviews, ...reviews];
 
 export default function TestimonialsCarousel() {
   return (
-    <section className="bg-beige py-20 overflow-hidden" aria-label="Customer testimonials">
+    <section className="overflow-hidden bg-beige py-14 md:py-20" aria-label="Customer testimonials">
       {/* Section header */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-16 mb-14 text-center">
+      <div className="mx-auto mb-10 max-w-7xl px-5 text-center md:mb-14 md:px-6 lg:px-16">
         <p className="section-eyebrow text-terracotta mb-4">
           From Bangalore, with love
         </p>
         <h2
           className="font-display text-ink"
-          style={{ fontSize: "clamp(36px, 3.5vw, 52px)", lineHeight: "1.15" }}
+          style={{ fontSize: "clamp(28px, 3.5vw, 52px)", lineHeight: "1.15" }}
         >
           Why they keep{" "}
           <em className="text-terracotta">coming back.</em>

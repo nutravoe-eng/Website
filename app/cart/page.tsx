@@ -438,8 +438,8 @@ export default function CartPage() {
   return (
     <>
       <DeliveryMarquee variant="light" />
-      <section className={`pt-16 px-6 lg:px-16 min-h-[80vh] ${items.length > 0 ? "pb-32 sm:pb-20" : "pb-20"}`}>
-        <div className="max-w-2xl mx-auto">
+      <section className={`min-h-[80vh] px-4 lg:px-16 ${items.length > 0 ? "pb-28 sm:pb-20" : "pb-16"}`}>
+        <div className="mx-auto max-w-2xl">
           {/* Cart summary */}
           <div>
             <h1
@@ -450,20 +450,20 @@ export default function CartPage() {
             </h1>
 
             {items.length === 0 ? (
-              <div className="border border-ink/10 rounded-sm p-10 text-center bg-[#F9F8F6]">
+              <div className="rounded-2xl border border-ink/10 bg-[#F9F8F6] p-6 text-center md:rounded-sm md:p-10">
                 <p className="font-display text-xl italic text-stone mb-4">
                   Your cart is empty.
                 </p>
                 <a
                   href="/menu"
-                  className="font-body text-[13px] font-bold tracking-wide text-sage-dark hover:underline transition-colors"
+                  className="inline-block font-body text-[13px] font-bold tracking-wide bg-sage hover:bg-sage-dark text-white px-6 py-3 rounded-md transition-colors"
                 >
-                  Browse the menu →
+                  Browse the menu
                 </a>
               </div>
             ) : (
-              <div className="bg-white border text-ink border-black/10 rounded-xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-                <div className="space-y-4 mb-6">
+              <div className="rounded-xl border border-black/10 bg-white p-4 text-ink shadow-[0_8px_30px_rgb(0,0,0,0.04)] md:p-6">
+                <div className="mb-5 space-y-3.5 md:mb-6 md:space-y-4">
                   {items.map((item) => {
                     const removed = item.customizations.filter(c => c.option === "remove");
                     const extras = item.customizations.filter(c => c.option === "extra");
@@ -477,10 +477,10 @@ export default function CartPage() {
                     return (
                       <div
                         key={item.instanceId}
-                        className="flex flex-col gap-3 bg-[#F9F8F6] p-4 rounded-lg sm:flex-row sm:items-start sm:gap-4"
+                        className="flex flex-col gap-3 rounded-lg bg-[#F9F8F6] p-3.5 sm:flex-row sm:items-start sm:gap-4"
                       >
                         <div className="flex-1 min-w-0">
-                          <p className="font-display text-lg font-medium text-ink leading-snug break-words">
+                          <p className="font-display text-[18px] font-medium leading-snug text-ink break-words">
                             {item.bowl.name}
                           </p>
                           <div className="flex flex-wrap items-center gap-2 mt-0.5">
@@ -544,11 +544,11 @@ export default function CartPage() {
                           )}
                         </div>
                         <div className="flex items-center justify-between gap-2 shrink-0 w-full sm:w-auto sm:justify-start sm:gap-3">
-                          <div className="flex items-center gap-2 bg-white rounded-md border border-black/10 px-2 py-1">
+                          <div className="flex items-center gap-1 bg-white rounded-md border border-black/10 px-1 py-0.5">
                             <button
                               aria-label={`Decrease quantity of ${item.bowl.name}`}
                               onClick={() => updateQuantity(item.instanceId, item.quantity - 1)}
-                              className="w-6 h-6 flex items-center justify-center text-stone hover:text-ink transition-colors cursor-pointer"
+                              className="flex h-9 w-9 items-center justify-center text-stone transition-colors hover:text-ink cursor-pointer"
                             >
                               −
                             </button>
@@ -559,7 +559,7 @@ export default function CartPage() {
                               aria-label={`Increase quantity of ${item.bowl.name}`}
                               onClick={() => updateQuantity(item.instanceId, item.quantity + 1)}
                               disabled={item.bowl.inStock === false}
-                              className="w-6 h-6 flex items-center justify-center text-stone hover:text-ink transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="flex h-9 w-9 items-center justify-center text-stone transition-colors hover:text-ink cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               +
                             </button>
@@ -570,7 +570,7 @@ export default function CartPage() {
                           <button
                             aria-label={`Remove ${item.bowl.name} from cart`}
                             onClick={() => removeItem(item.instanceId)}
-                            className="w-8 h-8 rounded-full border border-black/5 flex items-center justify-center text-stone hover:bg-terracotta/5 hover:text-terracotta transition-colors ml-2 cursor-pointer bg-white"
+                            className="w-10 h-10 rounded-full border border-black/5 flex items-center justify-center text-stone hover:bg-terracotta/5 hover:text-terracotta transition-colors ml-2 cursor-pointer bg-white"
                           >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                           </button>
@@ -581,7 +581,7 @@ export default function CartPage() {
                 </div>
 
                 {user && (
-                  <div className="mb-6 rounded-lg border border-black/10 bg-[#F9F8F6] px-4 py-3">
+                  <div className="mb-5 rounded-lg border border-black/10 bg-[#F9F8F6] px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-1">Deliver to</p>
@@ -592,7 +592,7 @@ export default function CartPage() {
                       <button
                         type="button"
                         onClick={() => setShowAddressPicker(true)}
-                        className="font-body text-[12px] font-bold text-sage hover:text-sage-dark underline shrink-0"
+                        className="font-body text-[12px] font-bold text-sage hover:text-sage-dark underline shrink-0 min-h-[44px] flex items-center"
                       >
                         Edit address
                       </button>
@@ -605,7 +605,7 @@ export default function CartPage() {
                   </div>
                 )}
 
-                <div className="border-t border-black/5 pt-6 mb-6 space-y-2">
+                <div className="mb-5 space-y-2 border-t border-black/5 pt-5">
                   {subscriberDiscount > 0 && (
                     <>
                       <div className="flex items-center justify-between">
@@ -666,7 +666,7 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                <div className="mb-6 space-y-3">
+                <div className="mb-5 space-y-3">
                   <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone">
                     Delivery Mode
                   </label>
@@ -710,7 +710,7 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                <div className="mb-6">
+                <div className="mb-5">
                   <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
                     {deliveryMode === "asap" ? "Selected Delivery Slot" : "Select Delivery Slot"}
                   </label>
@@ -735,7 +735,7 @@ export default function CartPage() {
                 </div>
 
                 {/* Customer notes */}
-                <div className="mb-5">
+                <div className="mb-4">
                   <label htmlFor="order-notes" className="block font-body text-[12px] font-bold uppercase tracking-wider text-stone mb-2">
                     Any notes for us? <span className="font-normal normal-case tracking-normal">(allergies, preferences…)</span>
                   </label>
@@ -797,7 +797,7 @@ export default function CartPage() {
             )}
 
             {/* Trust signals */}
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 text-center border-t border-black/5 pt-8">
+            <div className="mt-6 grid grid-cols-1 gap-3 border-t border-black/5 pt-6 text-center md:mt-8 md:grid-cols-3 md:gap-4 md:pt-8">
               {[
                 { emoji: "🌅", text: "Made fresh daily" },
                 { emoji: "🚚", text: "Same-day delivery" },
@@ -815,7 +815,7 @@ export default function CartPage() {
 
       {items.length > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-black/10 bg-white/95 backdrop-blur sm:hidden">
-          <div className="mx-auto max-w-2xl px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <div className="mx-auto max-w-2xl px-4 pt-2.5 pb-[calc(0.65rem+env(safe-area-inset-bottom))]">
             <div className="mb-2 flex items-center justify-between">
               <span className="font-body text-[11px] font-bold uppercase tracking-wider text-ink/70">
                 Grand Total
@@ -824,6 +824,18 @@ export default function CartPage() {
                 {formatCurrency(grandTotal)}
               </span>
             </div>
+            {hasActivePaidSub && (
+              <button
+                onClick={handlePayFromWallet}
+                disabled={submitting || !canPayFromWallet || hasOutOfStockItems || hasUnserviceableSelectedAddress}
+                className="w-full mb-2 bg-sage hover:bg-sage-dark disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>
+                {canPayFromWallet
+                  ? `Pay ${formatCurrency(grandTotal)} from Wallet`
+                  : `Wallet balance low (${formatCurrency(walletBalanceRs)})`}
+              </button>
+            )}
             <button
               onClick={handlePlaceOrder}
               disabled={submitting || hasOutOfStockItems || hasUnserviceableSelectedAddress}

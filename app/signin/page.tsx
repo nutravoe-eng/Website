@@ -10,6 +10,28 @@ import { createClient } from "@/lib/supabase/client";
 const MapPicker = dynamic(() => import("@/components/MapPicker"), { ssr: false });
 
 type Step = "identifier" | "new-user" | "existing-user" | "success";
+type SignupStage = 1 | 2 | 3;
+
+const SIGNUP_STAGE_META: Array<{ step: SignupStage; label: string; title: string; description: string }> = [
+  {
+    step: 1,
+    label: "About You",
+    title: "Let’s start with you",
+    description: "Name and phone first. We’ll use this for delivery updates and account recovery.",
+  },
+  {
+    step: 2,
+    label: "Delivery",
+    title: "Where should we deliver?",
+    description: "Add the address and pin your exact location so deliveries reach the right spot.",
+  },
+  {
+    step: 3,
+    label: "Finish setup",
+    title: "Secure your account",
+    description: "Set your email and password so you can sign in quickly next time.",
+  },
+];
 
 function SignInForm() {
   const router = useRouter();
@@ -17,6 +39,7 @@ function SignInForm() {
   const supabase = createClient();
 
   const [step, setStep] = useState<Step>("identifier");
+  const [signupStage, setSignupStage] = useState<SignupStage>(1);
   const [isNewUser, setIsNewUser] = useState(false);
 
   const [identifier, setIdentifier] = useState("");
@@ -38,17 +61,21 @@ function SignInForm() {
   const [pincodeLookupLoading, setPincodeLookupLoading] = useState(false);
   const [isIndianPincode, setIsIndianPincode] = useState<boolean | null>(null);
 
-  // Redirect on success
   useEffect(() => {
     if (step === "success") {
       const rawNext = searchParams.get("next") ?? "/";
-      const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/';
+      const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/";
       const timer = setTimeout(() => router.push(next), 2000);
       return () => clearTimeout(timer);
     }
   }, [step, router, searchParams]);
 
-  // Geocode pincode to center the map when pincode is complete
+  useEffect(() => {
+    if (step !== "new-user") {
+      setSignupStage(1);
+    }
+  }, [step]);
+
   useEffect(() => {
     if (pincode.length !== 6) {
       setIsIndianPincode(null);
@@ -83,14 +110,55 @@ function SignInForm() {
       });
   }, [pincode]);
 
-  /* ── Step 1: detect identifier type and check if account exists ── */
+  const enterNewUserFlow = () => {
+    setError("");
+    setSignupStage(1);
+    setStep("new-user");
+  };
+
+  const validateSignupStage = (stageToValidate: SignupStage) => {
+    if (stageToValidate === 1) {
+      if (!name.trim()) return "Please enter your name.";
+      if (!phone.trim() || phone.replace(/\D/g, "").length < 10) return "Please enter a valid 10-digit mobile number.";
+      return "";
+    }
+
+    if (stageToValidate === 2) {
+      if (!addressLine1.trim()) return "Please enter your street address.";
+      if (!/^\d{6}$/.test(pincode)) return "Enter a valid PIN code in India.";
+      if (isIndianPincode === false) return "Enter a valid PIN code in India.";
+      if (!city.trim()) return "Please enter your city.";
+      if (!addressState) return "Please select your state.";
+      if (pinLat === null || pinLng === null) return "Pin drop is required to continue.";
+      return "";
+    }
+
+    if (!email) return "Please enter your email.";
+    if (!password) return "Please enter your password.";
+    if (password.length < 8) return "Password must be at least 8 characters.";
+    return "";
+  };
+
+  const handleSignupStageSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    const validationError = validateSignupStage(signupStage);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setSignupStage((current) => Math.min(3, current + 1) as SignupStage);
+  };
+
   const handleIdentifierSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     const val = identifier.trim();
-    if (!val) { setError("Please enter your email address or mobile number."); return; }
+    if (!val) {
+      setError("Please enter your email address or mobile number.");
+      return;
+    }
 
-    // Detect type: email takes priority, then 10-digit phone
     const isEmail = val.includes("@");
     const digits = val.replace(/\D/g, "");
     const isPhone = !isEmail && digits.length === 10;
@@ -112,59 +180,54 @@ function SignInForm() {
           body: JSON.stringify({ email: val }),
         });
         const { exists } = await res.json();
-        setStep(exists ? "existing-user" : "new-user");
-      } catch {
-        setStep("existing-user");
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      // Phone path
-      setIdentifierType("phone");
-      setPhone(digits);
-      try {
-        const res = await fetch("/api/auth/check-phone", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone: digits }),
-        });
-        const data = await res.json();
-        if (data.exists && data.email) {
-          setEmail(data.email);
+        if (exists) {
           setStep("existing-user");
         } else {
-          // New user — phone pre-filled, email left blank for them to fill
-          setEmail("");
-          setStep("new-user");
+          enterNewUserFlow();
         }
       } catch {
-        // Fallback: let them try signing in
         setStep("existing-user");
       } finally {
         setLoading(false);
       }
+      return;
+    }
+
+    setIdentifierType("phone");
+    setPhone(digits);
+    try {
+      const res = await fetch("/api/auth/check-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: digits }),
+      });
+      const data = await res.json();
+      if (data.exists && data.email) {
+        setEmail(data.email);
+        setStep("existing-user");
+      } else {
+        setEmail("");
+        enterNewUserFlow();
+      }
+    } catch {
+      setStep("existing-user");
+    } finally {
+      setLoading(false);
     }
   };
 
-  /* ── Sign up ── */
   const handleSignUp = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (!name.trim()) { setError("Please enter your name."); return; }
-    if (!phone.trim() || phone.replace(/\D/g, "").length < 10) { setError("Please enter a valid 10-digit mobile number."); return; }
-    if (!addressLine1.trim()) { setError("Please enter your street address."); return; }
-    if (!/^\d{6}$/.test(pincode)) { setError("Enter a valid PIN code in India."); return; }
-    if (isIndianPincode === false) { setError("Enter a valid PIN code in India."); return; }
-    if (!city.trim()) { setError("Please enter your city."); return; }
-    if (!addressState) { setError("Please select your state."); return; }
-    if (pinLat === null || pinLng === null) { setError("Pin drop is required to continue."); return; }
-    if (!email || !password) { setError("Please fill in all fields."); return; }
-    if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
+    const validationError = validateSignupStage(1) || validateSignupStage(2) || validateSignupStage(3);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
 
     setLoading(true);
 
-    // Check if this phone was used on a previously deleted account
     const phoneCheck = await fetch("/api/auth/check-phone", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -178,6 +241,7 @@ function SignInForm() {
         return;
       }
     }
+
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -192,7 +256,6 @@ function SignInForm() {
       return;
     }
 
-    // Sign them in immediately (email confirmation disabled in Supabase dashboard)
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
     if (signInError || !signInData.user) {
       setLoading(false);
@@ -226,7 +289,6 @@ function SignInForm() {
       return;
     }
 
-    // Self-signup welcome email (BREVO_WELCOME_TEMPLATE_ID) — not sent from Supabase webhook
     void fetch("/api/auth/send-welcome-self-signup", {
       method: "POST",
       credentials: "include",
@@ -237,7 +299,6 @@ function SignInForm() {
     setStep("success");
   };
 
-  /* ── Sign in ── */
   const handleSignIn = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
@@ -254,7 +315,6 @@ function SignInForm() {
       if (lowerMessage.includes("ban") || lowerMessage.includes("deactivated")) {
         setError("This account has been deactivated. Please contact support if you need to restore access.");
       } else if (lowerMessage.includes("invalid")) {
-        // Could be wrong password OR email doesn't exist — offer sign-up
         setError("No account found with this email, or the password is incorrect.");
       } else {
         setError(signInError.message);
@@ -270,49 +330,53 @@ function SignInForm() {
       });
     }
 
-    // Keep loading=true so button stays disabled during redirect
     setIsNewUser(false);
     setStep("success");
   };
 
-  /* ── Forgot password ── */
   const handleForgotPassword = async () => {
-    if (!email) { setError("Enter your email first, then click Forgot Password."); return; }
+    if (!email) {
+      setError("Enter your email first, then click Forgot Password.");
+      return;
+    }
     setLoading(true);
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setLoading(false);
-    if (resetError) { setError(resetError.message); return; }
+    if (resetError) {
+      setError(resetError.message);
+      return;
+    }
     setError("");
     alert(`Password reset email sent to ${email}. Check your inbox.`);
   };
 
+  const currentSignupMeta = SIGNUP_STAGE_META.find((item) => item.step === signupStage)!;
+  const progressWidth = `${(signupStage / SIGNUP_STAGE_META.length) * 100}%`;
+
   return (
-    <div className="min-h-[calc(100vh-64px)] pt-24 pb-16 px-6 bg-cream flex flex-col items-center justify-center">
-      {/* Brand Logo */}
-      <Link href="/" className="mb-8">
-        <div className="relative w-12 h-12">
+    <div className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-start bg-cream px-4 pb-10 pt-18 md:justify-center md:px-6 md:pb-16 md:pt-24">
+      <Link href="/" className="mb-5 md:mb-6">
+        <div className="relative h-10 w-10 md:h-12 md:w-12">
           <Image src="/Nutravoe Logo.png" alt="Nutravoe" fill className="object-contain" />
         </div>
       </Link>
 
-      <div className="w-full max-w-md bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-ink/5 overflow-hidden">
-        <div className="p-8 md:p-10">
-
-          {/* STEP 1: ENTER EMAIL */}
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-ink/5 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] md:rounded-xl">
+        <div className="p-4 md:p-10">
           {step === "identifier" && (
             <div className="animate-in fade-in duration-300">
-              <h1 className="font-display text-[28px] font-medium text-ink mb-2 leading-tight">
+              <h1 className="mb-2 font-display text-[22px] font-medium leading-tight text-ink md:text-[28px]">
                 Sign in or create account
               </h1>
-              <p className="font-body text-[14px] text-stone mb-8">
+              <p className="mb-5 font-body text-[12px] leading-relaxed text-stone md:mb-8 md:text-[14px]">
                 Enter your email address or mobile number to get started.
               </p>
 
-              <form onSubmit={handleIdentifierSubmit} className="flex flex-col gap-4">
+              <form onSubmit={handleIdentifierSubmit} className="flex flex-col gap-3 md:gap-4">
                 <div>
-                  <label htmlFor="identifier" className="block font-body text-[13px] font-medium text-ink mb-1.5">
+                  <label htmlFor="identifier" className="mb-1.5 block font-body text-[13px] font-medium text-ink">
                     Email or mobile number
                   </label>
                   <input
@@ -322,20 +386,20 @@ function SignInForm() {
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     placeholder="Email address or 10-digit mobile number"
-                    className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage transition-all"
+                    className="w-full rounded-md border border-black/20 px-3 py-2.5 font-body text-sm transition-all focus:border-sage focus:outline-none focus:ring-1 focus:ring-sage"
                     autoFocus
                     required
                   />
                 </div>
 
-                {error && <p id="identifier-error" role="alert" className="font-body text-[12px] text-terracotta">{error}</p>}
+                {error ? <p id="identifier-error" role="alert" className="font-body text-[12px] text-terracotta">{error}</p> : null}
 
-                <button type="submit" disabled={loading} className="w-full bg-sage hover:bg-sage-dark disabled:opacity-50 text-white font-body text-sm font-medium py-3 rounded-md transition-colors shadow-sm mt-2">
-                  {loading ? "Checking…" : "Continue"}
+                <button type="submit" disabled={loading} className="mt-1 w-full rounded-md bg-sage py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-sage-dark disabled:opacity-50">
+                  {loading ? "Checking..." : "Continue"}
                 </button>
               </form>
 
-              <p className="font-body text-[11px] text-stone mt-6 text-center leading-relaxed">
+              <p className="mt-5 text-center font-body text-[10.5px] leading-relaxed text-stone md:mt-6 md:text-[11px]">
                 By continuing, you agree to Nutravoe&apos;s{" "}
                 <Link href="/terms" className="underline hover:text-ink">Conditions of Use</Link> and{" "}
                 <Link href="/privacy" className="underline hover:text-ink">Privacy Notice</Link>.
@@ -343,22 +407,21 @@ function SignInForm() {
             </div>
           )}
 
-          {/* STEP 2: SIGN IN */}
           {step === "existing-user" && (
             <div className="animate-in fade-in duration-300">
-              <h1 className="font-display text-[28px] font-medium text-ink mb-2 leading-tight">
+              <h1 className="mb-2 font-display text-[22px] font-medium leading-tight text-ink md:text-[28px]">
                 Sign in
               </h1>
-              <div className="flex items-center gap-2 mb-8">
-                <span className="font-body text-[14px] text-ink">{identifier}</span>
-                <button onClick={() => { setStep("identifier"); setError(""); }} className="font-body text-[13px] text-sage hover:text-sage-dark font-medium underline">
+              <div className="mb-6 flex items-center gap-2 md:mb-8">
+                <span className="min-w-0 truncate font-body text-[13px] text-ink md:text-[14px]">{identifier}</span>
+                <button onClick={() => { setStep("identifier"); setError(""); }} className="font-body text-[12px] font-medium text-sage underline hover:text-sage-dark">
                   Change
                 </button>
               </div>
 
-              <form onSubmit={handleSignIn} className="flex flex-col gap-4">
+              <form onSubmit={handleSignIn} className="flex flex-col gap-3 md:gap-4">
                 <div>
-                  <div className="flex justify-between items-baseline mb-1.5">
+                  <div className="mb-1.5 flex justify-between">
                     <label htmlFor="signin-password" className="block font-body text-[13px] font-medium text-ink">Password</label>
                     <button type="button" onClick={handleForgotPassword} className="font-body text-[12px] text-sage hover:underline">
                       Forgot Password?
@@ -369,30 +432,34 @@ function SignInForm() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
+                    className="w-full rounded-md border border-black/20 px-3 py-2.5 font-body text-sm outline-none transition-all focus:border-sage"
                     autoFocus
                     required
                     aria-describedby={error ? "signin-error" : undefined}
                   />
                 </div>
 
-                {error && <p id="signin-error" role="alert" className="font-body text-[12px] text-terracotta">{error}</p>}
+                {error ? <p id="signin-error" role="alert" className="font-body text-[12px] text-terracotta">{error}</p> : null}
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-sage hover:bg-sage-dark disabled:opacity-50 text-white font-body text-sm font-medium py-3 rounded-md transition-colors shadow-sm mt-3"
+                  className="mt-2 w-full rounded-md bg-sage py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-sage-dark disabled:opacity-50"
                 >
-                  {loading ? "Signing in…" : "Sign In"}
+                  {loading ? "Signing in..." : "Sign In"}
                 </button>
               </form>
 
-              <div className="mt-6 pt-6 border-t border-ink/5 text-center">
+              <div className="mt-5 border-t border-ink/5 pt-5 text-center md:mt-6 md:pt-6">
                 <p className="font-body text-[13px] text-stone">
                   New to Nutravoe?{" "}
                   <button
-                    onClick={() => { setStep("new-user"); setError(""); }}
-                    className="text-sage font-medium hover:underline"
+                    onClick={() => {
+                      setError("");
+                      setSignupStage(1);
+                      setStep("new-user");
+                    }}
+                    className="font-medium text-sage hover:underline"
                   >
                     Create an account
                   </button>
@@ -401,253 +468,271 @@ function SignInForm() {
             </div>
           )}
 
-          {/* STEP 3: SIGN UP */}
           {step === "new-user" && (
-            <div className="animate-in zoom-in-95 duration-300">
-              <div className="flex items-center justify-center w-12 h-12 bg-sage/10 rounded-full text-sage mb-4 mx-auto">
+            <div className="animate-in fade-in duration-300">
+              <div className="mb-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="font-body text-[10px] font-bold uppercase tracking-[0.18em] text-stone">
+                    Step {signupStage} of {SIGNUP_STAGE_META.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (signupStage === 1) {
+                        setStep("identifier");
+                      } else {
+                        setSignupStage((current) => Math.max(1, current - 1) as SignupStage);
+                      }
+                      setError("");
+                    }}
+                    className="font-body text-[12px] font-medium text-stone hover:text-ink"
+                  >
+                    {signupStage === 1 ? "Back" : "Previous"}
+                  </button>
+                </div>
+                <div className="h-1.5 rounded-full bg-black/6">
+                  <div className="h-full rounded-full bg-sage transition-all duration-300" style={{ width: progressWidth }} />
+                </div>
+                <div className="mt-3 flex justify-between gap-2">
+                  {SIGNUP_STAGE_META.map((item) => (
+                    <div key={item.step} className="min-w-0 flex-1">
+                      <p className={`font-body text-[10px] font-bold uppercase tracking-[0.12em] ${item.step === signupStage ? "text-ink" : "text-stone/55"}`}>
+                        {item.label}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-sage/10 text-sage md:h-12 md:w-12">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                  <circle cx="9" cy="7" r="4"/>
-                  <line x1="19" x2="19" y1="8" y2="14"/>
-                  <line x1="22" x2="16" y1="11" y2="11"/>
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <line x1="19" x2="19" y1="8" y2="14" />
+                  <line x1="22" x2="16" y1="11" y2="11" />
                 </svg>
               </div>
-              <h1 className="font-display text-[28px] font-medium text-ink mb-2 text-center leading-tight">
-                Looks like you're new here!
+              <h1 className="mb-2 text-center font-display text-[22px] font-medium leading-tight text-ink md:text-[28px]">
+                {currentSignupMeta.title}
               </h1>
-              <p className="font-body text-[13.5px] text-stone mb-8 text-center px-4">
-                Good to meet you. Let&apos;s get your account set up in under a minute.
+              <p className="mb-5 px-1 text-center font-body text-[12px] leading-relaxed text-stone md:mb-8 md:px-4 md:text-[13.5px]">
+                {currentSignupMeta.description}
               </p>
 
-              <form onSubmit={handleSignUp} className="flex flex-col gap-4">
-                <div>
-                  <label htmlFor="signup-name" className="block font-body text-[13px] font-medium text-ink mb-1.5">Your Name</label>
-                  <input
-                    id="signup-name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="signup-phone" className="block font-body text-[13px] font-medium text-ink mb-1.5">Mobile Number</label>
-                  <input
-                    id="signup-phone"
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    placeholder="10-digit mobile number"
-                    className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
-                    required
-                  />
-                </div>
-
-                {/* Address section */}
-                <div className="pt-1">
-                  <p className="font-body text-[12px] font-semibold text-stone uppercase tracking-widest mb-3">Delivery Address</p>
-                  <div className="flex flex-col gap-3">
+              <form onSubmit={signupStage === 3 ? handleSignUp : handleSignupStageSubmit} className="flex flex-col gap-3 md:gap-4">
+                {signupStage === 1 && (
+                  <>
                     <div>
-                      <label htmlFor="signup-address-line1" className="block font-body text-[13px] font-medium text-ink mb-1.5">Street / Flat / Building</label>
+                      <label htmlFor="signup-name" className="mb-1.5 block font-body text-[13px] font-medium text-ink">Your Name</label>
                       <input
-                        id="signup-address-line1"
+                        id="signup-name"
                         type="text"
-                        value={addressLine1}
-                        onChange={(e) => setAddressLine1(e.target.value)}
-                        placeholder="e.g. 12A, Green Apartments, MG Road"
-                        className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full rounded-md border border-black/20 px-3 py-2.5 font-body text-sm outline-none transition-all focus:border-sage"
+                        autoFocus
                         required
                       />
                     </div>
                     <div>
-                      <label htmlFor="signup-address-line2" className="block font-body text-[13px] font-medium text-ink mb-1.5">Landmark <span className="text-stone font-normal">(optional)</span></label>
+                      <label htmlFor="signup-phone" className="mb-1.5 block font-body text-[13px] font-medium text-ink">Mobile Number</label>
                       <input
-                        id="signup-address-line2"
-                        type="text"
-                        value={addressLine2}
-                        onChange={(e) => setAddressLine2(e.target.value)}
-                        placeholder="e.g. Near City Mall"
-                        className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
+                        id="signup-phone"
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        placeholder="10-digit mobile number"
+                        className="w-full rounded-md border border-black/20 px-3 py-2.5 font-body text-sm outline-none transition-all focus:border-sage"
+                        required
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label htmlFor="signup-pincode" className="block font-body text-[13px] font-medium text-ink mb-1.5">PIN Code</label>
-                        <input
-                          id="signup-pincode"
-                          type="text"
-                          value={pincode}
-                          onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                          placeholder="6 digits"
-                          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
-                          required
-                        />
-                        {pincode.length === 6 && isIndianPincode === false && (
-                          <p className="font-body text-[11px] text-terracotta mt-1">Enter a valid PIN code in India.</p>
-                        )}
-                      </div>
-                      <div>
-                        <label htmlFor="signup-city" className="block font-body text-[13px] font-medium text-ink mb-1.5">City</label>
-                        <input
-                          id="signup-city"
-                          type="text"
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          placeholder={pincodeLookupLoading ? "Auto-filling..." : "e.g. Bengaluru"}
-                          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="signup-state" className="block font-body text-[13px] font-medium text-ink mb-1.5">State</label>
-                      <select
-                        id="signup-state"
-                        value={addressState}
-                        onChange={(e) => setAddressState(e.target.value)}
-                        className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all bg-white text-ink"
-                        required
-                      >
-                        <option value="">Select state…</option>
-                        {["Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa","Gujarat","Haryana","Himachal Pradesh","Jharkhand","Karnataka","Kerala","Madhya Pradesh","Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland","Odisha","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura","Uttar Pradesh","Uttarakhand","West Bengal","Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"].map(s => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
+                  </>
+                )}
 
-                    {/* Mandatory map pin */}
-                    <div className="border border-dashed border-black/15 rounded-lg overflow-hidden">
-                      <div className="w-full flex items-center gap-2.5 px-4 py-3 text-left">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sage shrink-0">
-                          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
-                          <circle cx="12" cy="10" r="3"/>
-                        </svg>
-                        <span className="font-body text-[13px] text-ink font-medium">
-                          Pin your exact location
-                        </span>
-                        <span className="font-body text-[11px] text-terracotta ml-1">(required)</span>
-                      </div>
-                      <div className="px-4 pb-4">
-                        <p className="font-body text-[12px] text-stone mb-3">
-                          Drag the pin or tap the map to mark your exact gate or building entrance.
-                        </p>
-                        <MapPicker
-                          centerLat={mapCenter?.lat}
-                          centerLng={mapCenter?.lng}
-                          onChange={(lat, lng) => { setPinLat(lat); setPinLng(lng); }}
+                {signupStage === 2 && (
+                  <div className="rounded-2xl border border-black/6 bg-[#FBFAF8] p-3.5 md:rounded-none md:border-0 md:bg-transparent md:p-0">
+                    <p className="mb-3 font-body text-[11px] font-semibold uppercase tracking-[0.16em] text-stone md:text-[12px] md:tracking-widest">Delivery Address</p>
+                    <div className="flex flex-col gap-3">
+                      <div>
+                        <label htmlFor="signup-address-line1" className="mb-1.5 block font-body text-[13px] font-medium text-ink">Street / Flat / Building</label>
+                        <input
+                          id="signup-address-line1"
+                          type="text"
+                          value={addressLine1}
+                          onChange={(e) => setAddressLine1(e.target.value)}
+                          placeholder="e.g. 12A, Green Apartments, MG Road"
+                          className="w-full rounded-md border border-black/20 px-3 py-2.5 font-body text-sm outline-none transition-all focus:border-sage"
+                          autoFocus
+                          required
                         />
+                      </div>
+                      <div>
+                        <label htmlFor="signup-address-line2" className="mb-1.5 block font-body text-[13px] font-medium text-ink">Landmark <span className="font-normal text-stone">(optional)</span></label>
+                        <input
+                          id="signup-address-line2"
+                          type="text"
+                          value={addressLine2}
+                          onChange={(e) => setAddressLine2(e.target.value)}
+                          placeholder="e.g. Near City Mall"
+                          className="w-full rounded-md border border-black/20 px-3 py-2.5 font-body text-sm outline-none transition-all focus:border-sage"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div>
+                          <label htmlFor="signup-pincode" className="mb-1.5 block font-body text-[13px] font-medium text-ink">PIN Code</label>
+                          <input
+                            id="signup-pincode"
+                            type="text"
+                            value={pincode}
+                            onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                            placeholder="6 digits"
+                            className="w-full rounded-md border border-black/20 px-3 py-2.5 font-body text-sm outline-none transition-all focus:border-sage"
+                            required
+                          />
+                          {pincode.length === 6 && isIndianPincode === false ? (
+                            <p className="mt-1 font-body text-[11px] text-terracotta">Enter a valid PIN code in India.</p>
+                          ) : null}
+                        </div>
+                        <div>
+                          <label htmlFor="signup-city" className="mb-1.5 block font-body text-[13px] font-medium text-ink">City</label>
+                          <input
+                            id="signup-city"
+                            type="text"
+                            value={city}
+                            onChange={(e) => setCity(e.target.value)}
+                            placeholder={pincodeLookupLoading ? "Auto-filling..." : "e.g. Bengaluru"}
+                            className="w-full rounded-md border border-black/20 px-3 py-2.5 font-body text-sm outline-none transition-all focus:border-sage"
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor="signup-state" className="mb-1.5 block font-body text-[13px] font-medium text-ink">State</label>
+                        <select
+                          id="signup-state"
+                          value={addressState}
+                          onChange={(e) => setAddressState(e.target.value)}
+                          className="w-full rounded-md border border-black/20 bg-white px-3 py-2.5 font-body text-sm text-ink outline-none transition-all focus:border-sage"
+                          required
+                        >
+                          <option value="">Select state...</option>
+                          {["Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa","Gujarat","Haryana","Himachal Pradesh","Jharkhand","Karnataka","Kerala","Madhya Pradesh","Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland","Odisha","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura","Uttar Pradesh","Uttarakhand","West Bengal","Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"].map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="overflow-hidden rounded-lg border border-dashed border-black/15">
+                        <div className="flex w-full items-center gap-2.5 px-4 py-3 text-left">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-sage">
+                            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                            <circle cx="12" cy="10" r="3" />
+                          </svg>
+                          <span className="font-body text-[13px] font-medium text-ink">
+                            Pin your exact location
+                          </span>
+                          <span className="ml-1 font-body text-[11px] text-terracotta">(required)</span>
+                        </div>
+                        <div className="px-4 pb-4">
+                          <p className="mb-3 font-body text-[11px] leading-relaxed text-stone md:text-[12px]">
+                            Drag the pin or tap the map to mark your exact gate or building entrance.
+                          </p>
+                          <MapPicker
+                            centerLat={mapCenter?.lat}
+                            centerLng={mapCenter?.lng}
+                            onChange={(lat, lng) => { setPinLat(lat); setPinLng(lng); }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
 
-                <div>
-                  <label htmlFor="signup-email" className="block font-body text-[13px] font-medium text-ink mb-1.5">Email</label>
-                  <input
-                    id="signup-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="signup-password" className="block font-body text-[13px] font-medium text-ink mb-1.5">Password</label>
-                  <input
-                    id="signup-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 8 characters"
-                    className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage transition-all"
-                    required
-                    minLength={8}
-                    aria-describedby={error ? "signup-error" : undefined}
-                  />
-                </div>
+                {signupStage === 3 && (
+                  <>
+                    <div>
+                      <label htmlFor="signup-email" className="mb-1.5 block font-body text-[13px] font-medium text-ink">Email</label>
+                      <input
+                        id="signup-email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full rounded-md border border-black/20 px-3 py-2.5 font-body text-sm outline-none transition-all focus:border-sage"
+                        autoFocus
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="signup-password" className="mb-1.5 block font-body text-[13px] font-medium text-ink">Password</label>
+                      <input
+                        id="signup-password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="At least 8 characters"
+                        className="w-full rounded-md border border-black/20 px-3 py-2.5 font-body text-sm outline-none transition-all focus:border-sage"
+                        required
+                        minLength={8}
+                        aria-describedby={error ? "signup-error" : undefined}
+                      />
+                    </div>
+                  </>
+                )}
 
-                {error && <p id="signup-error" role="alert" className="font-body text-[12px] text-terracotta">{error}</p>}
+                {error ? <p id="signup-error" role="alert" className="font-body text-[12px] text-terracotta">{error}</p> : null}
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-terracotta hover:bg-terracotta/90 disabled:opacity-50 text-white font-body text-sm font-medium py-3 rounded-md transition-colors shadow-sm mt-3"
-                >
-                  {loading ? "Creating account…" : "Create Account"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setStep("existing-user"); setError(""); }}
-                  className="font-body text-[12px] text-stone hover:text-ink mt-1"
-                >
-                  Already have an account? Sign in
-                </button>
+                {signupStage < 3 ? (
+                  <button
+                    type="submit"
+                    className="mt-2 w-full rounded-md bg-sage py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-sage-dark"
+                  >
+                    Continue
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="mt-2 w-full rounded-md bg-terracotta py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-terracotta/90 disabled:opacity-50"
+                  >
+                    {loading ? "Creating account..." : "Create Account"}
+                  </button>
+                )}
+
+                {signupStage === 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => { setStep("existing-user"); setError(""); }}
+                    className="mt-0.5 font-body text-[12px] text-stone hover:text-ink"
+                  >
+                    Already have an account? Sign in
+                  </button>
+                ) : null}
               </form>
             </div>
           )}
 
-          {/* CHURNED — previously deleted account */}
-          {false && (
-            <div className="animate-in fade-in duration-300">
-              <div className="flex items-center justify-center w-12 h-12 bg-terracotta/10 rounded-full text-terracotta mb-4 mx-auto">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>
-                </svg>
-              </div>
-              <h1 className="font-display text-[26px] font-medium text-ink mb-2 text-center leading-tight">
-                This account was deleted
-              </h1>
-              <p className="font-body text-[14px] text-stone mb-4 text-center leading-relaxed px-2">
-                The email <span className="font-semibold text-ink">{identifier}</span> belongs to a previously deleted Nutravoe account.
-              </p>
-              <div className="bg-beige border border-black/5 rounded-lg p-4 mb-6">
-                <p className="font-body text-[13px] text-ink/80 leading-relaxed">
-                  You can <span className="font-semibold">sign up fresh</span> using this email — your old data will not be restored. If you deleted your account by mistake, please contact us within 30 days to request a reactivation.
-                </p>
-              </div>
-              <div className="flex flex-col gap-3">
-                <button
-                  onClick={() => { setStep("new-user"); setError(""); }}
-                  className="w-full bg-terracotta hover:bg-terracotta-dark text-white font-body text-sm font-medium py-3 rounded-md transition-colors shadow-sm"
-                >
-                  Sign Up Fresh with This Email
-                </button>
-                <button
-                  onClick={() => { setStep("identifier"); setIdentifier(""); setError(""); }}
-                  className="w-full bg-black/5 hover:bg-black/10 text-ink font-body text-sm font-medium py-3 rounded-md transition-colors"
-                >
-                  Use a Different Email
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* SUCCESS */}
           {step === "success" && (
-            <div className="flex flex-col items-center justify-center py-10 text-center animate-in zoom-in-95 fade-in duration-500">
-              <div className="w-16 h-16 rounded-full bg-sage/10 flex items-center justify-center text-sage mb-6 ring-1 ring-sage/20 shadow-inner">
+            <div className="flex animate-in zoom-in-95 fade-in duration-500 flex-col items-center justify-center py-10 text-center">
+              <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-sage/10 text-sage ring-1 ring-sage/20 shadow-inner">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 6 9 17l-5-5"/>
+                  <path d="M20 6 9 17l-5-5" />
                 </svg>
               </div>
-              <h1 className="font-display text-[32px] font-medium text-ink mb-3 leading-tight">
+              <h1 className="mb-3 font-display text-[28px] font-medium leading-tight text-ink md:text-[32px]">
                 {isNewUser ? "Welcome aboard!" : "Welcome back!"}
               </h1>
-              <p className="font-body text-[14px] text-stone mb-2 px-2 leading-relaxed">
+              <p className="mb-2 px-2 font-body text-[14px] leading-relaxed text-stone">
                 {isNewUser
                   ? "Your account is ready. Let's find your perfect bowl."
                   : "We're so glad to see you again. Taking you to the menu..."}
               </p>
-              <div className="mt-8 flex gap-2 justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-sage/40 animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                <div className="w-1.5 h-1.5 rounded-full bg-sage/70 animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                <div className="w-1.5 h-1.5 rounded-full bg-sage animate-bounce" style={{ animationDelay: "300ms" }}></div>
+              <div className="mt-8 flex justify-center gap-2">
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-sage/40" style={{ animationDelay: "0ms" }} />
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-sage/70" style={{ animationDelay: "150ms" }} />
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-sage" style={{ animationDelay: "300ms" }} />
               </div>
             </div>
           )}
-
         </div>
       </div>
     </div>

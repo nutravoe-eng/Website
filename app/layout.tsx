@@ -1,12 +1,6 @@
-import { GoogleAnalytics } from "@next/third-parties/google";
 import type { Metadata } from "next";
 import "@/styles/globals.css";
-import { CartProvider } from "@/components/CartContext";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
-import WhatsAppButton from "@/components/WhatsAppButton";
-import JsonLd from "@/components/JsonLd";
-import { getOrganizationSchema } from "@/lib/seo";
+import AppChrome from "@/components/AppChrome";
 import { getSiteUrl } from "@/lib/site";
 
 const siteUrl = getSiteUrl();
@@ -16,7 +10,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "Nutravoe - Fresh Yogurt Bowls Delivered in Bangalore",
   description:
-    "Premium protein yogurt bowls made fresh daily in Bangalore. No added sugar, probiotic base, delivered 7 AM-3 PM. Order via WhatsApp.",
+    "Premium protein yogurt bowls made fresh daily in Bangalore. No added sugar, probiotic base, delivered 7 AM-3 PM.",
   keywords: [
     "protein yoghurt bowl Bangalore",
     "yogurt bowl delivery",
@@ -83,24 +77,10 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" href="/icon-32px.png" type="image/png" sizes="32x32" />
         <link rel="apple-touch-icon" href="/icon-128px.png" />
+        <link rel="manifest" href="/manifest.json" />
       </head>
       <body className="min-h-screen flex flex-col">
-        <JsonLd data={getOrganizationSchema()} />
-        <CartProvider>
-          <a
-            href="#main"
-            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[200] focus:bg-sage focus:text-white focus:px-4 focus:py-2 focus:rounded-sm focus:text-sm focus:font-medium"
-          >
-            Skip to main content
-          </a>
-          <Navbar />
-          <main id="main" className="flex-1 pt-16">
-            {children}
-          </main>
-          <Footer />
-          {gaId ? <GoogleAnalytics gaId={gaId} /> : null}
-          <WhatsAppButton />
-        </CartProvider>
+        <AppChrome gaId={gaId}>{children}</AppChrome>
       </body>
     </html>
   );

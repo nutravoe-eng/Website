@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { getAllBowls } from "@/lib/sanity";
 import BowlCard from "@/components/BowlCard";
+import MobileBowlCard from "@/components/MobileBowlCard";
 import TestimonialsCarousel from "@/components/TestimonialsCarousel";
 import DeliveryMarquee from "@/components/DeliveryMarquee";
-import { getWhatsAppHref } from "@/lib/contact";
 
 export default async function HomePage() {
   const bowls = await getAllBowls();
@@ -11,97 +11,248 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* ── Hero ────────────────────────────────────────── */}
-      <section
-        className="relative flex min-h-[max(640px,calc(100vh-64px))] flex-col"
-        aria-labelledby="trust-heading"
-      >
-        {/* Background video bleeds up into the 64px layout padding */}
-        <div className="absolute inset-x-0 bottom-0 top-[-64px] z-[-1] overflow-hidden" aria-hidden="true">
-          <video
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover"
-            poster="/hero-image.png"
-          >
-            <source src="/hero-vid-slow.mp4" type="video/mp4" />
-          </video>
-          {/* Warm brand tint: brown-gold left scrim, cream edge, open right */}
-          <div className="absolute inset-0" style={{
-            background: "linear-gradient(to right, rgba(62,48,32,0.72) 0%, rgba(62,48,32,0.45) 40%, rgba(250,249,246,0.12) 72%, transparent 100%)"
-          }} />
-          {/* Bottom vignette so trust strip reads on any video frame */}
-          <div className="absolute inset-0" style={{
-            background: "linear-gradient(to top, rgba(62,48,32,0.42) 0%, transparent 26%)"
-          }} />
-        </div>
-
-        {/* Copy fills space above strip; strip is in-flow so it never overlaps CTAs */}
-        <div className="relative z-10 flex min-h-0 flex-1 flex-col justify-end px-6 pb-10 pt-10 lg:px-16">
-          <div className="max-w-7xl mx-auto w-full">
-            <div className="max-w-2xl">
-            <p className="font-body text-[11px] font-medium tracking-[0.25em] mb-5 text-sage-light" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}>
-              Bangalore · Fresh Daily · Delivered 7 AM–3 PM
-            </p>
-            <h1 className="font-display text-white mb-7"
-              style={{ fontSize: "clamp(46px, 6vw, 76px)", lineHeight: "1.05" }}>
-              Wholesome, nourishin&apos;<br />
-              <em className="text-sage-light">yoghurt bowls</em>
-            </h1>
-            <p className="font-body text-[15px] font-light text-white/90 leading-relaxed mb-10 max-w-md">
-              High protein, high fibre, gut-friendly, no added sugar — a complete meal delivered
-              to your doorstep whenever you need one.
-            </p>
-            <div className="flex flex-wrap gap-4 items-center">
-              <Link href="/menu" className="btn-sage shadow-[0_4px_20px_rgba(196,165,116,0.35)] hover:shadow-[0_4px_25px_rgba(196,165,116,0.55)] transition-all duration-300">
-                Order Now
-              </Link>
-              <Link href="/subscribe" className="btn-sage shadow-[0_4px_20px_rgba(196,165,116,0.35)] hover:shadow-[0_4px_25px_rgba(196,165,116,0.55)] transition-all duration-300">
-                Subscribe Now
-              </Link>
-            </div>
+      <section className="relative pt-3 md:pt-0" aria-labelledby="trust-heading">
+        <div className="px-4 md:hidden">
+          <div className="relative overflow-hidden rounded-[28px] shadow-[0_24px_60px_rgba(62,48,32,0.18)]">
+            <div className="relative aspect-[1.18/1] min-h-[320px]">
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="h-full w-full object-cover"
+                poster="/hero-image.png"
+              >
+                <source src="/hero-vid-slow.mp4" type="video/mp4" />
+              </video>
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(to top, rgba(40,28,18,0.92) 0%, rgba(54,40,26,0.68) 42%, rgba(62,48,32,0.22) 100%)",
+                }}
+              />
+              <div className="absolute inset-x-0 bottom-0 p-4">
+                <p
+                  className="mb-2.5 font-body text-[9px] font-medium tracking-[0.22em] text-sage-light"
+                  style={{ textShadow: "0 3px 12px rgba(0,0,0,0.42)" }}
+                >
+                  Bangalore · Fresh Daily · Delivered 7 AM-3 PM
+                </p>
+                <h1
+                  className="mb-3 font-display text-white"
+                  style={{
+                    fontSize: "clamp(28px, 7.2vw, 38px)",
+                    lineHeight: "1.02",
+                    textShadow: "0 8px 28px rgba(0,0,0,0.38)",
+                  }}
+                >
+                  Wholesome,
+                  <br />
+                  nourishin&apos;
+                  <br />
+                  <em className="text-sage-light">yoghurt bowls</em>
+                </h1>
+                <p
+                  className="mb-4 max-w-[15.5rem] font-body text-[11px] font-light leading-relaxed text-white/95"
+                  style={{ textShadow: "0 2px 10px rgba(0,0,0,0.42)" }}
+                >
+                  High protein, high fibre, gut-friendly, no added sugar - a complete meal for busy
+                  days.
+                </p>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <Link
+                    href="/menu"
+                    className="inline-flex min-w-[132px] items-center justify-center rounded-full bg-[#c9a562] px-5 py-2.5 font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-white shadow-[0_8px_22px_rgba(196,165,116,0.28)] transition-colors hover:bg-[#b8924f]"
+                  >
+                    Order Now
+                  </Link>
+                  <Link
+                    href="/subscribe"
+                    className="inline-flex min-w-[132px] items-center justify-center rounded-full border border-white/68 bg-black/10 px-5 py-2.5 font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-white backdrop-blur-sm"
+                  >
+                    Subscribe
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Trust strip — in document flow (was absolute + z-20, which covered CTAs on mobile) */}
+        <div className="relative hidden min-h-[400px] flex-col md:flex lg:min-h-[440px]">
+          <div className="absolute inset-x-0 bottom-0 top-[-64px] z-[-1] overflow-hidden" aria-hidden="true">
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="h-full w-full object-cover"
+              poster="/hero-image.png"
+            >
+              <source src="/hero-vid-slow.mp4" type="video/mp4" />
+            </video>
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(to right, rgba(62,48,32,0.72) 0%, rgba(62,48,32,0.45) 40%, rgba(250,249,246,0.12) 72%, transparent 100%)",
+              }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                background: "linear-gradient(to top, rgba(62,48,32,0.42) 0%, transparent 26%)",
+              }}
+            />
+          </div>
+
+          <div className="relative z-10 flex min-h-0 flex-1 flex-col justify-end px-6 pb-24 pt-10 lg:px-16">
+            <div className="mx-auto w-full max-w-7xl">
+              <div className="max-w-2xl">
+                <p
+                  className="mb-5 font-body text-[11px] font-medium tracking-[0.25em] text-sage-light"
+                  style={{ textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}
+                >
+                  Bangalore · Fresh Daily · Delivered 7 AM–3 PM
+                </p>
+                <h1
+                  className="mb-7 font-display text-white"
+                  style={{ fontSize: "clamp(46px, 6vw, 76px)", lineHeight: "1.05" }}
+                >
+                  Wholesome, nourishin&apos;
+                  <br />
+                  <em className="text-sage-light">yoghurt bowls</em>
+                </h1>
+                <p className="mb-10 max-w-md font-body text-[15px] font-light leading-relaxed text-white/90">
+                  High protein, high fibre, gut-friendly, no added sugar — a complete meal delivered
+                  to your doorstep whenever you need one.
+                </p>
+                <div className="flex flex-wrap items-center gap-4">
+                  <Link
+                    href="/menu"
+                    className="btn-sage shadow-[0_4px_20px_rgba(196,165,116,0.35)] transition-all duration-300 hover:shadow-[0_4px_25px_rgba(196,165,116,0.55)]"
+                  >
+                    Order Now
+                  </Link>
+                  <Link
+                    href="/subscribe"
+                    className="inline-flex items-center justify-center rounded-sm border border-white/40 bg-white/8 px-8 py-3.5 font-body text-sm font-medium tracking-widest text-white backdrop-blur-sm transition-all duration-300 hover:border-white/60 hover:bg-white/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+                  >
+                    Subscribe Now
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div
-          className="relative z-20 shrink-0 grid grid-cols-2 md:grid-cols-4 divide-x divide-white/[0.12] border-t border-white/[0.12] text-white"
-          style={{ background: "rgba(45,36,26,0.72)", backdropFilter: "blur(16px)" }}
+          className="mt-3 grid grid-cols-2 gap-2 bg-[#f8f4ed] px-4 py-2 text-sage-dark md:absolute md:bottom-0 md:left-0 md:right-0 md:z-20 md:mt-0 md:shrink-0 md:grid-cols-4 md:gap-0 md:overflow-hidden md:divide-x md:divide-white/[0.12] md:border-t md:border-white/[0.12] md:bg-[rgba(45,36,26,0.68)] md:px-0 md:py-0 md:text-white"
+          style={{ backdropFilter: "blur(16px)" }}
           aria-label="Why Nutravoe"
         >
-          <h2 id="trust-heading" className="sr-only">Why Nutravoe</h2>
+          <h2 id="trust-heading" className="sr-only">
+            Why Nutravoe
+          </h2>
           {[
             {
-              icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg>,
-              title: "Probiotic Yogurt Base", sub: "Good for your gut, every time"
+              icon: (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z" />
+                </svg>
+              ),
+              title: "Probiotic Yogurt Base",
+              sub: "Good for your gut, every time",
             },
             {
-              icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>,
-              title: "No Added Sugar", sub: "Real fruit, honest flavour"
+              icon: (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+                  <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
+                </svg>
+              ),
+              title: "No Added Sugar",
+              sub: "Real fruit, honest flavour",
             },
             {
-              icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>,
-              title: "Small Batches Daily", sub: "No preservatives, ever"
+              icon: (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                  <path d="M5 3v4" />
+                  <path d="M19 17v4" />
+                  <path d="M3 5h4" />
+                  <path d="M17 19h4" />
+                </svg>
+              ),
+              title: "Small Batches Daily",
+              sub: "No preservatives, ever",
             },
             {
-              icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-              title: "Delivered 7 AM–3 PM", sub: "Last same-day order by 3 PM"
+              icon: (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              ),
+              title: "Delivered 7 AM-3 PM",
+              sub: "Last same-day order by 3 PM",
             },
           ].map(({ icon, title, sub }) => (
-            <div key={title} className="px-4 lg:px-8 py-2.5 text-center flex flex-col justify-center items-center text-inherit">
-              <div className="text-sage-light mb-1.5 drop-shadow-md [color:#f0e6d4]" aria-hidden="true">{icon}</div>
+            <div
+              key={title}
+              className="flex flex-col items-center justify-center rounded-2xl border border-[#e8dcc8] bg-[#fffdf8] px-4 py-3 text-center text-inherit shadow-[0_8px_20px_rgba(62,48,32,0.035)] md:rounded-none md:border-0 md:bg-transparent md:px-4 md:py-2.5 md:shadow-none lg:px-8"
+            >
+              <div
+                className="mb-1.5 [color:#bf9350] md:text-sage-light md:drop-shadow-md md:[color:#f0e6d4]"
+                aria-hidden="true"
+              >
+                {icon}
+              </div>
               <p
-                className="font-body text-[11.5px] font-medium tracking-wide leading-tight text-white"
-                style={{ textShadow: "0 1px 3px rgba(0,0,0,0.45)" }}
+                className="font-body text-[11px] font-medium leading-tight tracking-wide text-inherit md:text-[11.5px] md:text-white"
+                style={{ textShadow: "0 1px 2px rgba(0,0,0,0.12)" }}
               >
                 {title}
               </p>
               <p
-                className="font-body text-[10px] mt-0.5 leading-tight text-[#f5f0e8]"
-                style={{ textShadow: "0 1px 2px rgba(0,0,0,0.35)" }}
+                className="mt-0.5 font-body text-[10px] leading-tight text-[#7b6750] md:text-[#f5f0e8]"
+                style={{ textShadow: "0 1px 1px rgba(0,0,0,0.06)" }}
               >
                 {sub}
               </p>
@@ -110,34 +261,37 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Delivery marquee ─────────────────────────────── */}
       <DeliveryMarquee variant="dark" />
 
-      {/* ── Featured Bowls ──────────────────────────────── */}
-      <section className="py-28 px-6 lg:px-16">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-16">
+      <section className="px-5 py-16 md:px-6 md:py-28 lg:px-16">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-10 flex flex-col md:mb-16 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="section-eyebrow mb-4">The Menu</p>
-              <h2 className="section-heading"
-                style={{ fontSize: "clamp(40px, 4.5vw, 60px)" }}>
-                Our menu.<br />
+              <h2 className="section-heading" style={{ fontSize: "clamp(26px, 4.5vw, 60px)" }}>
+                Our menu.
+                <br />
                 <em className="text-sage">Curated with intention.</em>
               </h2>
             </div>
-            <p className="font-body text-sm text-stone max-w-xs mt-4 md:mt-0 md:text-right leading-relaxed">
-              Made with real ingredients. Kept refrigerated.
-              Best consumed within 24 hours.
+            <p className="mt-2 max-w-xs font-body text-[11px] leading-relaxed text-stone md:mt-0 md:text-right md:text-sm">
+              Made with real ingredients. Kept refrigerated. Best consumed within 24 hours.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:hidden">
+            {featured.map((bowl) => (
+              <MobileBowlCard key={bowl._id} bowl={bowl} />
+            ))}
+          </div>
+
+          <div className="hidden gap-6 md:grid md:grid-cols-3">
             {featured.map((bowl) => (
               <BowlCard key={bowl._id} bowl={bowl} />
             ))}
           </div>
 
-          <div className="text-center mt-12">
+          <div className="mt-12 text-center">
             <Link href="/menu" className="btn-ghost">
               See All Bowls →
             </Link>
@@ -145,72 +299,63 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Testimonials ────────────────────────────────── */}
       <TestimonialsCarousel />
 
-
-      {/* ── CTA Section ─────────────────────────────────── */}
-      <section className="py-28 px-6 lg:px-16 text-center bg-cream">
-        <div className="max-w-3xl mx-auto">
-          <p className="font-body text-xs font-medium tracking-[0.22em] uppercase text-stone mb-8">
-            Delivered 7 AM–3 PM · Bangalore
+      <section className="bg-cream px-5 py-16 text-center md:px-6 md:py-28 lg:px-16">
+        <div className="mx-auto max-w-3xl">
+          <p className="mb-8 font-body text-xs font-medium uppercase tracking-[0.22em] text-stone">
+            Delivered 7 AM-3 PM · Bangalore
           </p>
-          <h2 className="font-display text-ink mb-10"
-            style={{ fontSize: "clamp(36px, 4vw, 60px)", lineHeight: "1.2" }}>
-            A proper meal.<br />
+          <h2
+            className="mb-10 font-display text-ink"
+            style={{ fontSize: "clamp(28px, 4vw, 60px)", lineHeight: "1.2" }}
+          >
+            A proper meal.
+            <br />
             <strong className="font-medium italic text-sage-dark">
               At your doorstep, whenever you need one.
             </strong>
           </h2>
           <Link
             href="/menu"
-            className="inline-block btn-sage text-xs tracking-widest shadow-[0_4px_20px_rgba(196,165,116,0.35)] hover:shadow-[0_4px_25px_rgba(196,165,116,0.55)] transition-all duration-300"
+            className="inline-block btn-sage px-4 py-2.5 text-[10px] tracking-[0.18em] shadow-[0_4px_20px_rgba(196,165,116,0.35)] transition-all duration-300 hover:shadow-[0_4px_25px_rgba(196,165,116,0.55)] md:px-6 md:py-3.5 md:text-[11px] md:tracking-widest"
           >
             Order Now →
           </Link>
         </div>
       </section>
 
-      {/* ── B2B Section ─────────────────────────────────── */}
-      <section className="py-24 px-6 lg:px-16" style={{ backgroundColor: "#F0EDE8" }}>
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-
-          {/* Left column — copy */}
+      <section className="px-6 py-24 lg:px-16" style={{ backgroundColor: "#F0EDE8" }}>
+        <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-16 lg:grid-cols-2">
           <div>
             <p className="section-eyebrow mb-5">For Organisations</p>
             <h2
-              className="font-display text-ink mb-6"
-              style={{ fontSize: "clamp(36px, 3.5vw, 54px)", lineHeight: "1.12" }}
+              className="mb-6 font-display text-ink"
+              style={{ fontSize: "clamp(28px, 3.5vw, 54px)", lineHeight: "1.12" }}
             >
-              Feeding your team?{" "}
-              <em className="text-sage-dark">We&rsquo;ve got you.</em>
+              Feeding your team? <em className="text-sage-dark">We&apos;ve got you.</em>
             </h2>
-            <p className="font-body text-[15px] font-light text-stone leading-relaxed mb-8 max-w-md">
-              Volume pricing, weekly invoicing, and a dedicated point of contact.
-              We deliver to corporate offices, gyms, hotels, and co-working spaces
-              across Bangalore.
+            <p className="mb-8 max-w-md font-body text-[13px] font-light leading-relaxed text-stone md:text-[15px]">
+              Volume pricing, weekly invoicing, and a dedicated point of contact. We deliver to
+              corporate offices, gyms, hotels, and co-working spaces across Bangalore.
             </p>
 
-            {/* Pill badges */}
-            <div className="flex flex-wrap gap-2.5 mb-10">
-              {["Corporate Offices", "Gyms & Studios", "Hotels & Hospitality"].map(
-                (label) => (
-                  <span
-                    key={label}
-                    className="font-body text-xs font-medium tracking-wide px-4 py-2 rounded-full border border-sage/30 text-sage-dark bg-white/60"
-                  >
-                    {label}
-                  </span>
-                )
-              )}
+            <div className="mb-10 flex flex-wrap gap-2.5">
+              {["Corporate Offices", "Gyms & Studios", "Hotels & Hospitality"].map((label) => (
+                <span
+                  key={label}
+                  className="rounded-full border border-sage/30 bg-white/60 px-4 py-2 font-body text-[11px] font-medium tracking-wide text-sage-dark md:text-xs"
+                >
+                  {label}
+                </span>
+              ))}
             </div>
 
-            <Link href="/b2b" className="btn-sage inline-block">
-              Enquire for Your Organisation &rarr;
+            <Link href="/b2b" className="btn-sage inline-block px-4 py-2.5 text-[10px] tracking-[0.18em] md:px-6 md:py-3.5 md:text-[11px] md:tracking-widest">
+              Enquire for Your Organisation →
             </Link>
           </div>
 
-          {/* Right column — stat blocks */}
           <div className="grid grid-cols-2 gap-5">
             {[
               { stat: "20+ bowls", desc: "minimum weekly order" },
@@ -220,15 +365,19 @@ export default async function HomePage() {
             ].map(({ stat, desc }) => (
               <div
                 key={stat}
-                className="bg-white/70 rounded-xl px-6 py-7 border border-black/[0.05]"
+                className="rounded-xl border border-black/[0.05] bg-white/70 px-5 py-5 md:px-6 md:py-7"
               >
                 <p
-                  className="font-display text-ink mb-1.5"
-                  style={{ fontSize: "clamp(22px, 2vw, 30px)", lineHeight: "1.1", fontWeight: 300 }}
+                  className="mb-1.5 font-display text-ink"
+                  style={{
+                    fontSize: "clamp(18px, 2vw, 30px)",
+                    lineHeight: "1.1",
+                    fontWeight: 300,
+                  }}
                 >
                   {stat}
                 </p>
-                <p className="font-body text-[13px] text-stone leading-snug">{desc}</p>
+                <p className="font-body text-[12px] leading-snug text-stone md:text-[13px]">{desc}</p>
               </div>
             ))}
           </div>

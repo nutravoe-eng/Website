@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useCart } from "./CartContext";
@@ -10,7 +10,6 @@ import { getWallet, hasActiveFlexibleSubscription } from "@/lib/wallet";
 import { formatCurrency } from "@/lib/utils";
 import { resolveDeliveryCoords } from "@/lib/geocodeCache";
 import { FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
-import { getWhatsAppHref } from "@/lib/contact";
 import {
   clearGuestDeliveryContext,
   writeGuestDeliveryContext,
@@ -36,12 +35,10 @@ type CachedNavAddress = {
 
 export default function Navbar() {
   const pathname = usePathname();
-  const router = useRouter();
   const isHomePage = pathname === "/";
   const { itemCount } = useCart();
   const supabase = createClient();
   const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   // Location Modal State
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -155,30 +152,36 @@ export default function Navbar() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    document.body.style.overflow = menuOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [menuOpen]);
-
   // isDark refers to whether the text should be dark ink (i.e. we are NOT on a dark hero section)
-  const isDark = !isHomePage || scrolled || menuOpen;
+  const isDark = !isHomePage || scrolled;
+  const primaryAddress = savedAddresses.find((address) => address.isDefault) ?? savedAddresses[0];
+  const mobileLocationTitle = primaryAddress?.tag?.trim() || primaryAddress?.line1?.trim() || savedPincode;
+  const mobileLocationSubtitle = savedPincode?.startsWith("56")
+    ? "Bengaluru, Karnataka"
+    : "Update location";
+  const useSolidMobileNav = isHomePage || isDark;
+  const navSurfaceClass = isDark
+    ? "bg-white/95 backdrop-blur-md shadow-sm"
+    : useSolidMobileNav
+      ? "bg-white/88 backdrop-blur-md shadow-[0_10px_28px_rgba(62,48,32,0.08)] md:bg-transparent md:backdrop-blur-0 md:shadow-none"
+      : "bg-transparent";
 
   return (
     <>
       <nav
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-          isDark ? "bg-white/95 backdrop-blur-md shadow-sm" : "bg-transparent"
-        }`}
+        className={`${isHomePage ? "absolute" : "fixed"} left-0 right-0 top-0 z-50 transition-all duration-500 md:fixed ${navSurfaceClass}`}
       >
-        <div className="max-w-7xl mx-auto px-6 lg:px-16 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-16">
+          <div className="hidden md:flex h-16 items-center justify-between">
           <div className="flex items-center gap-6 md:gap-8">
             {/* Brand Logo */}
-            <Link href="/" className="flex items-center gap-3.5 group" onClick={() => setMenuOpen(false)}>
+            <Link href="/" className="flex items-center gap-3.5 group">
               <div className={`relative w-8 h-8 md:w-9 md:h-9 transition-all duration-300 ${!isDark ? "drop-shadow-md" : ""}`}>
                 <Image
                   src="/Nutravoe Logo.png"
                   alt="Nutravoe Circular Logo"
                   fill
+                  sizes="(max-width: 767px) 0px, 36px"
                   className="object-contain"
                   priority
                 />
@@ -331,7 +334,6 @@ export default function Navbar() {
               className={`flex items-center gap-2 font-body text-[13px] font-medium transition-colors cursor-pointer ${
                 isDark ? "text-stone hover:text-sage-dark" : "text-white/90 hover:text-white drop-shadow-md"
               }`}
-              onClick={() => setMenuOpen(false)}
               aria-label={`Cart with ${itemCount} items`}
             >
               <div className="relative flex items-center pt-1 pr-1">
@@ -351,169 +353,69 @@ export default function Navbar() {
               <span className="hidden md:block pb-0.5">Cart</span>
             </Link>
             {/* Hamburger — mobile only */}
-            <button
-              className="md:hidden flex flex-col justify-center items-center w-10 h-10 gap-1.5 rounded-sm hover:bg-ink/5 transition-colors cursor-pointer"
-              aria-label={menuOpen ? "Close menu" : "Open menu"}
-              aria-expanded={menuOpen}
-              aria-controls="mobile-menu"
-              onClick={() => setMenuOpen((v) => !v)}
-            >
-              <span className={`block w-5 h-px transition-all duration-300 origin-center ${isDark ? "bg-ink" : "bg-white shadow-sm"} ${menuOpen ? "rotate-45 translate-y-[7px]" : ""}`} />
-              <span className={`block w-5 h-px transition-all duration-300 ${isDark ? "bg-ink" : "bg-white shadow-sm"} ${menuOpen ? "opacity-0" : ""}`} />
-              <span className={`block w-5 h-px transition-all duration-300 origin-center ${isDark ? "bg-ink" : "bg-white shadow-sm"} ${menuOpen ? "-rotate-45 -translate-y-[7px]" : ""}`} />
-            </button>
           </div>
-        </div>
-      </nav>
+          </div>
 
-      {itemCount > 0 && pathname !== "/cart" && (
-        <div className="fixed inset-x-0 bottom-0 z-[95] px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:hidden pointer-events-none">
-          <div className="mx-auto max-w-md pointer-events-auto">
+          <div className={`flex h-16 items-center gap-2.5 md:hidden ${useSolidMobileNav ? "" : ""}`}>
             <Link
-              href="/cart"
-              className="w-full flex items-center justify-between rounded-md bg-sage-dark text-white px-4 py-3 shadow-[0_8px_25px_rgba(0,0,0,0.22)]"
+              href="/"
+              className="flex shrink-0 items-center gap-2"
+              aria-label="Go to home"
             >
-              <span className="font-body text-sm font-bold tracking-wide">Go to cart</span>
-              <span className="font-body text-[12px] font-medium bg-white/15 px-2 py-1 rounded-full">
-                {itemCount} {itemCount === 1 ? "item" : "items"}
+              <div className={`relative h-9 w-9 rounded-full transition-all duration-300 ${useSolidMobileNav ? "bg-[#f3ede2] shadow-[0_8px_20px_rgba(62,48,32,0.12)]" : !isDark ? "drop-shadow-md" : ""}`}>
+                <Image
+                  src="/Nutravoe Logo.png"
+                  alt="Nutravoe Circular Logo"
+                  fill
+                  sizes="36px"
+                  className="object-contain"
+                  priority
+                />
+              </div>
+              <span
+                className={`font-display text-[15px] lowercase tracking-[0.18em] transition-colors duration-300 ${
+                  useSolidMobileNav ? "text-ink" : !isDark ? "text-white drop-shadow-md" : "text-ink"
+                }`}
+              >
+                nutravoe
               </span>
             </Link>
-          </div>
-        </div>
-      )}
 
-      {/* Mobile drawer */}
-      {menuOpen && (
-        <div
-          className="fixed inset-0 z-40 md:hidden"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Navigation menu"
-          id="mobile-menu"
-        >
-          <div
-            className="absolute inset-0 bg-ink/40 backdrop-blur-sm"
-            onClick={() => setMenuOpen(false)}
-            aria-hidden="true"
-          />
-          <div className="absolute top-16 left-0 right-0 bg-white shadow-xl flex flex-col overflow-y-auto max-h-[calc(100vh-4rem)]">
-            {/* Nav links */}
-            <ul className="list-none m-0 p-0 flex flex-col border-b border-black/5">
-              {NAV_LINKS.map(({ href, label }) => (
-                <li key={href}>
-                  <Link
-                    href={href}
-                    className="block px-6 py-4 font-display text-[22px] font-light text-ink hover:text-sage-dark hover:bg-[#F9F8F6] transition-colors duration-200"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    {label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-
-            {/* Location selector — mobile */}
             <button
+              type="button"
               onClick={() => {
-                setMenuOpen(false);
                 setInputPincode("");
                 setPinInputError("");
                 setLocationState("idle");
                 setDeliveryZone(null);
                 setShowLocationModal(true);
               }}
-              className="flex items-center gap-3 px-6 py-4 border-b border-black/5 w-full text-left hover:bg-[#F9F8F6] transition-colors"
+              className={`min-w-0 flex-1 rounded-full border px-2.5 py-1.5 text-left transition-colors ${
+                useSolidMobileNav
+                  ? "border-[#d8c8ad] bg-white/92 text-ink shadow-[0_10px_24px_rgba(62,48,32,0.08)] backdrop-blur-md"
+                  : "border-white/20 bg-white/12 text-white backdrop-blur-sm"
+              }`}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" className="text-stone shrink-0">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-              </svg>
-              <div className="flex flex-col items-start leading-tight">
-                <span className="font-body text-[11px] text-stone font-medium tracking-wide">
-                  {savedPincode?.startsWith("56") ? "Delivering to Bengaluru" : savedPincode ? "Not delivering here yet" : "Delivering to Bengaluru"}
-                </span>
-                <span className="font-body text-[15px] text-ink font-bold">{savedPincode}</span>
+              <div className="flex items-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <path d="M12 21s6-5.33 6-11a6 6 0 1 0-12 0c0 5.67 6 11 6 11Z" />
+                  <circle cx="12" cy="10" r="2.5" />
+                </svg>
+                <div className="min-w-0">
+                  <p className="truncate font-body text-[12px] font-bold leading-none">{mobileLocationTitle}</p>
+                  <p className={`mt-0.5 truncate font-body text-[10px] leading-none ${useSolidMobileNav ? "text-stone" : "text-white/78"}`}>
+                    {mobileLocationSubtitle}
+                  </p>
+                </div>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
               </div>
             </button>
 
-            {/* Account section */}
-            {!user ? (
-              <div className="px-6 py-5">
-                <Link
-                  href="/signin"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 w-full bg-sage hover:bg-sage-dark text-white font-body text-sm font-bold tracking-wide px-5 py-3.5 rounded-md transition-colors shadow-sm justify-center"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  Sign In
-                </Link>
-              </div>
-            ) : (
-              <div className="flex flex-col">
-                {/* User identity */}
-                <div className="px-6 py-4 bg-[#F9F8F6] border-b border-black/5">
-                  <p className="font-display text-base font-medium text-ink">{user.name}</p>
-                  <p className="font-body text-[11px] text-stone">{user.email}</p>
-                </div>
-
-                {/* Account links */}
-                {[
-                  { href: "/profile", label: "Profile" },
-                  { href: "/orders", label: "Orders" },
-                  { href: "/subscriptions", label: "Subscriptions" },
-                  { href: "/addresses", label: "Addresses" },
-                ].map(({ href, label }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setMenuOpen(false)}
-                    className="flex items-center justify-between px-6 py-3.5 font-body text-[15px] text-ink hover:bg-[#F9F8F6] transition-colors border-b border-black/5"
-                  >
-                    {label}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone/40"><path d="m9 18 6-6-6-6"/></svg>
-                  </Link>
-                ))}
-
-                {walletBalanceRs !== null && (
-                  <Link
-                    href="/wallet"
-                    onClick={() => setMenuOpen(false)}
-                    className="flex items-center justify-between px-6 py-3.5 font-body text-[15px] text-ink hover:bg-[#F9F8F6] transition-colors border-b border-black/5"
-                  >
-                    <span className="flex items-center gap-2">
-                      Wallet
-                      <span className="font-body text-[11px] font-bold bg-terracotta/10 text-terracotta px-2 py-0.5 rounded-full">
-                        {formatCurrency(walletBalanceRs)}
-                      </span>
-                    </span>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone/40"><path d="m9 18 6-6-6-6"/></svg>
-                  </Link>
-                )}
-
-                <Link
-                  href="/help"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center justify-between px-6 py-3.5 font-body text-[15px] text-stone hover:bg-[#F9F8F6] transition-colors border-b border-black/5"
-                >
-                  Help & Support
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone/40"><path d="m9 18 6-6-6-6"/></svg>
-                </Link>
-
-                <button
-                  onClick={async () => {
-                    await supabase.auth.signOut();
-                    setMenuOpen(false);
-                    window.location.href = "/";
-                  }}
-                  className="flex items-center gap-2 px-6 py-4 font-body text-[15px] text-terracotta font-medium hover:bg-terracotta/5 transition-colors text-left"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-                  Logout
-                </button>
-              </div>
-            )}
           </div>
         </div>
-      )}
+      </nav>
 
       {/* Location Modal */}
       {showLocationModal && (

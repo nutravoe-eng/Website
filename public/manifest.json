@@ -1,0 +1,21 @@
+{
+  "name": "Nutravoe",
+  "short_name": "Nutravoe",
+  "description": "Fresh protein yogurt bowls delivered in Bangalore.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F9F8F6",
+  "theme_color": "#C4A574",
+  "icons": [
+    {
+      "src": "/icon-256px.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512px.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

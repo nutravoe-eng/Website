@@ -78,24 +78,24 @@ function ResetPasswordForm() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] pt-24 pb-16 px-6 bg-[#F9F8F6] flex flex-col items-center justify-center">
-      <Link href="/" className="mb-8">
-        <div className="relative w-12 h-12">
+    <div className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-start bg-[#F9F8F6] px-4 pb-10 pt-18 md:justify-center md:px-6 md:pb-16 md:pt-24">
+      <Link href="/" className="mb-5 md:mb-6">
+        <div className="relative h-10 w-10 md:h-12 md:w-12">
           <Image src="/Nutravoe Logo.png" alt="Nutravoe" fill className="object-contain" />
         </div>
       </Link>
 
-      <div className="w-full max-w-md bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-ink/5 overflow-hidden p-8 md:p-10">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-ink/5 bg-white p-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] md:rounded-xl md:p-10">
         {!success ? (
           <div className="animate-in fade-in duration-300">
-            <h1 className="font-display text-[28px] font-medium text-ink mb-2 leading-tight">
+            <h1 className="mb-2 font-display text-[22px] font-medium leading-tight text-ink md:text-[28px]">
               Reset Password
             </h1>
-            <p className="font-body text-[14px] text-stone mb-8">
+            <p className="mb-5 font-body text-[12px] leading-relaxed text-stone md:mb-8 md:text-[14px]">
               Enter a new secure password for your account.
             </p>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3 md:gap-4">
               <div>
                 <label className="block font-body text-[13px] font-medium text-ink mb-1.5">
                   New Password
@@ -132,23 +132,23 @@ function ResetPasswordForm() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-sage hover:bg-sage-dark disabled:opacity-50 text-white font-body text-sm font-medium py-3 rounded-md transition-colors shadow-sm mt-2"
+                className="mt-1 w-full rounded-md bg-sage py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-sage-dark disabled:opacity-50"
               >
                 {loading ? "Updating..." : "Update Password"}
               </button>
             </form>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-6 text-center animate-in zoom-in-95 fade-in duration-500">
-            <div className="w-16 h-16 rounded-full bg-sage/10 flex items-center justify-center text-sage mb-6 ring-1 ring-sage/20 shadow-inner">
+          <div className="flex flex-col items-center justify-center py-4 text-center animate-in zoom-in-95 fade-in duration-500 md:py-6">
+            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-sage/10 text-sage ring-1 ring-sage/20 shadow-inner md:mb-6 md:h-16 md:w-16">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 6 9 17l-5-5"/>
               </svg>
             </div>
-            <h1 className="font-display text-[28px] font-medium text-ink mb-3 leading-tight">
+            <h1 className="mb-3 font-display text-[22px] font-medium leading-tight text-ink md:text-[28px]">
               Password Updated
             </h1>
-            <p className="font-body text-[14px] text-stone mb-2 px-2 leading-relaxed">
+            <p className="mb-2 px-1 font-body text-[12px] leading-relaxed text-stone md:px-2 md:text-[14px]">
               Your password has been successfully reset! You can now sign in with your new password. Returning you to the login screen...
             </p>
           </div>

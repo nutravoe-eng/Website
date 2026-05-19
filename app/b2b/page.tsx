@@ -248,23 +248,23 @@ export default function B2BPage() {
   return (
     <>
       {/* ── Hero strip ───────────────────────────────────── */}
-      <section className="bg-ink pt-32 pb-20 px-6 lg:px-16" aria-labelledby="b2b-hero-heading">
-        <div className="max-w-7xl mx-auto">
+      <section className="bg-ink px-5 pb-14 pt-20 md:px-6 md:pb-20 md:pt-32 lg:px-16" aria-labelledby="b2b-hero-heading">
+        <div className="mx-auto max-w-7xl">
           <p className="section-eyebrow text-terracotta mb-5">For Offices &amp; Teams</p>
           <h1
             id="b2b-hero-heading"
             className="font-display text-white mb-5"
-            style={{ fontSize: "clamp(42px, 5.5vw, 72px)", lineHeight: "1.06" }}
+            style={{ fontSize: "clamp(30px, 5.5vw, 72px)", lineHeight: "1.06" }}
           >
             Wholesome meals for your whole team.{" "}
             <em className="text-sage-light">We&apos;ll sort it out.</em>
           </h1>
-          <p className="font-body text-[16px] font-light text-white/60 max-w-xl leading-relaxed mb-16">
+          <p className="mb-10 max-w-xl font-body text-[13px] font-light leading-relaxed text-white/70 md:mb-16 md:text-[16px] md:text-white/60">
             Wholesome, nourishing bowls for your entire team — delivered fresh, billed weekly.
           </p>
 
           {/* Benefit blocks */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-2xl">
+          <div className="grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-6">
             {[
               {
                 icon: (
@@ -309,11 +309,11 @@ export default function B2BPage() {
 
       {/* ── Form section ─────────────────────────────────── */}
       <section
-        className="py-20 px-6 lg:px-16"
+        className="px-5 py-14 md:px-6 md:py-20 lg:px-16"
         style={{ backgroundColor: "#F9F8F6" }}
         aria-labelledby="b2b-form-heading"
       >
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_1.6fr] gap-16 items-start">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 items-start gap-10 md:gap-16 lg:grid-cols-[1fr_1.6fr]">
 
           {/* Left — value-prop sidebar */}
           <div className="lg:sticky lg:top-28">
@@ -356,7 +356,7 @@ export default function B2BPage() {
           </div>
 
           {/* Right — form */}
-          <div className="bg-white rounded-2xl border border-black/[0.06] px-8 py-10 shadow-sm">
+          <div className="rounded-2xl border border-black/[0.06] bg-white px-5 py-6 shadow-sm md:px-8 md:py-10">
             <h3 className="font-display text-ink mb-8" style={{ fontSize: "clamp(24px, 2vw, 32px)" }}>
               Get in touch
             </h3>
@@ -537,8 +537,8 @@ export default function B2BPage() {
       </section>
 
       {/* ── FAQ section ──────────────────────────────────── */}
-      <section className="bg-white py-16 px-6 lg:px-16" aria-labelledby="b2b-faq-heading">
-        <div className="max-w-3xl mx-auto">
+      <section className="bg-white px-5 py-12 md:px-6 md:py-16 lg:px-16" aria-labelledby="b2b-faq-heading">
+        <div className="mx-auto max-w-3xl">
           <p className="section-eyebrow mb-4">Questions</p>
           <h2
             id="b2b-faq-heading"

@@ -7,6 +7,17 @@ import { createClient } from "@/lib/supabase/client";
 import { getWallet, hasActiveFlexibleSubscription } from "@/lib/wallet";
 import { formatCurrency } from "@/lib/utils";
 
+const PAGE_TITLES: Record<string, string> = {
+  "/profile": "Profile Settings",
+  "/orders": "Orders",
+  "/subscriptions": "Subscriptions",
+  "/wallet": "Wallet",
+  "/addresses": "Addresses",
+  "/help": "Help & Support",
+  "/cancellations": "Cancellations",
+  "/payment-methods": "Payment Methods",
+};
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -54,6 +65,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   const navItems = [
+    { name: "Account", path: "/account" },
     { name: "Profile", path: "/profile" },
     { name: "Orders", path: "/orders" },
     { name: "Subscriptions", path: "/subscriptions" },
@@ -65,18 +77,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ] as { name: string; path: string; badge?: string }[];
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-[#F9F8F6] pt-12 pb-24">
-      <div className="max-w-6xl mx-auto px-6">
-        <h1 className="font-display text-4xl text-ink mb-2">
+    <div className="min-h-[calc(100vh-64px)] bg-[#F9F8F6] pt-6 pb-6 md:pt-12 md:pb-12">
+      <div className="max-w-6xl mx-auto px-4 md:px-6">
+        <h1 className="mb-1.5 font-display text-[28px] text-ink md:text-4xl">
           Welcome, {user?.name?.split(" ")[0]}
         </h1>
-        <p className="font-body text-stone text-[14px] mb-10">
+        <p className="mb-5 font-body text-[13px] text-stone md:mb-10 md:text-[14px]">
           Manage your Account, Orders, and Deliveries.
         </p>
 
-        <div className="flex flex-col md:flex-row gap-8 lg:gap-14">
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8 lg:gap-14">
           {/* Sidebar */}
-          <aside className="w-full md:w-56 shrink-0">
+          <aside className="hidden md:block w-full md:w-56 shrink-0">
             <nav className="flex flex-col gap-1 sticky top-24">
               {navItems.map((item) => {
                 const isActive = pathname === item.path;
@@ -119,7 +131,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </aside>
 
           {/* Main Content */}
-          <section className="flex-1 bg-white rounded-xl shadow-[0_2px_20px_rgb(0,0,0,0.03)] border border-black/5 p-8 min-h-[500px]">
+          <section className="flex-1 rounded-xl border border-black/5 bg-white p-4 shadow-[0_2px_20px_rgb(0,0,0,0.03)] md:p-8">
+            {pathname !== "/account" && (
+              <div className="mb-4 flex items-center gap-2 md:hidden">
+                <Link href="/account" className="flex items-center gap-1.5 font-body text-[13px] font-bold text-stone hover:text-ink transition-colors">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                  Account
+                </Link>
+                <span className="font-body text-[11px] text-stone/40">/</span>
+                <span className="font-body text-[13px] text-ink">{PAGE_TITLES[pathname] ?? ""}</span>
+              </div>
+            )}
             {children}
           </section>
         </div>

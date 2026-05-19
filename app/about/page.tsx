@@ -48,34 +48,34 @@ export default function AboutPage() {
   return (
     <>
       <JsonLd data={getAboutPageSchema()} />
-      <section className="pt-28 pb-20 px-6 lg:px-16 border-b border-ink/8">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+      <section className="border-b border-ink/8 px-5 pb-14 pt-20 md:px-6 md:pb-20 md:pt-28 lg:px-16">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 md:gap-16 lg:grid-cols-2">
           <div>
             <p className="section-eyebrow mb-6">Our Story</p>
             <h1
               className="section-heading text-ink mb-8"
-              style={{ fontSize: "clamp(44px, 5vw, 68px)" }}
+              style={{ fontSize: "clamp(30px, 5vw, 68px)" }}
             >
               Inspired by Austria.<br />
               <em className="text-sage">Made for India.</em>
             </h1>
-            <p className="font-body text-[15px] font-light text-stone leading-loose mb-6 max-w-lg">
+            <p className="mb-5 max-w-lg font-body text-[13px] font-light leading-relaxed text-stone md:text-[15px] md:leading-loose">
               What you eat shapes how you feel. Yet finding a wholesome, protein-rich meal
               is often rushed, confusing, or skipped entirely. Nutravoe solves one simple
               problem: what if the right bowl just showed up at your doorstep?
             </p>
-            <p className="font-body text-[15px] font-light text-stone leading-loose mb-6 max-w-lg">
+            <p className="mb-5 max-w-lg font-body text-[13px] font-light leading-relaxed text-stone md:text-[15px] md:leading-loose">
               On a trip to Austria, Harshita noticed something simple and brilliant:
               grab-and-go protein yoghurt bowls. Fresh, healthy, and casually available everywhere.
               She looked around and realised there was no equivalent in India.
             </p>
-            <p className="font-body text-[15px] font-light text-stone leading-loose max-w-lg">
+            <p className="max-w-lg font-body text-[13px] font-light leading-relaxed text-stone md:text-[15px] md:leading-loose">
               So she built one. Nutravoe is her answer to the gap: a premium daily ritual,
               made by hand in small batches each day and delivered to your doorstep.
               No apps, no aggregators, just you and a bowl worth looking forward to.
             </p>
           </div>
-          <div className="relative h-[440px] rounded-sm overflow-hidden">
+          <div className="relative h-[280px] overflow-hidden rounded-2xl md:h-[440px] md:rounded-sm">
             <Image
               src="/hero-image.png"
               alt="Fresh Nutravoe yogurt bowl"
@@ -87,7 +87,7 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="bg-ink py-24 px-6 lg:px-16 text-center">
+      <section className="bg-ink px-5 py-16 text-center md:px-6 md:py-24 lg:px-16">
         <div className="max-w-2xl mx-auto">
           <blockquote
             className="font-display font-light italic text-white leading-relaxed mb-8"
@@ -102,20 +102,20 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="py-24 px-6 lg:px-16">
-        <div className="max-w-7xl mx-auto">
+      <section className="px-5 py-16 md:px-6 md:py-24 lg:px-16">
+        <div className="mx-auto max-w-7xl">
           <p className="section-eyebrow mb-4 text-center">What we stand for</p>
           <h2
-            className="section-heading text-ink text-center mb-16"
-            style={{ fontSize: "clamp(36px, 4vw, 52px)" }}
+            className="section-heading text-ink text-center mb-10 md:mb-16"
+            style={{ fontSize: "clamp(28px, 4vw, 52px)" }}
           >
             Our commitments
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-10 lg:grid-cols-3">
             {commitments.map(({ icon, title, body }) => (
               <div
                 key={title}
-                className="border border-ink/8 p-8 rounded-sm hover:border-sage transition-colors duration-300"
+                className="rounded-2xl border border-ink/8 p-5 transition-colors duration-300 hover:border-sage md:rounded-sm md:p-8"
               >
                 <div
                   className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-sage/30 text-xs font-semibold tracking-widest text-sage-dark"
@@ -133,8 +133,8 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="bg-cream py-20 px-6 lg:px-16 text-center border-t border-ink/8">
-        <blockquote className="font-display italic text-2xl text-ink mb-8 max-w-2xl mx-auto leading-relaxed">
+      <section className="border-t border-ink/8 bg-cream px-5 py-14 text-center md:px-6 md:py-20 lg:px-16">
+        <blockquote className="mx-auto mb-6 max-w-2xl font-display text-[22px] italic leading-relaxed text-ink md:mb-8 md:text-2xl">
           <span className="text-ink">"If you're someone who likes routine, simplicity, and good food, </span>
           <span className="text-sage-dark">I'd love to hear from you."</span>
         </blockquote>

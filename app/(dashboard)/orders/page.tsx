@@ -142,8 +142,8 @@ export default function OrdersPage() {
   if (loading) {
     return (
       <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="font-display text-2xl font-medium text-ink">Order History</h2>
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="font-display text-[24px] font-medium text-ink">Order History</h2>
         </div>
         <div className="space-y-4">
           {[1, 2, 3].map(i => (
@@ -161,8 +161,8 @@ export default function OrdersPage() {
   if (error) {
     return (
       <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="font-display text-2xl font-medium text-ink">Order History</h2>
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="font-display text-[24px] font-medium text-ink">Order History</h2>
         </div>
         <div className="p-4 bg-terracotta/5 border border-terracotta/20 rounded-xl">
           <p className="font-body text-[13px] text-terracotta font-medium">{error}</p>
@@ -173,8 +173,8 @@ export default function OrdersPage() {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <div className="flex items-center justify-between mb-8">
-        <h2 className="font-display text-2xl font-medium text-ink">Order History</h2>
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="font-display text-[24px] font-medium text-ink">Order History</h2>
       </div>
 
       {orders.length === 0 ? (
@@ -194,7 +194,7 @@ export default function OrdersPage() {
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           {orders.map(order => {
             const displayStatus =
               order.payment_status === 'paid' && order.status === 'pending'
@@ -207,7 +207,7 @@ export default function OrdersPage() {
             const isDelivered = displayStatus === 'delivered' && order.payment_status === 'paid';
 
             return (
-              <div key={order.id} className="bg-white border text-ink border-black/10 rounded-xl p-6 shadow-sm hover:border-sage/40 transition-colors group">
+              <div key={order.id} className="group rounded-xl border border-black/10 bg-white p-4 text-ink shadow-sm transition-colors hover:border-sage/40 md:p-6">
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b border-black/5 pb-4 mb-4">
                   <div>
                     <div className="flex items-center gap-3 mb-1 flex-wrap">

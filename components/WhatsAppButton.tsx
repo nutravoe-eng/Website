@@ -1,20 +1,36 @@
 import { getWhatsAppHref } from "@/lib/contact";
 
-export default function WhatsAppButton() {
+export default function WhatsAppButton({
+  lifted = false,
+  clearCartBar = false,
+}: {
+  lifted?: boolean;
+  clearCartBar?: boolean;
+}) {
+  const bottom = clearCartBar
+    ? "calc(10rem + env(safe-area-inset-bottom,0px))"
+    : lifted
+      ? "calc(6.25rem + env(safe-area-inset-bottom,0px))"
+      : "calc(1.25rem + env(safe-area-inset-bottom,0px))";
+
   return (
     <a
       href={getWhatsAppHref()}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Order on WhatsApp"
-      className="fixed right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-300 hover:scale-110 bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))]"
-      style={{ background: "#25D366", boxShadow: "0 8px 24px rgba(37,211,102,0.4)" }}
+      className="fixed right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition-all duration-300 hover:scale-110 md:right-5 md:h-14 md:w-14"
+      style={{
+        bottom,
+        background: "#25D366",
+        boxShadow: "0 8px 24px rgba(37,211,102,0.4)",
+      }}
     >
       <svg
         viewBox="0 0 32 32"
         fill="white"
         xmlns="http://www.w3.org/2000/svg"
-        className="w-7 h-7"
+        className="h-6 w-6 md:h-7 md:w-7"
       >
         <path d="M16 2C8.268 2 2 8.268 2 16c0 2.478.672 4.8 1.84 6.795L2 30l7.41-1.813A13.94 13.94 0 0016 30c7.732 0 14-6.268 14-14S23.732 2 16 2zm0 25.5a11.45 11.45 0 01-5.85-1.607l-.42-.25-4.398 1.076 1.115-4.28-.273-.44A11.5 11.5 0 1116 27.5zm6.36-8.61c-.35-.175-2.07-1.02-2.39-1.136-.32-.116-.554-.175-.787.175-.234.35-.903 1.136-1.107 1.37-.203.233-.406.262-.756.087-.35-.175-1.478-.545-2.814-1.737-1.04-.928-1.742-2.074-1.946-2.424-.204-.35-.022-.54.153-.714.158-.156.35-.408.525-.612.175-.204.233-.35.35-.583.116-.234.058-.438-.029-.612-.088-.175-.788-1.9-1.08-2.602-.284-.684-.573-.591-.788-.602l-.671-.012c-.233 0-.612.087-.932.438-.32.35-1.22 1.194-1.22 2.91s1.25 3.376 1.424 3.61c.175.233 2.46 3.757 5.96 5.268.833.36 1.483.574 1.99.735.836.265 1.597.228 2.199.138.671-.1 2.07-.846 2.362-1.663.292-.816.292-1.516.204-1.663-.087-.146-.32-.233-.67-.408z" />
       </svg>

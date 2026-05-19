@@ -10,10 +10,10 @@ export const metadata: Metadata = buildPageMetadata({
 
 export default function PrivacyPage() {
   return (
-    <div className="mx-auto max-w-3xl px-6 py-28 text-ink">
-      <h1 className="mb-8 font-display text-4xl">Privacy Notice</h1>
+    <div className="mx-auto max-w-3xl px-5 py-20 text-ink md:px-6 md:py-28">
+      <h1 className="mb-6 font-display text-[30px] md:mb-8 md:text-4xl">Privacy Notice</h1>
       
-      <div className="space-y-6 font-body text-[14px] leading-relaxed text-stone">
+      <div className="space-y-5 font-body text-[13px] leading-relaxed text-stone md:space-y-6 md:text-[14px]">
         <p><strong>Last Updated: {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong></p>
 
         <section>

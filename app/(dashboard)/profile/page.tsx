@@ -131,14 +131,14 @@ export default function ProfilePage() {
   return (
     <>
       <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-        <h2 className="font-display text-2xl font-medium text-ink mb-6">Profile Information</h2>
+        <h2 className="mb-5 font-display text-[24px] font-medium text-ink">Profile Information</h2>
 
         <form onSubmit={handleSave} className="max-w-xl flex flex-col gap-6">
-          <div className="flex gap-4 items-center mb-2">
-            <div className="w-20 h-20 rounded-full bg-sage/10 flex items-center justify-center text-sage text-2xl font-bold uppercase ring-1 ring-sage/20">
+          <div className="mb-1 flex items-center gap-3">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-sage/10 text-xl font-bold uppercase text-sage ring-1 ring-sage/20">
               {formData.name?.[0] ?? formData.email?.[0] ?? "?"}
             </div>
-            <button type="button" className="font-body text-[13px] font-bold text-sage hover:underline">Change Photo</button>
+            <button type="button" className="font-body text-[12px] font-bold text-sage hover:underline">Change Photo</button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

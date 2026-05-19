@@ -25,6 +25,7 @@ import { FREE_ZONE_RADIUS_KM } from "@/lib/delivery";
 import { getSubscriberBaseFromPlanConfig } from "@/lib/subscription-pricing";
 import { DELIVERY_TIME_SLOTS } from "@/lib/delivery-slots";
 import { addCalendarDaysIst, formatIstYmd } from "@/lib/datetime-ist";
+import { MOBILE_SHELL_BOTTOM_NAV_HEIGHT_REM } from "@/lib/mobile-shell";
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 type Day = typeof DAYS[number];
@@ -715,7 +716,8 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
 
   if (state.step === 1) {
     return (
-      <div className="max-w-3xl mx-auto">
+      <>
+      <div className="max-w-3xl mx-auto pb-24 sm:pb-0">
         {isRenewalFlow && (
           <div className="mb-8 p-6 bg-sage/10 border border-sage/20 rounded-2xl animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="flex items-start gap-4">
@@ -735,7 +737,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
         <StepIndicator />
 
         <h2 className="font-display text-xl font-medium text-ink mb-6 text-center">Choose your plan</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3 md:items-start">
           {plans.map(plan => (
             <PlanCard
               key={plan.id}
@@ -761,7 +763,11 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
           ))}
         </div>
 
-        <div className="flex justify-end">
+        <p className="mb-8 text-center font-body text-[11px] leading-relaxed text-stone/80 md:text-[12px]">
+          Delivery is free within 10 km. Extra delivery charges apply beyond 10 km.
+        </p>
+
+        <div className="hidden sm:flex justify-end">
           <button
             disabled={!canProceedStep1}
             onClick={goToStep2}
@@ -771,6 +777,22 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
           </button>
         </div>
       </div>
+
+      <div
+        className="fixed inset-x-0 z-[90] border-t border-black/10 bg-white/95 backdrop-blur sm:hidden"
+        style={{ bottom: `calc(${MOBILE_SHELL_BOTTOM_NAV_HEIGHT_REM}rem + env(safe-area-inset-bottom, 0px))` }}
+      >
+        <div className="px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <button
+            disabled={!canProceedStep1}
+            onClick={goToStep2}
+            className="w-full bg-terracotta hover:bg-[#D55F43] disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm"
+          >
+            Next: Configure Delivery →
+          </button>
+        </div>
+      </div>
+      </>
     );
   }
 
@@ -781,7 +803,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
 
     return (
       <>
-        <div ref={step2TopRef} className="max-w-2xl mx-auto">
+        <div ref={step2TopRef} className="max-w-2xl mx-auto pb-24 sm:pb-0">
           <div className="text-center mb-8">
             <h1 className="font-display text-4xl font-medium text-ink mb-3">Subscribe & Save</h1>
             <p className="font-body text-[14px] text-stone">
@@ -838,7 +860,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
                       <button
                         key={day}
                         onClick={() => toggleDay(day)}
-                        className={`px-4 py-2 rounded-full font-body text-[13px] font-medium transition-all duration-200 border ${
+                        className={`px-4 py-2.5 rounded-full font-body text-[13px] font-medium transition-all duration-200 border ${
                           isSelected
                             ? 'bg-sage text-white border-sage'
                             : 'border-black/15 text-stone hover:border-sage/60'
@@ -926,7 +948,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
                                   <button
                                     onClick={() => adjustDayBowlCount(day, bowl._id, -1)}
                                     disabled={count === 0}
-                                    className="w-7 h-7 rounded-full border border-black/10 flex items-center justify-center text-stone hover:text-ink hover:border-black/20 disabled:opacity-30 transition-all text-sm"
+                                    className="w-9 h-9 rounded-full border border-black/10 flex items-center justify-center text-stone hover:text-ink hover:border-black/20 disabled:opacity-30 transition-all text-sm"
                                   >
                                     −
                                   </button>
@@ -934,7 +956,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
                                   <button
                                     onClick={() => adjustDayBowlCount(day, bowl._id, 1)}
                                     disabled={spreadTotal >= currentPlan.bowlsPerWeek}
-                                    className="w-7 h-7 rounded-full border border-black/10 flex items-center justify-center text-stone hover:text-ink hover:border-black/20 disabled:opacity-30 transition-all text-sm"
+                                    className="w-9 h-9 rounded-full border border-black/10 flex items-center justify-center text-stone hover:text-ink hover:border-black/20 disabled:opacity-30 transition-all text-sm"
                                   >
                                     +
                                   </button>
@@ -1042,27 +1064,29 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
                 <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone">Preferred delivery time</p>
               </div>
 
-              <div className="flex gap-4 mb-5">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input 
-                    type="radio" 
-                    name="timeSlotMode" 
-                    checked={state.timeSlotMode === 'same'} 
-                    onChange={() => setState(s => ({ ...s, timeSlotMode: 'same' }))}
-                    className="text-sage focus:ring-sage"
-                  />
-                  <span className="font-body text-[13px] text-ink">Same time every day</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input 
-                    type="radio" 
-                    name="timeSlotMode" 
-                    checked={state.timeSlotMode === 'different'} 
-                    onChange={() => setState(s => ({ ...s, timeSlotMode: 'different' }))}
-                    className="text-sage focus:ring-sage"
-                  />
-                  <span className="font-body text-[13px] text-ink">Different times for each day</span>
-                </label>
+              <div className="flex flex-wrap gap-2 mb-5">
+                <button
+                  type="button"
+                  onClick={() => setState(s => ({ ...s, timeSlotMode: 'same' }))}
+                  className={`px-4 py-2.5 rounded-full font-body text-[13px] font-medium transition-all border ${
+                    state.timeSlotMode === 'same'
+                      ? 'bg-sage text-white border-sage'
+                      : 'border-black/15 text-stone hover:border-sage/60'
+                  }`}
+                >
+                  Same time every day
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setState(s => ({ ...s, timeSlotMode: 'different' }))}
+                  className={`px-4 py-2.5 rounded-full font-body text-[13px] font-medium transition-all border ${
+                    state.timeSlotMode === 'different'
+                      ? 'bg-sage text-white border-sage'
+                      : 'border-black/15 text-stone hover:border-sage/60'
+                  }`}
+                >
+                  Different times per day
+                </button>
               </div>
 
               {state.timeSlotMode === 'same' ? (
@@ -1119,8 +1143,8 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
             </div>
           )}
 
-          {/* Navigation */}
-          <div className="flex items-center justify-between mt-8">
+          {/* Navigation — desktop only */}
+          <div className="hidden sm:flex items-center justify-between mt-8">
             <button
               onClick={goBack}
               className="font-body text-[13px] font-bold text-stone hover:text-ink transition-colors flex items-center gap-1.5"
@@ -1136,6 +1160,38 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
               className="bg-terracotta hover:bg-[#D55F43] disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide px-8 py-3.5 rounded-md transition-colors shadow-sm"
             >
             Next: Review & Confirm →
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile sticky CTA */}
+        <div
+          className="fixed inset-x-0 z-[90] border-t border-black/10 bg-white/95 backdrop-blur sm:hidden"
+          style={{ bottom: `calc(${MOBILE_SHELL_BOTTOM_NAV_HEIGHT_REM}rem + env(safe-area-inset-bottom, 0px))` }}
+        >
+          <div className="px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={goBack}
+                className="font-body text-[13px] font-bold text-stone flex items-center gap-1.5"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+                Back
+              </button>
+              {scenario === 'A' && (
+                <span className={`font-body text-[11px] font-bold ${spreadTotal === currentPlan.bowlsPerWeek ? 'text-sage' : 'text-stone'}`}>
+                  {spreadTotal} / {currentPlan.bowlsPerWeek} bowls
+                </span>
+              )}
+            </div>
+            <button
+              disabled={!canProceedStep2}
+              onClick={goToStep3}
+              className="w-full bg-terracotta hover:bg-[#D55F43] disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm"
+            >
+              Next: Review & Confirm →
             </button>
           </div>
         </div>
