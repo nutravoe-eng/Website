@@ -449,22 +449,16 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
             return;
           }
 
-          const tilesOk = await olaMapTilesHealthy(olaMap);
-          if (cancelled) {
-            olaController.destroy();
-            return;
-          }
+          void olaMapTilesHealthy(olaMap).then((tilesOk) => {
+            if (!tilesOk) {
+              console.warn("[MapPicker] Ola tiles may be unhealthy, but keeping Ola as the primary provider");
+            }
+          });
 
-          if (!tilesOk) {
-            console.warn("[MapPicker] Ola tiles unhealthy — switching to Google Maps");
-            const googleOk = await tryGoogle("Ola tiles failed to load", olaController);
-            if (googleOk) return;
-          } else {
-            mapControllerRef.current = olaController;
-            setMapProvider("ola");
-            onPinMove(center.lat, center.lng);
-            return;
-          }
+          mapControllerRef.current = olaController;
+          setMapProvider("ola");
+          onPinMove(center.lat, center.lng);
+          return;
         } catch (e) {
           console.error("OlaMaps init:", e);
           const googleOk = await tryGoogle("Ola Maps failed to initialize");
