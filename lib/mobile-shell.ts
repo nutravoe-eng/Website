@@ -49,12 +49,17 @@ export const MOBILE_SHELL_HIDE_WHATSAPP_PREFIXES = [
 
 export const MOBILE_SHELL_MINIMAL_FOOTER_PREFIXES = [
   ...MOBILE_SHELL_CUSTOMER_PREFIXES,
+  "/b2b",
+  "/privacy",
+  "/terms",
+  "/cart",
   "/signin",
   "/reset-password",
 ] as const;
 
 export const MOBILE_SHELL_BOTTOM_NAV_HEIGHT_REM = 4.5;
 export const MOBILE_SHELL_CART_BAR_HEIGHT_REM = 3.5;
+export const MOBILE_SHELL_CHECKOUT_BAR_HEIGHT_REM = 8;
 
 export const MENU_TIER_OPTIONS = [
   { key: "standard", label: "Premium", priceLabel: "Rs 299" },
@@ -100,6 +105,10 @@ export function shouldShowMobileCartBar(pathname: string, itemCount: number): bo
   return itemCount > 0 && shouldShowMobileBottomNav(pathname) && pathname !== "/cart" && pathname !== "/subscribe";
 }
 
+export function shouldReserveCheckoutBarSpace(pathname: string, itemCount: number): boolean {
+  return pathname === "/cart" && itemCount > 0;
+}
+
 export function getMobileNavActiveKey(pathname: string): "home" | "menu" | "subscribe" | "account" {
   if (matchesAnyPrefix(pathname, MOBILE_SHELL_ACCOUNT_PREFIXES)) return "account";
   if (matchesPrefix(pathname, "/menu")) return "menu";
@@ -117,6 +126,7 @@ export function getBottomSafeAreaPaddingRem({
   let rem = 0;
   if (shouldShowMobileBottomNav(pathname)) rem += MOBILE_SHELL_BOTTOM_NAV_HEIGHT_REM;
   if (shouldShowMobileCartBar(pathname, itemCount)) rem += MOBILE_SHELL_CART_BAR_HEIGHT_REM;
+  if (shouldReserveCheckoutBarSpace(pathname, itemCount)) rem += MOBILE_SHELL_CHECKOUT_BAR_HEIGHT_REM;
   return rem;
 }
 

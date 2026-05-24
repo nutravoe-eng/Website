@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { Suspense } from "react";
 import { getAllBowls, getSubscriptionPlans } from "@/lib/sanity";
 import { buildPageMetadata } from "@/lib/seo";
 import SubscribeWizard from "./SubscribeWizard";
@@ -47,7 +48,9 @@ export default async function SubscribePage() {
 
       {/* Wizard */}
       <div className="px-4 pt-6 pb-12 md:px-6 md:pt-8 md:pb-16">
-        <SubscribeWizard bowls={bowls} plans={plans} />
+        <Suspense>
+          <SubscribeWizard bowls={bowls} plans={plans} />
+        </Suspense>
       </div>
     </section>
   );

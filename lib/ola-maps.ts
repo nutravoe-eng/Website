@@ -6,12 +6,17 @@
  *
  * Env: `OLA_MAPS_API_KEY` or `OLAMAPS_API_KEY` (either works).
  *
+ * Fallback order for geocoding / search: OLA → Google Maps (`GOOGLE_MAPS_API_KEY`) → Nominatim (OSM).
+ * Driving distance fallback is in `lib/road-distance.ts` (OLA → Google Routes → haversine).
+ *
  * Domain allowlist: Ola checks `Referer` / `Origin`. API routes pass
  * {@link requestOriginReferrer} so the port matches the running dev server (3000, 3001, …).
  * For code without a request (e.g. checkout pricing), set `OLA_MAPS_HTTP_REFERER` or
  * `NEXT_PUBLIC_SITE_URL` (canonical origin, usually allowlisted in Krutrim) or rely on
  * `PORT` in development and `VERCEL_URL` as a last resort.
  */
+
+import { googleGeocodeAddress, googlePlacesSearch } from "@/lib/google-maps";
 
 const OLA_BASE = "https://api.olamaps.io";
 
@@ -421,7 +426,9 @@ export async function olaAutocompletePredictions(
   return [];
 }
 
-// --- Nominatim fallback (no Ola key, or Ola returns no results) ---
+// --- Google Maps fallback (after Ola, before Nominatim) ---
+
+// --- Nominatim fallback (no Ola/Google key, or both return no results) ---
 
 async function nominatimPincode(pincode: string): Promise<{ lat: number; lng: number; display_name: string } | null> {
   const query = `${pincode}, India`;
@@ -475,7 +482,7 @@ async function nominatimSearch(q: string): Promise<GeocodeHit[]> {
 }
 
 /**
- * Pincode → coordinates (Ola first, then Nominatim). Used by API routes and checkout pricing.
+ * Pincode → coordinates (Ola → Google → Nominatim). Used by API routes and checkout pricing.
  */
 export async function geocodeIndianPincode(
   pincode: string,
@@ -484,9 +491,9 @@ export async function geocodeIndianPincode(
   const normalizedPin = pincode.trim();
   if (!/^\d{6}$/.test(normalizedPin)) return null;
 
-  const olaQueries = [`${normalizedPin} India`, normalizedPin];
+  const queries = [`${normalizedPin} India`, normalizedPin];
   if (getOlaMapsApiKey()) {
-    for (const query of olaQueries) {
+    for (const query of queries) {
       const hits = geocodeHitsFromResults(await olaGeocodeResults(query, preferredReferrer), 5);
       const strictMatch = hits.find((hit) => displayNameMatchesPincode(hit.display_name, normalizedPin));
       if (strictMatch) {
@@ -496,6 +503,13 @@ export async function geocodeIndianPincode(
           display_name: strictMatch.display_name,
         };
       }
+    }
+  }
+
+  for (const query of queries) {
+    const g = await googleGeocodeAddress(query);
+    if (g && displayNameMatchesPincode(g.display_name, normalizedPin)) {
+      return { lat: g.lat, lng: g.lng, display_name: g.display_name };
     }
   }
 
@@ -526,7 +540,7 @@ function coordsFromPrediction(p: unknown): { lat: number; lng: number } | null {
 }
 
 /**
- * Map search: Ola autocomplete (+ geocode when needed), then forward geocode, else Nominatim.
+ * Map search: Ola autocomplete (+ geocode) → Google Places/geocode → Nominatim.
  */
 export async function geocodeSearchIndia(q: string, preferredReferrer?: string | null): Promise<GeocodeHit[]> {
   const trimmed = q.trim();
@@ -579,6 +593,10 @@ export async function geocodeSearchIndia(q: string, preferredReferrer?: string |
     const fromGeocode = geocodeHitsFromResults(await olaGeocodeResults(query, preferredReferrer), 5);
     if (fromGeocode.length) return fromGeocode;
   }
+
+  const googleHits = await googlePlacesSearch(trimmed, 5);
+  if (googleHits.length) return googleHits;
+
   return nominatimSearch(q);
 }
 

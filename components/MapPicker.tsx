@@ -1,10 +1,13 @@
 "use client";
 import { useEffect, useRef, useState, useCallback, useId } from "react";
+import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 
 interface MapPickerProps {
   centerLat?: number;
   centerLng?: number;
   onChange: (lat: number, lng: number) => void;
+  onAddressSelect?: (displayName: string) => void;
+  fullscreen?: boolean;
 }
 
 interface Suggestion {
@@ -13,119 +16,475 @@ interface Suggestion {
   display_name: string;
 }
 
-const BENGALURU: [number, number] = [12.9716, 77.5946];
-const ZOOM = 16;
+type MapProvider = "ola" | "google";
 
-export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerProps) {
+/** Minimal shared surface for Ola (MapLibre) and Google Maps pickers. */
+interface MapController {
+  provider: MapProvider;
+  setCenter(lng: number, lat: number): void;
+  setMarker(lng: number, lat: number): void;
+  getMarker(): { lat: number; lng: number };
+  zoomIn(): void;
+  zoomOut(): void;
+  destroy(): void;
+}
+
+const BENGALURU_LAT = 12.9716;
+const BENGALURU_LNG = 77.5946;
+const ZOOM = 16;
+const MARKER_COLOR = "#C4714A";
+/** Google demo map ID — works without creating a Map ID in Cloud Console. Override via NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID. */
+const GOOGLE_MAP_ID_FALLBACK = "DEMO_MAP_ID";
+
+function getGoogleMapId(): string {
+  return process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID?.trim() || GOOGLE_MAP_ID_FALLBACK;
+}
+
+function getOlaPublicKey(): string | undefined {
+  return process.env.NEXT_PUBLIC_OLA_MAPS_API_KEY?.trim();
+}
+
+function getGooglePublicKey(): string | undefined {
+  const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
+  return key || undefined;
+}
+
+function clearMapContainer(container: HTMLElement) {
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
+  container.className = container.className
+    .split(/\s+/)
+    .filter((c) => c && !c.startsWith("maplibregl-"))
+    .join(" ");
+}
+
+/** Ola init() can succeed while raster tiles 403 — detect and fall back to Google. */
+function olaMapTilesHealthy(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  map: any,
+  timeoutMs = 6000,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
+    };
+
+    const timer = setTimeout(() => finish(false), timeoutMs);
+
+    const fail = () => {
+      clearTimeout(timer);
+      finish(false);
+    };
+
+    map.once?.("error", (e: unknown) => {
+      console.warn("[MapPicker] Ola map error:", e);
+      fail();
+    });
+
+    const verifyCanvas = () => {
+      try {
+        const canvas = map.getCanvas?.() as HTMLCanvasElement | undefined;
+        if (!canvas || canvas.width < 8) {
+          fail();
+          return;
+        }
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          fail();
+          return;
+        }
+        const w = Math.min(48, canvas.width);
+        const h = Math.min(48, canvas.height);
+        const { data } = ctx.getImageData(0, 0, w, h);
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        const n = data.length / 4;
+        for (let i = 0; i < data.length; i += 4) {
+          r += data[i];
+          g += data[i + 1];
+          b += data[i + 2];
+        }
+        r /= n;
+        g /= n;
+        b /= n;
+        let variance = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          variance += (data[i] - r) ** 2 + (data[i + 1] - g) ** 2 + (data[i + 2] - b) ** 2;
+        }
+        variance /= n;
+        // Blank/grey placeholder when tiles fail is nearly uniform colour.
+        if (variance < 80) {
+          fail();
+          return;
+        }
+        clearTimeout(timer);
+        finish(true);
+      } catch {
+        fail();
+      }
+    };
+
+    const onIdle = () => {
+      if (typeof map.areTilesLoaded === "function" && !map.areTilesLoaded()) {
+        fail();
+        return;
+      }
+      setTimeout(verifyCanvas, 400);
+    };
+
+    if (map.loaded?.()) {
+      map.once?.("idle", onIdle);
+      map.triggerRepaint?.();
+    } else {
+      map.once?.("load", () => map.once?.("idle", onIdle));
+    }
+  });
+}
+
+async function initOlaMap(
+  containerId: string,
+  center: [number, number],
+  onPinMove: (lat: number, lng: number) => void,
+): Promise<{ controller: MapController; map: unknown }> {
+  const { OlaMaps, defaultStyleJson } = await import("olamaps-web-sdk");
+  const ola = new OlaMaps({ apiKey: getOlaPublicKey()! });
+  const map = await ola.init({
+    container: containerId,
+    center,
+    zoom: ZOOM,
+    style: defaultStyleJson,
+  });
+
+  map.scrollZoom.disable();
+
+  const marker = new OlaMaps.Marker({ color: MARKER_COLOR, draggable: true })
+    .setLngLat(center)
+    .addTo(map);
+
+  marker.on("dragend", () => {
+    const ll = marker.getLngLat();
+    onPinMove(ll.lat, ll.lng);
+  });
+
+  map.on("click", (e: { lngLat: { lat: number; lng: number } }) => {
+    marker.setLngLat(e.lngLat);
+    onPinMove(e.lngLat.lat, e.lngLat.lng);
+  });
+
+  const controller: MapController = {
+    provider: "ola",
+    setCenter(lng, lat) {
+      map.setCenter([lng, lat]);
+    },
+    setMarker(lng, lat) {
+      marker.setLngLat({ lng, lat });
+      map.setCenter([lng, lat]);
+    },
+    getMarker() {
+      const ll = marker.getLngLat();
+      return { lat: ll.lat, lng: ll.lng };
+    },
+    zoomIn() {
+      map.zoomIn?.();
+    },
+    zoomOut() {
+      map.zoomOut?.();
+    },
+    destroy() {
+      const suppressAbort = (e: PromiseRejectionEvent) => {
+        if (e.reason?.name === "AbortError") e.preventDefault();
+      };
+      window.addEventListener("unhandledrejection", suppressAbort, { capture: true });
+      try {
+        map.remove();
+      } catch {
+        /* ignore */
+      }
+      setTimeout(() => window.removeEventListener("unhandledrejection", suppressAbort, { capture: true }), 300);
+    },
+  };
+
+  return { controller, map };
+}
+
+const GOOGLE_MAPS_BLOCKED_HELP =
+  "Enable Maps JavaScript API in Google Cloud, then edit your API key → API restrictions → add Maps JavaScript API (your key may only allow Routes/Geocoding/Places for server use). For the browser, also set HTTP referrer allowlist: http://localhost:3000/* and https://nutravoe.in/*";
+
+function installGoogleMapsAuthFailureHandler(onFail: () => void): () => void {
+  type Win = Window & { gm_authFailure?: () => void };
+  const win = window as Win;
+  const prev = win.gm_authFailure;
+  win.gm_authFailure = () => {
+    prev?.();
+    onFail();
+  };
+  return () => {
+    win.gm_authFailure = prev;
+  };
+}
+
+function googleMapHasVisibleError(container: HTMLElement): boolean {
+  return Boolean(
+    container.querySelector(".gm-err-container") ||
+      container.textContent?.includes("didn't load Google Maps correctly"),
+  );
+}
+
+function readAdvancedMarkerPosition(
+  marker: google.maps.marker.AdvancedMarkerElement,
+): { lat: number; lng: number } | null {
+  const p = marker.position;
+  if (!p) return null;
+  if (typeof (p as google.maps.LatLng).lat === "function") {
+    const ll = p as google.maps.LatLng;
+    return { lat: ll.lat(), lng: ll.lng() };
+  }
+  const lit = p as google.maps.LatLngLiteral;
+  return { lat: lit.lat, lng: lit.lng };
+}
+
+async function initGoogleMap(
+  container: HTMLElement,
+  center: { lat: number; lng: number },
+  onPinMove: (lat: number, lng: number) => void,
+): Promise<MapController> {
+  const apiKey = getGooglePublicKey();
+  if (!apiKey) {
+    throw new Error("Missing Google Maps browser key. Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env.local.");
+  }
+
+  let authFailed = false;
+  const restoreAuthFailure = installGoogleMapsAuthFailureHandler(() => {
+    authFailed = true;
+  });
+
+  setOptions({ key: apiKey, v: "weekly" });
+  const { Map } = await importLibrary("maps");
+  const { AdvancedMarkerElement, PinElement } = await importLibrary("marker");
+
+  const map = new Map(container, {
+    center,
+    zoom: ZOOM,
+    mapId: getGoogleMapId(),
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: false,
+    clickableIcons: false,
+  });
+
+  const pin = new PinElement({
+    background: MARKER_COLOR,
+    borderColor: MARKER_COLOR,
+    glyphColor: "#FFFFFF",
+  });
+
+  const marker = new AdvancedMarkerElement({
+    map,
+    position: center,
+    gmpDraggable: true,
+    title: "Drag to set delivery location",
+  });
+  marker.append(pin);
+
+  marker.addListener("dragend", () => {
+    const pos = readAdvancedMarkerPosition(marker);
+    if (!pos) return;
+    onPinMove(pos.lat, pos.lng);
+  });
+
+  map.addListener("click", (e: google.maps.MapMouseEvent) => {
+    const pos = e.latLng;
+    if (!pos) return;
+    marker.position = { lat: pos.lat(), lng: pos.lng() };
+    onPinMove(pos.lat(), pos.lng());
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  if (authFailed || googleMapHasVisibleError(container)) {
+    marker.map = null;
+    throw new Error(`ApiTargetBlockedMapError: ${GOOGLE_MAPS_BLOCKED_HELP}`);
+  }
+
+  return {
+    provider: "google",
+    setCenter(lng, lat) {
+      map.setCenter({ lat, lng });
+    },
+    setMarker(lng, lat) {
+      const pos = { lat, lng };
+      marker.position = pos;
+      map.setCenter(pos);
+    },
+    getMarker() {
+      const pos = readAdvancedMarkerPosition(marker);
+      if (!pos) return { lat: center.lat, lng: center.lng };
+      return pos;
+    },
+    zoomIn() {
+      const z = map.getZoom();
+      if (typeof z === "number") map.setZoom(z + 1);
+    },
+    zoomOut() {
+      const z = map.getZoom();
+      if (typeof z === "number") map.setZoom(z - 1);
+    },
+    destroy() {
+      marker.map = null;
+      restoreAuthFailure();
+    },
+  };
+}
+
+export default function MapPicker({ centerLat, centerLng, onChange, onAddressSelect, fullscreen }: MapPickerProps) {
   const mapContainerId = useId().replace(/:/g, "");
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const markerRef = useRef<any>(null);
+  const mapControllerRef = useRef<MapController | null>(null);
 
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [mapProvider, setMapProvider] = useState<MapProvider | null>(null);
 
-  const initialCenterRef = useRef<[number, number]>(
-    centerLat != null && centerLng != null ? [centerLng, centerLat] : [BENGALURU[1], BENGALURU[0]],
-  );
+  const initialCenterRef = useRef<{ lat: number; lng: number }>({
+    lat: centerLat ?? BENGALURU_LAT,
+    lng: centerLng ?? BENGALURU_LNG,
+  });
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_OLA_MAPS_API_KEY?.trim();
-    if (!apiKey) {
-      setMapError("Add NEXT_PUBLIC_OLA_MAPS_API_KEY to .env.local (same value as OLA_MAPS_API_KEY) to show the map.");
-      return;
-    }
-
     let cancelled = false;
 
+    const onPinMove = (lat: number, lng: number) => {
+      onChangeRef.current(lat, lng);
+    };
+
     (async () => {
-      try {
-        const { OlaMaps, defaultStyleJson } = await import("olamaps-web-sdk");
-        if (cancelled || !containerRef.current) return;
+      setMapError(null);
+      setMapProvider(null);
 
-        const ola = new OlaMaps({ apiKey });
-        const map = await ola.init({
-          container: mapContainerId,
-          center: initialCenterRef.current,
-          zoom: ZOOM,
-          style: defaultStyleJson,
-        });
+      const center = initialCenterRef.current;
+      const olaKey = getOlaPublicKey();
+      const googleKey = getGooglePublicKey();
 
-        if (cancelled) {
-          map.remove();
-          return;
+      if (!olaKey && !googleKey) {
+        setMapError(
+          "Add NEXT_PUBLIC_OLA_MAPS_API_KEY or NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to .env.local to show the map.",
+        );
+        return;
+      }
+
+      if (!containerRef.current) return;
+
+      const tryGoogle = async (reason: string, destroyPrevious?: MapController) => {
+        if (!googleKey || cancelled) return false;
+        destroyPrevious?.destroy();
+        if (containerRef.current) clearMapContainer(containerRef.current);
+        try {
+          const controller = await initGoogleMap(containerRef.current!, center, onPinMove);
+          if (cancelled) {
+            controller.destroy();
+            return false;
+          }
+          mapControllerRef.current = controller;
+          setMapProvider("google");
+          setMapError(null);
+          console.info(`[MapPicker] Using Google Maps (${reason})`);
+          onPinMove(center.lat, center.lng);
+          return true;
+        } catch (e) {
+          console.error("Google Maps init:", e);
+          if (containerRef.current) clearMapContainer(containerRef.current);
+          setMapProvider(null);
+          const msg = e instanceof Error ? e.message : "";
+          if (msg.includes("ApiTargetBlockedMapError") || msg.includes("Maps JavaScript")) {
+            setMapError(GOOGLE_MAPS_BLOCKED_HELP);
+          }
+          return false;
         }
+      };
 
-        map.scrollZoom.disable();
+      if (olaKey) {
+        try {
+          const { controller: olaController, map: olaMap } = await initOlaMap(
+            mapContainerId,
+            [center.lng, center.lat],
+            onPinMove,
+          );
+          if (cancelled) {
+            olaController.destroy();
+            return;
+          }
 
-        const marker = new OlaMaps.Marker({ color: "#C4714A", draggable: true })
-          .setLngLat(initialCenterRef.current)
-          .addTo(map);
+          const tilesOk = await olaMapTilesHealthy(olaMap);
+          if (cancelled) {
+            olaController.destroy();
+            return;
+          }
 
-        marker.on("dragend", () => {
-          const ll = marker.getLngLat();
-          onChangeRef.current(ll.lat, ll.lng);
-        });
+          if (!tilesOk) {
+            console.warn("[MapPicker] Ola tiles unhealthy — switching to Google Maps");
+            const googleOk = await tryGoogle("Ola tiles failed to load", olaController);
+            if (googleOk) return;
+          } else {
+            mapControllerRef.current = olaController;
+            setMapProvider("ola");
+            onPinMove(center.lat, center.lng);
+            return;
+          }
+        } catch (e) {
+          console.error("OlaMaps init:", e);
+          const googleOk = await tryGoogle("Ola Maps failed to initialize");
+          if (googleOk) return;
+        }
+      } else {
+        const googleOk = await tryGoogle("Ola key not configured");
+        if (googleOk) return;
+      }
 
-        map.on("click", (e: { lngLat: { lat: number; lng: number } }) => {
-          marker.setLngLat(e.lngLat);
-          onChangeRef.current(e.lngLat.lat, e.lngLat.lng);
-        });
-
-        mapRef.current = map;
-        markerRef.current = marker;
-
-        onChangeRef.current(initialCenterRef.current[1], initialCenterRef.current[0]);
-      } catch (e) {
-        console.error("OlaMaps init:", e);
-        setMapError("Could not load Ola Maps. Check your API key and domain allowlist.");
+      if (!cancelled) {
+        setMapError(
+          "Could not load the map. Check Ola/Google API keys and domain allowlists (Maps JavaScript API for Google).",
+        );
       }
     })();
 
     return () => {
       cancelled = true;
-      if (mapRef.current) {
-        // OlaMaps/MapLibre aborts in-flight tile requests on remove(), which fires an async
-        // AbortError rejection that escapes try-catch. Suppress it for 300ms then clean up.
-        const suppressAbort = (e: PromiseRejectionEvent) => {
-          if (e.reason?.name === 'AbortError') e.preventDefault();
-        };
-        window.addEventListener('unhandledrejection', suppressAbort, { capture: true });
-        try { mapRef.current.remove(); } catch { /* ignore */ }
-        setTimeout(() => window.removeEventListener('unhandledrejection', suppressAbort, { capture: true }), 300);
-        mapRef.current = null;
-      }
-      markerRef.current = null;
+      mapControllerRef.current?.destroy();
+      mapControllerRef.current = null;
     };
   }, [mapContainerId]);
 
   useEffect(() => {
-    if (!mapRef.current || !markerRef.current || centerLat == null || centerLng == null) return;
-    const pos: [number, number] = [centerLng, centerLat];
-    mapRef.current.setCenter(pos);
-    markerRef.current.setLngLat(pos);
+    const controller = mapControllerRef.current;
+    if (!controller || centerLat == null || centerLng == null) return;
+    controller.setCenter(centerLng, centerLat);
+    controller.setMarker(centerLng, centerLat);
     onChangeRef.current(centerLat, centerLng);
   }, [centerLat, centerLng]);
 
   const handleSearchChange = useCallback((value: string) => {
     setQuery(value);
     setSuggestions([]);
+    setSearchError(null);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    if (value.trim().length < 3) {
+    const trimmed = value.trim();
+    if (trimmed.length < 3) {
       setShowSuggestions(false);
       return;
     }
@@ -133,12 +492,27 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
     setSearching(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/geocode/search?q=${encodeURIComponent(value.trim())}`);
-        const data: Suggestion[] = await res.json();
-        setSuggestions(Array.isArray(data) ? data : []);
-        setShowSuggestions(true);
+        const res = await fetch(`/api/geocode/search?q=${encodeURIComponent(trimmed)}`);
+        if (!res.ok) {
+          setSuggestions([]);
+          setShowSuggestions(false);
+          if (res.status === 429) {
+            setSearchError("Too many searches. Please wait a moment.");
+          } else if (res.status === 400) {
+            setSearchError("Search text is too long. Try a shorter address.");
+          } else {
+            setSearchError("Address search unavailable. Move the pin or try again.");
+          }
+          return;
+        }
+        const data: unknown = await res.json();
+        const hits = Array.isArray(data) ? (data as Suggestion[]) : [];
+        setSuggestions(hits);
+        setShowSuggestions(hits.length > 0);
       } catch {
         setSuggestions([]);
+        setShowSuggestions(false);
+        setSearchError("Address search unavailable. Move the pin or try again.");
       } finally {
         setSearching(false);
       }
@@ -151,40 +525,38 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
       setSuggestions([]);
       setShowSuggestions(false);
 
-      if (!mapRef.current || !markerRef.current) return;
-      const pos: [number, number] = [s.lng, s.lat];
-      mapRef.current.setCenter(pos);
-      markerRef.current.setLngLat(pos);
+      const controller = mapControllerRef.current;
+      if (!controller) return;
+      controller.setMarker(s.lng, s.lat);
+      onAddressSelect?.(s.display_name);
       onChange(s.lat, s.lng);
     },
-    [onChange],
+    [onChange, onAddressSelect],
   );
 
   const handleZoomIn = useCallback(() => {
     try {
-      mapRef.current?.zoomIn?.();
+      mapControllerRef.current?.zoomIn();
     } catch {
-      /* ignore map control errors */
+      /* ignore */
     }
   }, []);
 
   const handleZoomOut = useCallback(() => {
     try {
-      mapRef.current?.zoomOut?.();
+      mapControllerRef.current?.zoomOut();
     } catch {
-      /* ignore map control errors */
+      /* ignore */
     }
   }, []);
 
   const handleResetView = useCallback(() => {
     try {
-      const [lng, lat] = initialCenterRef.current;
-      const pos: [number, number] = [lng, lat];
-      mapRef.current?.setCenter?.(pos);
-      markerRef.current?.setLngLat?.(pos);
+      const { lat, lng } = initialCenterRef.current;
+      mapControllerRef.current?.setMarker(lng, lat);
       onChangeRef.current(lat, lng);
     } catch {
-      /* ignore map control errors */
+      /* ignore */
     }
   }, []);
 
@@ -200,17 +572,15 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
       (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        const pos: [number, number] = [lng, lat];
 
-        initialCenterRef.current = pos;
+        initialCenterRef.current = { lat, lng };
         setShowSuggestions(false);
         setSuggestions([]);
 
         try {
-          mapRef.current?.setCenter?.(pos);
-          markerRef.current?.setLngLat?.(pos);
+          mapControllerRef.current?.setMarker(lng, lat);
         } catch {
-          // Ignore map move errors; coordinates are still saved via onChange.
+          /* coordinates still saved */
         }
 
         onChangeRef.current(lat, lng);
@@ -218,7 +588,9 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
       },
       (err) => {
         let message = "Could not fetch your location. Try search or move the pin manually.";
-        if (err.code === err.PERMISSION_DENIED) message = "Location permission denied. Use search or move the pin manually.";
+        if (err.code === err.PERMISSION_DENIED) {
+          message = "Location permission denied. Use search or move the pin manually.";
+        }
         if (err.code === err.TIMEOUT) message = "Location lookup timed out. Please try again.";
         setLocationError(message);
         setLocating(false);
@@ -230,6 +602,129 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
       },
     );
   }, []);
+
+  if (fullscreen) {
+    return (
+      <div className="h-full relative">
+        {/* Search card — floats over the map */}
+        <div className="absolute top-3 left-3 right-3 z-10">
+          <div className="relative">
+            <div className="bg-white rounded-2xl shadow-[0_2px_20px_rgba(0,0,0,0.13)] flex items-center px-4 py-3 gap-3">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0 text-sage"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                placeholder="Search for area or street name…"
+                className="flex-1 font-body text-[14px] text-ink placeholder:text-stone/55 outline-none bg-transparent"
+              />
+              {searching && (
+                <div className="w-3.5 h-3.5 shrink-0 rounded-full border-2 border-sage border-t-transparent animate-spin" />
+              )}
+              {query && !searching && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setQuery("");
+                    setSuggestions([]);
+                    setShowSuggestions(false);
+                    setSearchError(null);
+                  }}
+                  className="shrink-0 text-stone hover:text-ink"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {showSuggestions && suggestions.length > 0 && (
+              <ul className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] overflow-hidden max-h-52 overflow-y-auto z-20">
+                {suggestions.map((s, i) => (
+                  <li key={i}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelect(s);
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-[#F9F8F6] transition-colors flex items-start gap-3 border-b border-black/5 last:border-0"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sage shrink-0 mt-0.5">
+                        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                        <circle cx="12" cy="10" r="3" />
+                      </svg>
+                      <span className="font-body text-[13px] text-ink leading-relaxed line-clamp-2">{s.display_name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {(locationError || searchError) && (
+            <p className="font-body text-[11px] text-terracotta mt-2 px-1">{locationError ?? searchError}</p>
+          )}
+        </div>
+
+        {/* Map fills the entire area */}
+        {mapError ? (
+          <div className="absolute inset-0 flex items-center justify-center p-6 bg-[#F9F8F6]">
+            <p className="font-body text-[13px] text-stone text-center">{mapError}</p>
+          </div>
+        ) : (
+          <div
+            ref={containerRef}
+            id={mapContainerId}
+            className="absolute inset-0"
+            style={{ zIndex: 0 }}
+          />
+        )}
+
+        {/* "Use current location" pill — floats over the map */}
+        {!mapError && (
+          <button
+            type="button"
+            onClick={handleLocateMe}
+            disabled={locating}
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2.5 bg-white border border-sage rounded-full px-5 py-2.5 shadow-md font-body text-[13px] font-medium text-sage whitespace-nowrap disabled:opacity-60 transition-opacity"
+            aria-label="Use current location"
+          >
+            {locating ? (
+              <div className="w-4 h-4 rounded-full border-2 border-sage border-t-transparent animate-spin" />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2" />
+                <path d="M12 20v2" />
+                <path d="M2 12h2" />
+                <path d="M20 12h2" />
+              </svg>
+            )}
+            Use current location
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -285,6 +780,7 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
                 setQuery("");
                 setSuggestions([]);
                 setShowSuggestions(false);
+                setSearchError(null);
               }}
               className="absolute right-3 text-stone hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage rounded-sm"
             >
@@ -295,10 +791,8 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
             </button>
           )}
         </div>
-        {locationError && (
-          <p className="font-body text-[11px] text-terracotta mt-1">
-            {locationError}
-          </p>
+        {(locationError || searchError) && (
+          <p className="font-body text-[11px] text-terracotta mt-1">{locationError ?? searchError}</p>
         )}
 
         {showSuggestions && suggestions.length > 0 && (
@@ -345,6 +839,11 @@ export default function MapPicker({ centerLat, centerLng, onChange }: MapPickerP
             className="w-full rounded-lg border border-black/10 overflow-hidden"
             style={{ height: "240px", zIndex: 0 }}
           />
+          {mapProvider === "google" && (
+            <p className="font-body text-[10px] text-stone/80 mt-1">
+              Map loaded via Google (Ola Maps unavailable).
+            </p>
+          )}
           <div className="absolute right-2 top-2 z-10 flex flex-col gap-1.5">
             <button
               type="button"

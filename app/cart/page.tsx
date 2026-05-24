@@ -439,415 +439,726 @@ export default function CartPage() {
 
   return (
     <>
-      <DeliveryMarquee variant="light" />
-      <section className={`min-h-[80vh] px-4 lg:px-16 ${items.length > 0 ? "pb-28 sm:pb-20" : "pb-16"}`}>
-        <div className="mx-auto max-w-2xl">
-          {/* Cart summary */}
-          <div>
-            <h1
-              className="section-heading text-ink mb-10"
-              style={{ fontSize: "clamp(32px, 4vw, 48px)" }}
-            >
-              Your Cart
-            </h1>
+      {/* ── MOBILE FULL-SCREEN CART ── */}
+      <div className="md:hidden">
+      <div
+        className="fixed inset-0 z-50 flex flex-col bg-[#F5F3EF]"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
+        {/* Header */}
+        <div className="flex-none flex items-center gap-2 px-5 pt-3 pb-3 bg-white border-b border-black/6 md:border-b-0 md:pt-8 md:pb-2 md:max-w-2xl md:mx-auto md:w-full">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="flex items-center justify-center w-10 h-10 -ml-2 rounded-full hover:bg-black/5 transition-colors text-ink shrink-0"
+            aria-label="Go back"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+          </button>
+          <h1 className="font-display text-[22px] font-light text-ink leading-tight">Your Cart</h1>
+        </div>
 
-            {items.length === 0 ? (
-              <div className="rounded-2xl border border-ink/10 bg-[#F9F8F6] p-6 text-center md:rounded-sm md:p-10">
-                <p className="font-display text-xl italic text-stone mb-4">
-                  Your cart is empty.
-                </p>
-                <a
-                  href="/menu"
-                  className="inline-block font-body text-[13px] font-bold tracking-wide bg-sage hover:bg-sage-dark text-white px-6 py-3 rounded-md transition-colors"
-                >
-                  Browse the menu
-                </a>
+        {/* ── CONTENT ── */}
+        <div className="flex-1 overflow-y-auto md:overflow-visible md:flex-none">
+
+          {/* Empty state */}
+          {items.length === 0 && (
+            <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-stone">
+                  <circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/>
+                  <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>
+                </svg>
               </div>
-            ) : (
-              <div className="rounded-xl border border-black/10 bg-white p-4 text-ink shadow-[0_8px_30px_rgb(0,0,0,0.04)] md:p-6">
-                <div className="mb-5 space-y-3.5 md:mb-6 md:space-y-4">
-                  {items.map((item) => {
-                    const removed = item.customizations.filter(c => c.option === "remove");
-                    const extras = item.customizations.filter(c => c.option === "extra");
-                    const subBase = subPlanConfig
-                      ? getSubscriberBaseFromPlanConfig(item.bowl, subPlanConfig)
-                      : null;
-                    const basePrice = subBase ?? item.bowl.price;
-                    const effectiveUnitPrice = basePrice + item.customizationCost;
-                    const isDiscounted = subBase !== null && item.bowl.price > subBase;
+              <p className="font-display text-[24px] font-light text-ink">Your cart is empty</p>
+              <p className="font-body text-[14px] text-stone">Add some bowls from our menu</p>
+              <a href="/menu" className="mt-2 rounded-xl bg-sage px-8 py-3 font-body text-[14px] font-medium text-white shadow-sm">
+                Browse menu
+              </a>
+            </div>
+          )}
 
-                    return (
-                      <div
-                        key={item.instanceId}
-                        className="flex flex-col gap-3 rounded-lg bg-[#F9F8F6] p-3.5 sm:flex-row sm:items-start sm:gap-4"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="font-display text-[18px] font-medium leading-snug text-ink break-words">
-                            {item.bowl.name}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                            <p className="font-body text-[13px] text-stone whitespace-nowrap">
-                              Base price - {formatCurrency(basePrice)}
-                            </p>
-                            {isDiscounted && (
-                              <>
-                                <span className="font-body text-[11px] text-stone/50 line-through">{formatCurrency(item.bowl.price)}</span>
-                                <span className="font-body text-[10px] font-bold text-sage-dark bg-sage/10 px-1.5 py-0.5 rounded-full">Subscriber</span>
-                              </>
-                            )}
-                          </div>
-                          {/* Customization summary */}
-                          {(removed.length > 0 || extras.length > 0) && (
-                            <div className="mt-1.5 space-y-0.5">
-                              <p className="font-body text-[11px] text-stone leading-relaxed break-words">
-                                Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} | Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
-                              </p>
-                              {item.presetOptions.noSugar && (
-                                <p className="font-body text-[11px] text-terracotta leading-relaxed break-words">
-                                  No sugar: exclude banana, honey, dates
-                                </p>
-                              )}
-                              {removed.map(c => {
-                                const ing = item.bowl.customizableIngredients?.find(i => i.id === c.ingredientId);
-                                if (!ing) return null;
-                                return (
-                                  <p key={c.ingredientId} className="font-body text-[11px] text-terracotta">
-                                    &minus;{ing.name} = 0
-                                  </p>
-                                );
-                              })}
-                              {extras.map(c => {
-                                const ing = item.bowl.customizableIngredients?.find(i => i.id === c.ingredientId);
-                                if (!ing) return null;
-                                return (
-                                  <p key={c.ingredientId} className="font-body text-[11px] text-sage-dark">
-                                    +{ing.name} = +{formatCurrency(ing.extraCost)}
-                                  </p>
-                                );
-                              })}
-                            </div>
-                          )}
-                          {removed.length === 0 && extras.length === 0 && (
-                            <div className="mt-1.5 space-y-0.5">
-                              <p className="font-body text-[11px] text-stone leading-relaxed break-words">
-                                Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} | Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
-                              </p>
-                              {item.presetOptions.noSugar && (
-                                <p className="font-body text-[11px] text-terracotta leading-relaxed break-words">
-                                  No sugar: exclude banana, honey, dates
-                                </p>
-                              )}
-                            </div>
-                          )}
-                          {item.bowl.inStock === false && (
-                            <p className="font-body text-[11px] font-medium text-terracotta mt-2">
-                              Out of stock - please remove to continue.
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between gap-2 shrink-0 w-full sm:w-auto sm:justify-start sm:gap-3">
-                          <div className="flex items-center gap-1 bg-white rounded-md border border-black/10 px-1 py-0.5">
-                            <button
-                              aria-label={`Decrease quantity of ${item.bowl.name}`}
-                              onClick={() => updateQuantity(item.instanceId, item.quantity - 1)}
-                              className="flex h-9 w-9 items-center justify-center text-stone transition-colors hover:text-ink cursor-pointer"
-                            >
-                              −
-                            </button>
-                            <span className="font-body text-sm w-4 text-center font-medium">
-                              {item.quantity}
-                            </span>
-                            <button
-                              aria-label={`Increase quantity of ${item.bowl.name}`}
-                              onClick={() => updateQuantity(item.instanceId, item.quantity + 1)}
-                              disabled={item.bowl.inStock === false}
-                              className="flex h-9 w-9 items-center justify-center text-stone transition-colors hover:text-ink cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                            >
-                              +
-                            </button>
-                          </div>
-                          <span className="font-display text-lg text-sage-dark min-w-[72px] text-right">
-                            {formatCurrency(effectiveUnitPrice * item.quantity)}
-                          </span>
-                          <button
-                            aria-label={`Remove ${item.bowl.name} from cart`}
-                            onClick={() => removeItem(item.instanceId)}
-                            className="w-10 h-10 rounded-full border border-black/5 flex items-center justify-center text-stone hover:bg-terracotta/5 hover:text-terracotta transition-colors ml-2 cursor-pointer bg-white"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                          </button>
-                        </div>
+          {items.length > 0 && (
+            <div className="px-4 py-4 pb-8 space-y-3 md:max-w-2xl md:mx-auto md:pb-24 md:py-6">
+
+              {/* ── Items card ── */}
+              <div className="rounded-2xl bg-white overflow-hidden divide-y divide-black/5">
+                {items.map((item) => {
+                  const removed = item.customizations.filter(c => c.option === "remove");
+                  const extras = item.customizations.filter(c => c.option === "extra");
+                  const subBase = subPlanConfig ? getSubscriberBaseFromPlanConfig(item.bowl, subPlanConfig) : null;
+                  const basePrice = subBase ?? item.bowl.price;
+                  const effectiveUnitPrice = basePrice + item.customizationCost;
+                  const isDiscounted = subBase !== null && item.bowl.price > subBase;
+
+                  return (
+                    <div key={item.instanceId} className="flex items-start gap-3 px-4 py-4">
+                      {/* Veg indicator */}
+                      <div className="mt-1 h-4 w-4 shrink-0 rounded-sm border-2 border-sage flex items-center justify-center">
+                        <div className="h-2 w-2 rounded-full bg-sage" />
                       </div>
-                    );
-                  })}
-                </div>
 
-                {user && (
-                  <div className="mb-5 rounded-lg border border-black/10 bg-[#F9F8F6] px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-1">Deliver to</p>
-                        <p className="font-body text-[13px] text-ink truncate">
-                          {formatAddressSingleLine(selectedAddress)}
+                      {/* Name + customizations */}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-display text-[16px] leading-snug text-ink">{item.bowl.name}</p>
+                        <p className="font-body text-[11px] text-stone mt-0.5">
+                          {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"}, {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"} oats{item.presetOptions.noSugar ? ", no sugar" : ""}
                         </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddressPicker(true)}
-                        className="font-body text-[12px] font-bold text-sage hover:text-sage-dark underline shrink-0 min-h-[44px] flex items-center"
-                      >
-                        Edit address
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {addressServiceabilityError && (
-                  <div className="mb-6 rounded-lg border border-terracotta/20 bg-terracotta/5 px-4 py-3">
-                    <p className="font-body text-[12px] font-medium text-terracotta">{addressServiceabilityError}</p>
-                  </div>
-                )}
-
-                <div className="mb-5 space-y-2 border-t border-black/5 pt-5">
-                  {subscriberDiscount > 0 && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <span className="font-body text-[13px] text-stone">Subtotal</span>
-                        <span className="font-body text-[13px] text-stone">{formatCurrency(total)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="font-body text-[13px] text-sage-dark font-medium">Subscriber discount</span>
-                        <span className="font-body text-[13px] text-sage-dark font-bold">- {formatCurrency(subscriberDiscount)}</span>
-                      </div>
-                    </>
-                  )}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-body text-[13px] text-stone">Delivery</span>
-                        {deliveryDistanceKm !== null && (
-                          <span className="font-body text-[10px] text-stone/60">({deliveryDistanceKm} km from {nearestHubName})</span>
+                        {removed.map(c => {
+                          const ing = item.bowl.customizableIngredients?.find(i => i.id === c.ingredientId);
+                          return ing ? <p key={c.ingredientId} className="font-body text-[10px] text-terracotta">−{ing.name}</p> : null;
+                        })}
+                        {extras.map(c => {
+                          const ing = item.bowl.customizableIngredients?.find(i => i.id === c.ingredientId);
+                          return ing ? <p key={c.ingredientId} className="font-body text-[10px] text-sage-dark">+{ing.name} (+{formatCurrency(ing.extraCost)})</p> : null;
+                        })}
+                        {isDiscounted && (
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <span className="font-body text-[10px] text-stone/50 line-through">{formatCurrency(item.bowl.price)}</span>
+                            <span className="font-body text-[10px] font-bold text-sage-dark bg-sage/10 px-1.5 py-0.5 rounded-full">Subscriber</span>
+                          </div>
+                        )}
+                        {item.bowl.inStock === false && (
+                          <p className="font-body text-[11px] font-medium text-terracotta mt-1">Out of stock — remove to continue</p>
                         )}
                       </div>
-                      {deliveryFeeLoading ? (
-                        <span className="font-body text-[12px] text-stone animate-pulse">Checking...</span>
-                      ) : deliveryFee === 0 ? (
-                        <span className="font-body text-[13px] font-bold text-sage-dark">Free</span>
-                      ) : (
-                        <span className="font-body text-[13px] font-bold text-terracotta">+ {formatCurrency(deliveryFee)}</span>
-                      )}
-                    </div>
-                    {!deliveryFeeLoading && deliveryBreakdown && !deliveryBreakdown.isFree && (
-                      <div className="rounded-lg bg-sage/5 border border-sage/15 px-3 py-2 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-body text-[11px] text-stone/70">Total delivery cost</span>
-                          <span className="font-body text-[11px] text-stone/70">{formatCurrency(deliveryBreakdown.totalCostRs)}</span>
+
+                      {/* Qty controls + price */}
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <div className="flex items-center rounded-lg border border-sage overflow-hidden">
+                          <button
+                            aria-label={`Decrease ${item.bowl.name}`}
+                            onClick={() => updateQuantity(item.instanceId, item.quantity - 1)}
+                            className="flex h-8 w-8 items-center justify-center text-sage font-bold text-lg hover:bg-sage/8 transition-colors"
+                          >−</button>
+                          <span className="w-7 text-center font-body text-[14px] font-bold text-sage">{item.quantity}</span>
+                          <button
+                            aria-label={`Increase ${item.bowl.name}`}
+                            onClick={() => updateQuantity(item.instanceId, item.quantity + 1)}
+                            disabled={item.bowl.inStock === false}
+                            className="flex h-8 w-8 items-center justify-center text-sage font-bold text-lg hover:bg-sage/8 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          >+</button>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="font-body text-[11px] text-sage-dark font-medium">Nutravoe covers</span>
-                          <span className="font-body text-[11px] text-sage-dark font-medium">- {formatCurrency(deliveryBreakdown.nutravoeCoverageRs)}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="font-body text-[11px] font-bold text-ink">You pay</span>
-                          <span className="font-body text-[11px] font-bold text-ink">{formatCurrency(deliveryBreakdown.customerPaysRs)}</span>
-                        </div>
+                        <span className="font-body text-[13px] font-semibold text-ink">{formatCurrency(effectiveUnitPrice * item.quantity)}</span>
                       </div>
-                    )}
-                    {!deliveryFeeLoading && (
-                      <p className="font-body text-[10px] text-stone/70">
-                        Delivery is free within 10 km. If delivery is charged, your address is beyond 10 km from Domlur Kitchen.
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="font-body text-sm font-bold uppercase tracking-wider text-ink/70">
-                      Grand Total
-                    </span>
-                    <span className="font-display text-3xl font-medium text-sage-dark">
-                      {formatCurrency(grandTotal)}
-                    </span>
-                  </div>
-                </div>
+                    </div>
+                  );
+                })}
 
-                <div className="mb-5 space-y-3">
-                  <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone">
-                    Delivery Mode
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!asapSlot) return;
-                        setDeliveryMode("asap");
-                        setError("");
-                      }}
-                      disabled={!asapSlot}
-                      className={`rounded-lg border px-4 py-3 text-left transition-colors ${
-                        deliveryMode === "asap"
-                          ? "border-sage bg-sage/10"
-                          : "border-black/10 bg-[#F9F8F6]"
-                      } disabled:opacity-40 disabled:cursor-not-allowed`}
-                    >
-                      <p className="font-body text-[13px] font-bold text-ink">Delivery in 60 min</p>
-                      <p className="font-body text-[11px] text-stone">
-                        {asapSlot ? `Next slot: ${asapSlot.label}` : "Available 7:00 AM–3:00 PM only"}
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDeliveryMode("scheduled");
-                        setError("");
-                        setCalViewState("calendar");
-                        setShowSlotPicker(true);
-                      }}
-                      className={`rounded-lg border px-4 py-3 text-left transition-colors ${
-                        deliveryMode === "scheduled"
-                          ? "border-sage bg-sage/10"
-                          : "border-black/10 bg-[#F9F8F6]"
-                      }`}
-                    >
-                      <p className="font-body text-[13px] font-bold text-ink">Schedule for later</p>
-                      <p className="font-body text-[11px] text-stone">Pick any available slot</p>
-                    </button>
-                  </div>
+                {/* Add more items */}
+                <div className="px-4 py-3">
+                  <a href="/menu" className="flex items-center gap-2 font-body text-[13px] font-medium text-sage">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                    Add more items
+                  </a>
                 </div>
+              </div>
 
-                <div className="mb-5">
-                  <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
-                    {deliveryMode === "asap" ? "Selected Delivery Slot" : "Select Delivery Slot"}
-                  </label>
+              {addressServiceabilityError && (
+                <div className="rounded-2xl border border-terracotta/20 bg-terracotta/5 px-4 py-3">
+                  <p className="font-body text-[12px] text-terracotta">{addressServiceabilityError}</p>
+                </div>
+              )}
+
+              {/* ── Bill details ── */}
+              <div className="rounded-2xl bg-white px-4 py-4 space-y-2.5">
+                <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-1">Bill Details</p>
+                {subscriberDiscount > 0 && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="font-body text-[13px] text-stone">Item total</span>
+                      <span className="font-body text-[13px] text-stone">{formatCurrency(total)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-body text-[13px] text-sage-dark font-medium">Subscriber discount</span>
+                      <span className="font-body text-[13px] text-sage-dark font-bold">−{formatCurrency(subscriberDiscount)}</span>
+                    </div>
+                  </>
+                )}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-body text-[13px] text-stone">Delivery</span>
+                    {deliveryDistanceKm !== null && (
+                      <span className="font-body text-[10px] text-stone/50">({deliveryDistanceKm} km)</span>
+                    )}
+                  </div>
+                  {deliveryFeeLoading ? (
+                    <span className="font-body text-[12px] text-stone animate-pulse">Checking…</span>
+                  ) : deliveryFee === 0 ? (
+                    <span className="font-body text-[13px] font-bold text-sage-dark">Free</span>
+                  ) : (
+                    <span className="font-body text-[13px] font-bold text-terracotta">+{formatCurrency(deliveryFee)}</span>
+                  )}
+                </div>
+                {!deliveryFeeLoading && deliveryBreakdown && !deliveryBreakdown.isFree && (
+                  <div className="rounded-xl bg-sage/5 border border-sage/15 px-3 py-2 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-body text-[11px] text-stone/70">Total cost</span>
+                      <span className="font-body text-[11px] text-stone/70">{formatCurrency(deliveryBreakdown.totalCostRs)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-body text-[11px] text-sage-dark font-medium">Nutravoe covers</span>
+                      <span className="font-body text-[11px] text-sage-dark font-medium">−{formatCurrency(deliveryBreakdown.nutravoeCoverageRs)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-body text-[11px] font-bold text-ink">You pay</span>
+                      <span className="font-body text-[11px] font-bold text-ink">{formatCurrency(deliveryBreakdown.customerPaysRs)}</span>
+                    </div>
+                  </div>
+                )}
+                {!deliveryFeeLoading && (
+                  <p className="font-body text-[10px] text-stone/60">Free within 10 km from Domlur Kitchen.</p>
+                )}
+                <div className="border-t border-black/6 pt-2.5 flex items-center justify-between">
+                  <span className="font-body text-[14px] font-bold text-ink">To pay</span>
+                  <span className="font-display text-[22px] font-medium text-sage-dark">{formatCurrency(grandTotal)}</span>
+                </div>
+              </div>
+
+              {/* ── Delivery Time ── */}
+              <div className="rounded-2xl bg-white px-4 py-4">
+                <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-3">Delivery Time</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { if (!asapSlot) return; setDeliveryMode("asap"); setError(""); }}
+                    disabled={!asapSlot}
+                    className={`rounded-xl border px-3 py-3 text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${deliveryMode === "asap" ? "border-sage bg-sage/8" : "border-black/10 bg-[#F9F8F6]"}`}
+                  >
+                    <p className="font-body text-[13px] font-bold text-ink">In 60 min</p>
+                    <p className="font-body text-[11px] text-stone">{asapSlot ? asapSlot.label : "7 AM–3 PM only"}</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDeliveryMode("scheduled"); setError(""); setCalViewState("calendar"); setShowSlotPicker(true); }}
+                    className={`rounded-xl border px-3 py-3 text-left transition-colors ${deliveryMode === "scheduled" ? "border-sage bg-sage/8" : "border-black/10 bg-[#F9F8F6]"}`}
+                  >
+                    <p className="font-body text-[13px] font-bold text-ink">Schedule</p>
+                    <p className="font-body text-[11px] text-stone">Pick a slot</p>
+                  </button>
+                </div>
+                <div className="mt-3">
                   {deliveryMode === "asap" ? (
-                    <div className="w-full border border-black/10 rounded-lg px-4 py-3.5 bg-[#F9F8F6]">
-                      <span className="font-body text-[13px] text-ink font-bold tracking-wide">
-                        {asapSlot?.label ?? "Delivery in 60 min unavailable right now"}
-                      </span>
+                    <div className="rounded-xl border border-black/10 bg-[#F9F8F6] px-4 py-3">
+                      <span className="font-body text-[13px] font-bold text-ink">{asapSlot?.label ?? "Unavailable right now"}</span>
                     </div>
                   ) : (
                     <button
-                      aria-label={selectedSlot ? `Selected delivery slot ${selectedSlot}` : "Choose an available delivery slot"}
+                      aria-label={selectedSlot ? `Slot: ${selectedSlotLabel}` : "Choose a delivery slot"}
                       onClick={() => { setShowSlotPicker(true); setError(""); }}
-                      className="w-full flex items-center justify-between border border-black/10 rounded-lg px-4 py-3.5 bg-[#F9F8F6] hover:bg-sage/5 hover:border-sage/30 transition-colors text-left group cursor-pointer shadow-sm"
+                      className="w-full flex items-center justify-between rounded-xl border border-black/10 bg-[#F9F8F6] px-4 py-3 hover:border-sage/30 hover:bg-sage/5 transition-colors group cursor-pointer"
                     >
-                      <span className={`font-body text-[13px] ${selectedSlotLabel ? 'text-ink font-bold tracking-wide' : 'text-stone font-medium'}`}>
-                        {selectedSlotLabel || "Choose an available time slot"}
+                      <span className={`font-body text-[13px] ${selectedSlotLabel ? "font-bold text-ink" : "text-stone"}`}>
+                        {selectedSlotLabel || "Choose a time slot"}
                       </span>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone group-hover:text-sage transition-colors"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
                   )}
                 </div>
-
-                {/* Customer notes */}
-                <div className="mb-4">
-                  <label htmlFor="order-notes" className="block font-body text-[12px] font-bold uppercase tracking-wider text-stone mb-2">
-                    Any notes for us? <span className="font-normal normal-case tracking-normal">(allergies, preferences…)</span>
-                  </label>
-                  <textarea
-                    id="order-notes"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value.slice(0, 300))}
-                    placeholder="e.g. I'm allergic to peanuts"
-                    rows={3}
-                    className="w-full border border-black/10 rounded-lg px-4 py-3 font-body text-[13px] text-ink placeholder:text-stone/50 bg-[#F9F8F6] focus:outline-none focus:ring-1 focus:ring-sage/40 resize-none"
-                  />
-                  <p className="font-body text-[11px] text-stone/60 text-right mt-1">{notes.length}/300</p>
-                </div>
-
-                {hasOutOfStockItems && (
-                  <div className="mb-4 p-4 bg-terracotta/5 border border-terracotta/20 rounded-md">
-                    <p className="font-body text-[13px] font-medium text-terracotta">
-                      Remove out-of-stock items above before checking out.
-                    </p>
-                  </div>
-                )}
-
-                {error && (
-                  <div className="mb-4 p-4 bg-terracotta/5 border border-terracotta/20 rounded-md">
-                    <p className="font-body text-[13px] font-medium text-terracotta">{error}</p>
-                  </div>
-                )}
-
-                {hasActivePaidSub && (
-                  <div className="mb-3">
-                    <button
-                      onClick={handlePayFromWallet}
-                      disabled={submitting || !canPayFromWallet || hasOutOfStockItems || hasUnserviceableSelectedAddress}
-                      className="w-full bg-sage hover:bg-sage-dark disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>
-                      {canPayFromWallet
-                        ? `Pay ${formatCurrency(grandTotal)} from Wallet`
-                        : `Wallet balance low (${formatCurrency(walletBalanceRs)} available)`}
-                    </button>
-                    <p className="font-body text-[11px] text-stone text-center mt-1.5">
-                      Order confirmed instantly · No WhatsApp needed
-                    </p>
-                  </div>
-                )}
-
-                <button
-                  onClick={handlePlaceOrder}
-                  disabled={submitting || hasOutOfStockItems || hasUnserviceableSelectedAddress}
-                  className={`hidden sm:block w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 hover:bg-black/30 text-ink" : "bg-terracotta hover:bg-[#D55F43]"}`}
-                >
-                  {canPayFromWallet ? "Place order instead" : "Place order"}
-                </button>
-
-                <p className="font-body text-[11px] text-stone text-center mt-4">
-                  {user ? (canPayFromWallet ? "" : "Your order request will be sent directly to our team for confirmation.") : "You will be asked to sign in to your Nutravoe account to continue."}
-                </p>
               </div>
-            )}
 
-            {/* Trust signals */}
-            <div className="mt-6 grid grid-cols-1 gap-3 border-t border-black/5 pt-6 text-center md:mt-8 md:grid-cols-3 md:gap-4 md:pt-8">
-              {[
-                { emoji: "🌅", text: "Made fresh daily" },
-                { emoji: "🚚", text: "Same-day delivery" },
-                { emoji: "🥛", text: "Probiotic base" },
-              ].map(({ emoji, text }) => (
-                <div key={text} className="flex flex-col items-center gap-2">
-                  <span className="text-xl" aria-hidden="true">{emoji}</span>
-                  <p className="font-body text-[12px] font-medium text-stone tracking-wide">{text}</p>
+              {/* ── Notes ── */}
+              <div className="rounded-2xl bg-white px-4 py-4">
+                <label htmlFor="order-notes" className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
+                  Notes <span className="font-normal normal-case tracking-normal text-stone/60">(allergies, preferences…)</span>
+                </label>
+                <textarea
+                  id="order-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value.slice(0, 300))}
+                  placeholder="e.g. I'm allergic to peanuts"
+                  rows={3}
+                  className="w-full rounded-xl border border-black/10 px-4 py-3 font-body text-[13px] text-ink placeholder:text-stone/50 bg-[#F9F8F6] focus:outline-none focus:ring-2 focus:ring-sage/20 resize-none"
+                />
+                <p className="font-body text-[11px] text-stone/50 text-right mt-1">{notes.length}/300</p>
+              </div>
+
+              {/* Warnings + errors */}
+              {hasOutOfStockItems && (
+                <div className="rounded-2xl border border-terracotta/20 bg-terracotta/5 px-4 py-3">
+                  <p className="font-body text-[13px] font-medium text-terracotta">Remove out-of-stock items before checking out.</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+              )}
+              {error && (
+                <div className="rounded-2xl border border-terracotta/20 bg-terracotta/5 px-4 py-3">
+                  <p className="font-body text-[13px] font-medium text-terracotta">{error}</p>
+                </div>
+              )}
 
-      {items.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-black/10 bg-white/95 backdrop-blur sm:hidden">
-          <div className="mx-auto max-w-2xl px-4 pt-2.5 pb-[calc(0.65rem+env(safe-area-inset-bottom))]">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="font-body text-[11px] font-bold uppercase tracking-wider text-ink/70">
-                Grand Total
-              </span>
-              <span className="font-display text-xl font-medium text-sage-dark">
-                {formatCurrency(grandTotal)}
-              </span>
+              {/* Wallet button */}
+              {hasActivePaidSub && (
+                <div>
+                  <button
+                    onClick={handlePayFromWallet}
+                    disabled={submitting || !canPayFromWallet || hasOutOfStockItems || hasUnserviceableSelectedAddress}
+                    className="w-full rounded-xl bg-sage hover:bg-sage-dark disabled:bg-black/10 disabled:text-stone text-white font-body text-[14px] font-bold py-3.5 transition-colors shadow-sm flex items-center justify-center gap-2"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>
+                    {canPayFromWallet ? `Pay ${formatCurrency(grandTotal)} from Wallet` : `Wallet balance low (${formatCurrency(walletBalanceRs)} available)`}
+                  </button>
+                  <p className="font-body text-[11px] text-stone text-center mt-1.5">Order confirmed instantly · No WhatsApp needed</p>
+                </div>
+              )}
             </div>
-            {hasActivePaidSub && (
-              <button
-                onClick={handlePayFromWallet}
-                disabled={submitting || !canPayFromWallet || hasOutOfStockItems || hasUnserviceableSelectedAddress}
-                className="w-full mb-2 bg-sage hover:bg-sage-dark disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>
-                {canPayFromWallet
-                  ? `Pay ${formatCurrency(grandTotal)} from Wallet`
-                  : `Wallet balance low (${formatCurrency(walletBalanceRs)})`}
-              </button>
-            )}
+          )}
+
+        </div>
+
+        {/* ── Footer CTA ── */}
+        {items.length > 0 && (
+          <div className="flex-none bg-white border-t border-black/6" style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
+            {/* Address row — tappable, sits just above Place Order */}
+            <button
+              type="button"
+              onClick={() => setShowAddressPicker(true)}
+              className="flex w-full items-center gap-2.5 border-b border-black/6 px-5 py-3"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-sage shrink-0">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+              </svg>
+              <p className="flex-1 font-body text-[12px] text-ink truncate text-left">
+                {formatAddressSingleLine(selectedAddress) || "Add delivery address"}
+              </p>
+              <span className="font-body text-[11px] font-medium text-sage shrink-0">Change</span>
+            </button>
+            <div className="px-5 pt-3">
             <button
               onClick={handlePlaceOrder}
               disabled={submitting || hasOutOfStockItems || hasUnserviceableSelectedAddress}
-              className={`w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 text-ink" : "bg-terracotta"}`}
+              className={`w-full rounded-xl py-4 font-body font-bold text-white flex items-center justify-between px-5 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${canPayFromWallet ? "bg-black/25 text-ink hover:bg-black/30" : "bg-sage hover:bg-sage-dark"}`}
             >
-              {canPayFromWallet ? "Place order instead" : "Place order"}
+              <div className="text-left">
+                <p className="font-body text-[17px] font-bold leading-tight">{formatCurrency(grandTotal)}</p>
+                <p className="font-body text-[10px] font-normal uppercase tracking-widest opacity-75">Total</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-body text-[15px] font-bold">
+                  {submitting ? "Placing…" : canPayFromWallet ? "Place order instead" : "Place Order"}
+                </span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m9 18 6-6-6-6"/>
+                </svg>
+              </div>
             </button>
+            {!user && (
+              <p className="font-body text-[11px] text-stone text-center mt-2">You&apos;ll be asked to sign in to continue.</p>
+            )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+      </div>{/* end md:hidden */}
+
+      {/* ── DESKTOP CART (original layout) ── */}
+      <div className="hidden md:block">
+        <DeliveryMarquee variant="light" />
+        <section className={`min-h-[80vh] px-4 lg:px-16 ${items.length > 0 ? "pb-28 sm:pb-20" : "pb-16"}`}>
+          <div className="mx-auto max-w-2xl">
+            <div>
+              <h1
+                className="section-heading text-ink mb-10"
+                style={{ fontSize: "clamp(32px, 4vw, 48px)" }}
+              >
+                Your Cart
+              </h1>
+
+              {items.length === 0 ? (
+                <div className="rounded-2xl border border-ink/10 bg-[#F9F8F6] p-6 text-center md:rounded-sm md:p-10">
+                  <p className="font-display text-xl italic text-stone mb-4">
+                    Your cart is empty.
+                  </p>
+                  <a
+                    href="/menu"
+                    className="inline-block font-body text-[13px] font-bold tracking-wide bg-sage hover:bg-sage-dark text-white px-6 py-3 rounded-md transition-colors"
+                  >
+                    Browse the menu
+                  </a>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-black/10 bg-white p-4 text-ink shadow-[0_8px_30px_rgb(0,0,0,0.04)] md:p-6">
+                  <div className="mb-5 space-y-3.5 md:mb-6 md:space-y-4">
+                    {items.map((item) => {
+                      const removed = item.customizations.filter(c => c.option === "remove");
+                      const extras = item.customizations.filter(c => c.option === "extra");
+                      const subBase = subPlanConfig
+                        ? getSubscriberBaseFromPlanConfig(item.bowl, subPlanConfig)
+                        : null;
+                      const basePrice = subBase ?? item.bowl.price;
+                      const effectiveUnitPrice = basePrice + item.customizationCost;
+                      const isDiscounted = subBase !== null && item.bowl.price > subBase;
+
+                      return (
+                        <div
+                          key={item.instanceId}
+                          className="flex flex-col gap-3 rounded-lg bg-[#F9F8F6] p-3.5 sm:flex-row sm:items-start sm:gap-4"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-display text-[18px] font-medium leading-snug text-ink break-words">
+                              {item.bowl.name}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                              <p className="font-body text-[13px] text-stone whitespace-nowrap">
+                                Base price - {formatCurrency(basePrice)}
+                              </p>
+                              {isDiscounted && (
+                                <>
+                                  <span className="font-body text-[11px] text-stone/50 line-through">{formatCurrency(item.bowl.price)}</span>
+                                  <span className="font-body text-[10px] font-bold text-sage-dark bg-sage/10 px-1.5 py-0.5 rounded-full">Subscriber</span>
+                                </>
+                              )}
+                            </div>
+                            {(removed.length > 0 || extras.length > 0) && (
+                              <div className="mt-1.5 space-y-0.5">
+                                <p className="font-body text-[11px] text-stone leading-relaxed break-words">
+                                  Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} | Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                                </p>
+                                {item.presetOptions.noSugar && (
+                                  <p className="font-body text-[11px] text-terracotta leading-relaxed break-words">
+                                    No sugar: exclude banana, honey, dates
+                                  </p>
+                                )}
+                                {removed.map(c => {
+                                  const ing = item.bowl.customizableIngredients?.find(i => i.id === c.ingredientId);
+                                  if (!ing) return null;
+                                  return (
+                                    <p key={c.ingredientId} className="font-body text-[11px] text-terracotta">
+                                      &minus;{ing.name} = 0
+                                    </p>
+                                  );
+                                })}
+                                {extras.map(c => {
+                                  const ing = item.bowl.customizableIngredients?.find(i => i.id === c.ingredientId);
+                                  if (!ing) return null;
+                                  return (
+                                    <p key={c.ingredientId} className="font-body text-[11px] text-sage-dark">
+                                      +{ing.name} = +{formatCurrency(ing.extraCost)}
+                                    </p>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {removed.length === 0 && extras.length === 0 && (
+                              <div className="mt-1.5 space-y-0.5">
+                                <p className="font-body text-[11px] text-stone leading-relaxed break-words">
+                                  Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} | Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                                </p>
+                                {item.presetOptions.noSugar && (
+                                  <p className="font-body text-[11px] text-terracotta leading-relaxed break-words">
+                                    No sugar: exclude banana, honey, dates
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            {item.bowl.inStock === false && (
+                              <p className="font-body text-[11px] font-medium text-terracotta mt-2">
+                                Out of stock - please remove to continue.
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-2 shrink-0 w-full sm:w-auto sm:justify-start sm:gap-3">
+                            <div className="flex items-center gap-1 bg-white rounded-md border border-black/10 px-1 py-0.5">
+                              <button
+                                aria-label={`Decrease quantity of ${item.bowl.name}`}
+                                onClick={() => updateQuantity(item.instanceId, item.quantity - 1)}
+                                className="flex h-9 w-9 items-center justify-center text-stone transition-colors hover:text-ink cursor-pointer"
+                              >
+                                −
+                              </button>
+                              <span className="font-body text-sm w-4 text-center font-medium">
+                                {item.quantity}
+                              </span>
+                              <button
+                                aria-label={`Increase quantity of ${item.bowl.name}`}
+                                onClick={() => updateQuantity(item.instanceId, item.quantity + 1)}
+                                disabled={item.bowl.inStock === false}
+                                className="flex h-9 w-9 items-center justify-center text-stone transition-colors hover:text-ink cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                +
+                              </button>
+                            </div>
+                            <span className="font-display text-lg text-sage-dark min-w-[72px] text-right">
+                              {formatCurrency(effectiveUnitPrice * item.quantity)}
+                            </span>
+                            <button
+                              aria-label={`Remove ${item.bowl.name} from cart`}
+                              onClick={() => removeItem(item.instanceId)}
+                              className="w-10 h-10 rounded-full border border-black/5 flex items-center justify-center text-stone hover:bg-terracotta/5 hover:text-terracotta transition-colors ml-2 cursor-pointer bg-white"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {user && (
+                    <div className="mb-5 rounded-lg border border-black/10 bg-[#F9F8F6] px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-1">Deliver to</p>
+                          <p className="font-body text-[13px] text-ink truncate">
+                            {formatAddressSingleLine(selectedAddress)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddressPicker(true)}
+                          className="font-body text-[12px] font-bold text-sage hover:text-sage-dark underline shrink-0 min-h-[44px] flex items-center"
+                        >
+                          Edit address
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {addressServiceabilityError && (
+                    <div className="mb-6 rounded-lg border border-terracotta/20 bg-terracotta/5 px-4 py-3">
+                      <p className="font-body text-[12px] font-medium text-terracotta">{addressServiceabilityError}</p>
+                    </div>
+                  )}
+
+                  <div className="mb-5 space-y-2 border-t border-black/5 pt-5">
+                    {subscriberDiscount > 0 && (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="font-body text-[13px] text-stone">Subtotal</span>
+                          <span className="font-body text-[13px] text-stone">{formatCurrency(total)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-body text-[13px] text-sage-dark font-medium">Subscriber discount</span>
+                          <span className="font-body text-[13px] text-sage-dark font-bold">- {formatCurrency(subscriberDiscount)}</span>
+                        </div>
+                      </>
+                    )}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-body text-[13px] text-stone">Delivery</span>
+                          {deliveryDistanceKm !== null && (
+                            <span className="font-body text-[10px] text-stone/60">({deliveryDistanceKm} km from {nearestHubName})</span>
+                          )}
+                        </div>
+                        {deliveryFeeLoading ? (
+                          <span className="font-body text-[12px] text-stone animate-pulse">Checking...</span>
+                        ) : deliveryFee === 0 ? (
+                          <span className="font-body text-[13px] font-bold text-sage-dark">Free</span>
+                        ) : (
+                          <span className="font-body text-[13px] font-bold text-terracotta">+ {formatCurrency(deliveryFee)}</span>
+                        )}
+                      </div>
+                      {!deliveryFeeLoading && deliveryBreakdown && !deliveryBreakdown.isFree && (
+                        <div className="rounded-lg bg-sage/5 border border-sage/15 px-3 py-2 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-body text-[11px] text-stone/70">Total delivery cost</span>
+                            <span className="font-body text-[11px] text-stone/70">{formatCurrency(deliveryBreakdown.totalCostRs)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="font-body text-[11px] text-sage-dark font-medium">Nutravoe covers</span>
+                            <span className="font-body text-[11px] text-sage-dark font-medium">- {formatCurrency(deliveryBreakdown.nutravoeCoverageRs)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="font-body text-[11px] font-bold text-ink">You pay</span>
+                            <span className="font-body text-[11px] font-bold text-ink">{formatCurrency(deliveryBreakdown.customerPaysRs)}</span>
+                          </div>
+                        </div>
+                      )}
+                      {!deliveryFeeLoading && (
+                        <p className="font-body text-[10px] text-stone/70">
+                          Delivery is free within 10 km. If delivery is charged, your address is beyond 10 km from Domlur Kitchen.
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="font-body text-sm font-bold uppercase tracking-wider text-ink/70">
+                        Grand Total
+                      </span>
+                      <span className="font-display text-3xl font-medium text-sage-dark">
+                        {formatCurrency(grandTotal)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mb-5 space-y-3">
+                    <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone">
+                      Delivery Mode
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!asapSlot) return;
+                          setDeliveryMode("asap");
+                          setError("");
+                        }}
+                        disabled={!asapSlot}
+                        className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                          deliveryMode === "asap"
+                            ? "border-sage bg-sage/10"
+                            : "border-black/10 bg-[#F9F8F6]"
+                        } disabled:opacity-40 disabled:cursor-not-allowed`}
+                      >
+                        <p className="font-body text-[13px] font-bold text-ink">Delivery in 60 min</p>
+                        <p className="font-body text-[11px] text-stone">
+                          {asapSlot ? `Next slot: ${asapSlot.label}` : "Available 7:00 AM–3:00 PM only"}
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeliveryMode("scheduled");
+                          setError("");
+                          setCalViewState("calendar");
+                          setShowSlotPicker(true);
+                        }}
+                        className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                          deliveryMode === "scheduled"
+                            ? "border-sage bg-sage/10"
+                            : "border-black/10 bg-[#F9F8F6]"
+                        }`}
+                      >
+                        <p className="font-body text-[13px] font-bold text-ink">Schedule for later</p>
+                        <p className="font-body text-[11px] text-stone">Pick any available slot</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mb-5">
+                    <label className="block font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
+                      {deliveryMode === "asap" ? "Selected Delivery Slot" : "Select Delivery Slot"}
+                    </label>
+                    {deliveryMode === "asap" ? (
+                      <div className="w-full border border-black/10 rounded-lg px-4 py-3.5 bg-[#F9F8F6]">
+                        <span className="font-body text-[13px] text-ink font-bold tracking-wide">
+                          {asapSlot?.label ?? "Delivery in 60 min unavailable right now"}
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        aria-label={selectedSlot ? `Selected delivery slot ${selectedSlot}` : "Choose an available delivery slot"}
+                        onClick={() => { setShowSlotPicker(true); setError(""); }}
+                        className="w-full flex items-center justify-between border border-black/10 rounded-lg px-4 py-3.5 bg-[#F9F8F6] hover:bg-sage/5 hover:border-sage/30 transition-colors text-left group cursor-pointer shadow-sm"
+                      >
+                        <span className={`font-body text-[13px] ${selectedSlotLabel ? "text-ink font-bold tracking-wide" : "text-stone font-medium"}`}>
+                          {selectedSlotLabel || "Choose an available time slot"}
+                        </span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone group-hover:text-sage transition-colors"><path d="m6 9 6 6 6-6"/></svg>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="mb-4">
+                    <label htmlFor="desktop-order-notes" className="block font-body text-[12px] font-bold uppercase tracking-wider text-stone mb-2">
+                      Any notes for us? <span className="font-normal normal-case tracking-normal">(allergies, preferences…)</span>
+                    </label>
+                    <textarea
+                      id="desktop-order-notes"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value.slice(0, 300))}
+                      placeholder="e.g. I'm allergic to peanuts"
+                      rows={3}
+                      className="w-full border border-black/10 rounded-lg px-4 py-3 font-body text-[13px] text-ink placeholder:text-stone/50 bg-[#F9F8F6] focus:outline-none focus:ring-1 focus:ring-sage/40 resize-none"
+                    />
+                    <p className="font-body text-[11px] text-stone/60 text-right mt-1">{notes.length}/300</p>
+                  </div>
+
+                  {hasOutOfStockItems && (
+                    <div className="mb-4 p-4 bg-terracotta/5 border border-terracotta/20 rounded-md">
+                      <p className="font-body text-[13px] font-medium text-terracotta">
+                        Remove out-of-stock items above before checking out.
+                      </p>
+                    </div>
+                  )}
+
+                  {error && (
+                    <div className="mb-4 p-4 bg-terracotta/5 border border-terracotta/20 rounded-md">
+                      <p className="font-body text-[13px] font-medium text-terracotta">{error}</p>
+                    </div>
+                  )}
+
+                  {hasActivePaidSub && (
+                    <div className="mb-3">
+                      <button
+                        onClick={handlePayFromWallet}
+                        disabled={submitting || !canPayFromWallet || hasOutOfStockItems || hasUnserviceableSelectedAddress}
+                        className="w-full bg-sage hover:bg-sage-dark disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>
+                        {canPayFromWallet
+                          ? `Pay ${formatCurrency(grandTotal)} from Wallet`
+                          : `Wallet balance low (${formatCurrency(walletBalanceRs)} available)`}
+                      </button>
+                      <p className="font-body text-[11px] text-stone text-center mt-1.5">
+                        Order confirmed instantly · No WhatsApp needed
+                      </p>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handlePlaceOrder}
+                    disabled={submitting || hasOutOfStockItems || hasUnserviceableSelectedAddress}
+                    className={`hidden sm:block w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 hover:bg-black/30 text-ink" : "bg-terracotta hover:bg-[#D55F43]"}`}
+                  >
+                    {canPayFromWallet ? "Place order instead" : "Place order"}
+                  </button>
+
+                  <p className="font-body text-[11px] text-stone text-center mt-4">
+                    {user ? (canPayFromWallet ? "" : "Your order request will be sent directly to our team for confirmation.") : "You will be asked to sign in to your Nutravoe account to continue."}
+                  </p>
+                </div>
+              )}
+
+              <div className="mt-6 grid grid-cols-1 gap-3 border-t border-black/5 pt-6 text-center md:mt-8 md:grid-cols-3 md:gap-4 md:pt-8">
+                {[
+                  { emoji: "🌅", text: "Made fresh daily" },
+                  { emoji: "🚚", text: "Same-day delivery" },
+                  { emoji: "🥛", text: "Probiotic base" },
+                ].map(({ emoji, text }) => (
+                  <div key={text} className="flex flex-col items-center gap-2">
+                    <span className="text-xl" aria-hidden="true">{emoji}</span>
+                    <p className="font-body text-[12px] font-medium text-stone tracking-wide">{text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {items.length > 0 && (
+          <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-black/10 bg-white/95 backdrop-blur sm:hidden">
+            <div className="mx-auto max-w-2xl px-4 pt-2.5 pb-[calc(0.65rem+env(safe-area-inset-bottom))]">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="font-body text-[11px] font-bold uppercase tracking-wider text-ink/70">
+                  Grand Total
+                </span>
+                <span className="font-display text-xl font-medium text-sage-dark">
+                  {formatCurrency(grandTotal)}
+                </span>
+              </div>
+              {hasActivePaidSub && (
+                <button
+                  onClick={handlePayFromWallet}
+                  disabled={submitting || !canPayFromWallet || hasOutOfStockItems || hasUnserviceableSelectedAddress}
+                  className="w-full mb-2 bg-sage hover:bg-sage-dark disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm flex items-center justify-center gap-2"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>
+                  {canPayFromWallet
+                    ? `Pay ${formatCurrency(grandTotal)} from Wallet`
+                    : `Wallet balance low (${formatCurrency(walletBalanceRs)})`}
+                </button>
+              )}
+              <button
+                onClick={handlePlaceOrder}
+                disabled={submitting || hasOutOfStockItems || hasUnserviceableSelectedAddress}
+                className={`w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 text-ink" : "bg-terracotta"}`}
+              >
+                {canPayFromWallet ? "Place order instead" : "Place order"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>{/* end hidden md:block */}
 
       {showAddressPicker && (
         <div className="fixed inset-0 z-[120] flex items-end md:items-center justify-center p-0 md:p-4 bg-ink/70 backdrop-blur-sm animate-in fade-in duration-300">
