@@ -24,6 +24,43 @@ export function getTodayIstYmd(): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Calendar/time parts for a real instant interpreted in IST. */
+export function getIstDateTimeParts(base: Date): Record<"year" | "month" | "day" | "hour", string> {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: NUTRAVOE_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(base);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+  const hour = parts.find((p) => p.type === "hour")?.value;
+  if (!year || !month || !day || !hour) {
+    throw new Error("Unable to derive IST date/time parts");
+  }
+  return { year, month, day, hour };
+}
+
+export function getIstHour(base: Date): number {
+  return Number(getIstDateTimeParts(base).hour);
+}
+
+export function getIstYearMonth(base: Date): { year: number; monthIndex: number } {
+  const parts = getIstDateTimeParts(base);
+  return {
+    year: Number(parts.year),
+    monthIndex: Number(parts.month) - 1,
+  };
+}
+
+/** Weekday index for an IST calendar date string, Sunday=0...Saturday=6. */
+export function getIstWeekdayIndex(ymd: string): number {
+  return parseIstYmd(ymd).getUTCDay();
+}
+
 /**
  * A calendar date stored as YYYY-MM-DD (India business / delivery day) as an absolute
  * `Date` at local noon in IST so day-boundary bugs are avoided.

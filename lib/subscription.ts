@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { Subscription, DayBowlConfig } from '@/types';
 import { STUB_PLANS as FALLBACK_PLANS, type PlanConfig } from '@/app/subscribe/PlanCard';
 import { getSubscriptionPlans } from '@/lib/sanity';
+import { addCalendarDaysIst, getIstHour, getIstWeekdayIndex, getTodayIstYmd } from '@/lib/datetime-ist';
 
 // Map Supabase day_of_week enum to the app's DayBowlConfig day type
 function mapDay(d: string): DayBowlConfig['day'] {
@@ -199,9 +200,9 @@ export function scheduleDeliveryDates(
     sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
   };
 
-  const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const todayIdx = nowIST.getDay();
-  const currentHour = nowIST.getHours();
+  const todayIst = getTodayIstYmd();
+  const todayIdx = getIstWeekdayIndex(todayIst);
+  const currentHour = getIstHour(new Date());
 
   const result: Record<string, string> = {};
 
@@ -227,13 +228,7 @@ export function scheduleDeliveryDates(
       if (daysToAdd < 0) daysToAdd += 7; // already passed this week → next week
     }
 
-    const date = new Date(nowIST);
-    date.setDate(nowIST.getDate() + daysToAdd);
-
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    result[daySlug] = `${y}-${m}-${d}`;
+    result[daySlug] = addCalendarDaysIst(todayIst, daysToAdd);
   }
 
   return result;
@@ -248,4 +243,3 @@ export function getNextDateForDayOfWeek(daySlug: string): string {
   const key = daySlug.substring(0, 3).toLowerCase();
   return dates[key] ?? (() => { throw new Error(`Invalid day slug: ${daySlug}`); })();
 }
-

@@ -54,11 +54,11 @@ function daySlugFromDate(dateISO: string): string {
 }
 
 function isOrderEditableByCustomer(order: { delivery_date: string; delivery_time_slot: string | null }): boolean {
-  const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
   const slotHour = parseSlotStartHour(order.delivery_time_slot);
-  const deliveryDateTime = new Date(`${order.delivery_date}T00:00:00`);
-  deliveryDateTime.setHours(slotHour ?? 7, 0, 0, 0);
-  return deliveryDateTime.getTime() - nowIST.getTime() >= 24 * 60 * 60 * 1000;
+  const deliveryDateTime = new Date(
+    `${order.delivery_date}T${String(slotHour ?? 7).padStart(2, '0')}:00:00+05:30`,
+  );
+  return deliveryDateTime.getTime() - Date.now() >= 24 * 60 * 60 * 1000;
 }
 
 function roundCurrency(value: number): number {

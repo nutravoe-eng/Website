@@ -30,6 +30,7 @@ import {
   getSlotAvailabilityForDate,
   parseSlotKey,
 } from "@/lib/delivery-policy";
+import { getIstWeekdayIndex, getIstYearMonth } from "@/lib/datetime-ist";
 
 
 interface StoredUser {
@@ -76,9 +77,10 @@ export default function CartPage() {
   // Calendar picker state
   const [calViewState, setCalViewState] = useState<"calendar" | "slots">("calendar");
   const [calSelectedDateIso, setCalSelectedDateIso] = useState<string | null>(null);
+  const initialIstYearMonth = getIstYearMonth(nowIst);
   const [calMonth, setCalMonth] = useState<{ year: number; month: number }>(() => ({
-    year: nowIst.getFullYear(),
-    month: nowIst.getMonth(),
+    year: initialIstYearMonth.year,
+    month: initialIstYearMonth.monthIndex,
   }));
 
   // Active subscription plan (tiered standard / premium rates)
@@ -950,13 +952,12 @@ export default function CartPage() {
       {/* Delivery Slot Picker Modal — Calendar */}
       {showSlotPicker && (() => {
         const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-        const startYear = nowIst.getFullYear();
-        const startMonthIdx = nowIst.getMonth();
+        const { year: startYear, monthIndex: startMonthIdx } = getIstYearMonth(nowIst);
         const maxMonthIdx = startMonthIdx === 11 ? 0 : startMonthIdx + 1;
         const maxMonthYear = startMonthIdx === 11 ? startYear + 1 : startYear;
         const isAtMinMonth = calMonth.year === startYear && calMonth.month === startMonthIdx;
         const isAtMaxMonth = calMonth.year === maxMonthYear && calMonth.month === maxMonthIdx;
-        const firstDayOfWeek = new Date(calMonth.year, calMonth.month, 1).getDay();
+        const firstDayOfWeek = getIstWeekdayIndex(`${calMonth.year}-${String(calMonth.month + 1).padStart(2, "0")}-01`);
         const daysInMonth = new Date(calMonth.year, calMonth.month + 1, 0).getDate();
 
         const handleDayClick = (dayIso: string) => {

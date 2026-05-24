@@ -9,10 +9,13 @@ import ManageModal from "./ManageModal";
 import CancelModal from "./CancelModal";
 import { createClient } from "@/lib/supabase/client";
 import {
+  addCalendarDaysIst,
+  getIstWeekdayIndex,
   NUTRAVOE_TIMEZONE,
   calendarDaysBetweenIst,
   formatIstYmd,
   getTodayIstYmd,
+  parseIstYmd,
 } from "@/lib/datetime-ist";
 import { getUserWithRetry } from "@/lib/supabase/auth-client";
 import TopupModal from "./TopupModal";
@@ -40,18 +43,16 @@ function getNextDeliveryDate(dayConfigs: DayBowlConfig[]): string {
 
   if (configuredDays.length === 0) return new Date().toISOString();
 
-  const today = new Date();
-  const todayIndex = today.getDay();
+  const todayYmd = getTodayIstYmd();
+  const todayIndex = getIstWeekdayIndex(todayYmd);
 
   const diffs = configuredDays.map(d => {
     const diff = d - todayIndex;
     return diff <= 0 ? diff + 7 : diff;
   });
 
-  const next = new Date(today);
-  next.setDate(today.getDate() + Math.min(...diffs));
-  next.setHours(0, 0, 0, 0);
-  return next.toISOString();
+  const nextYmd = addCalendarDaysIst(todayYmd, Math.min(...diffs));
+  return parseIstYmd(nextYmd).toISOString();
 }
 
 function flattenCustomizations(value: unknown): { ingredientId: string; option: "default" | "remove" | "extra" }[] {

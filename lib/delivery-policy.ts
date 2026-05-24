@@ -1,3 +1,11 @@
+import {
+  NUTRAVOE_TIMEZONE,
+  getIstDateTimeParts,
+  getIstHour,
+  getIstYearMonth,
+  parseIstYmd,
+} from "@/lib/datetime-ist";
+
 export type DeliveryMode = "asap" | "scheduled";
 
 export interface DeliveryPolicy {
@@ -55,13 +63,16 @@ function parseHourLabel(hour24: number): string {
 }
 
 export function getNowIst(): Date {
-  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  // Return the real current instant. All IST calendar/hour reads must be derived
+  // explicitly via Intl using Nutravoe's business timezone.
+  return new Date();
 }
 
 export function getIstDateIso(base: Date): string {
-  const y = base.getFullYear();
-  const m = String(base.getMonth() + 1).padStart(2, "0");
-  const d = String(base.getDate()).padStart(2, "0");
+  const parts = getIstDateTimeParts(base);
+  const y = parts.year;
+  const m = parts.month;
+  const d = parts.day;
   return `${y}-${m}-${d}`;
 }
 
@@ -111,7 +122,7 @@ export function generateScheduledSlotsWithOptions(
   options: { ignoreBlackout?: boolean; ignoreDisabled?: boolean } = {},
 ): GeneratedSlot[] {
   const slots: GeneratedSlot[] = [];
-  const currentHour = nowIst.getHours();
+  const currentHour = getIstHour(nowIst);
   const todayIso = getIstDateIso(nowIst);
   const tomorrowIso = addDays(todayIso, 1);
 
@@ -151,7 +162,7 @@ export function generateScheduledSlotsWithOptions(
 }
 
 export function getAsapSlot(policy: DeliveryPolicy, nowIst: Date = getNowIst()): GeneratedSlot | null {
-  const currentHour = nowIst.getHours();
+  const currentHour = getIstHour(nowIst);
   if (
     !policy.asapEnabled ||
     currentHour < DELIVERY_POLICY_CONSTANTS.asapOpenHour ||
@@ -199,11 +210,12 @@ function fmtHour(h: number): string {
 
 /** "Fri, Apr 25" from an ISO date string. */
 export function formatDateLabel(dateIso: string): string {
-  const [y, m, d] = dateIso.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${d}`;
+  return parseIstYmd(dateIso).toLocaleDateString("en-IN", {
+    timeZone: NUTRAVOE_TIMEZONE,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 /** "Fri, Apr 25 · 10 AM – 11 AM" */
@@ -241,7 +253,7 @@ export function getSlotAvailabilityForDate(
     }));
   }
   const isToday = dateIso === todayIso;
-  const cutoff = isToday ? nowIst.getHours() + 1 : BUSINESS_HOURS.firstSlotHour;
+  const cutoff = isToday ? getIstHour(nowIst) + 1 : BUSINESS_HOURS.firstSlotHour;
   return Array.from({ length: SLOT_HOUR_COUNT }, (_, i) => i + BUSINESS_HOURS.firstSlotHour).map((hour) => {
     if (!isEarlyMorningSlotBookableForDate(dateIso, hour, nowIst)) {
       return { hour, available: false };
@@ -258,8 +270,7 @@ export function getSlotAvailabilityForDate(
 export function generateCalendarSlots(policy: DeliveryPolicy, nowIst: Date = getNowIst()): GeneratedSlot[] {
   const slots: GeneratedSlot[] = [];
   const todayIso = getIstDateIso(nowIst);
-  const nowYear = nowIst.getFullYear();
-  const nowMonth = nowIst.getMonth(); // 0-indexed
+  const { year: nowYear, monthIndex: nowMonth } = getIstYearMonth(nowIst);
   const nextMonthIdx = nowMonth === 11 ? 0 : nowMonth + 1;
   const nextMonthYear = nowMonth === 11 ? nowYear + 1 : nowYear;
   const lastDay = new Date(nextMonthYear, nextMonthIdx + 1, 0).getDate();
