@@ -63,18 +63,17 @@ function clearMapContainer(container: HTMLElement) {
 function olaMapTilesHealthy(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   map: any,
-  timeoutMs = 6000,
+  timeoutMs = 10000,
 ): Promise<boolean> {
   return new Promise((resolve) => {
     let settled = false;
-    const startedAt = Date.now();
     const finish = (ok: boolean) => {
       if (settled) return;
       settled = true;
       resolve(ok);
     };
 
-    const timer = setTimeout(() => finish(true), timeoutMs);
+    const timer = setTimeout(() => finish(false), timeoutMs);
 
     const fail = () => {
       clearTimeout(timer);
@@ -90,72 +89,22 @@ function olaMapTilesHealthy(
       try {
         const canvas = map.getCanvas?.() as HTMLCanvasElement | undefined;
         if (!canvas || canvas.width < 8) {
-          if (Date.now() - startedAt < timeoutMs - 500) {
-            setTimeout(verifyCanvas, 500);
-            return;
-          }
-          clearTimeout(timer);
-          finish(true);
-          return;
-        }
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          if (Date.now() - startedAt < timeoutMs - 500) {
-            setTimeout(verifyCanvas, 500);
-            return;
-          }
-          clearTimeout(timer);
-          finish(true);
-          return;
-        }
-        const w = Math.min(48, canvas.width);
-        const h = Math.min(48, canvas.height);
-        const { data } = ctx.getImageData(0, 0, w, h);
-        let r = 0;
-        let g = 0;
-        let b = 0;
-        const n = data.length / 4;
-        for (let i = 0; i < data.length; i += 4) {
-          r += data[i];
-          g += data[i + 1];
-          b += data[i + 2];
-        }
-        r /= n;
-        g /= n;
-        b /= n;
-        let variance = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          variance += (data[i] - r) ** 2 + (data[i + 1] - g) ** 2 + (data[i + 2] - b) ** 2;
-        }
-        variance /= n;
-        // Blank/grey placeholder when tiles fail is nearly uniform colour.
-        if (variance < 80) {
-          if (Date.now() - startedAt < timeoutMs - 500) {
-            setTimeout(verifyCanvas, 500);
-            return;
-          }
-          clearTimeout(timer);
-          finish(true);
+          setTimeout(verifyCanvas, 700);
           return;
         }
         clearTimeout(timer);
         finish(true);
       } catch {
-        if (Date.now() - startedAt < timeoutMs - 500) {
-          setTimeout(verifyCanvas, 500);
-          return;
-        }
-        clearTimeout(timer);
-        finish(true);
+        setTimeout(verifyCanvas, 700);
       }
     };
 
     const onIdle = () => {
-      if (typeof map.areTilesLoaded === "function" && !map.areTilesLoaded() && Date.now() - startedAt < timeoutMs - 500) {
-        setTimeout(onIdle, 500);
+      if (typeof map.areTilesLoaded === "function" && !map.areTilesLoaded()) {
+        setTimeout(onIdle, 700);
         return;
       }
-      setTimeout(verifyCanvas, 400);
+      setTimeout(verifyCanvas, 700);
     };
 
     if (map.loaded?.()) {
@@ -449,15 +398,14 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
             return;
           }
 
-          void olaMapTilesHealthy(olaMap).then((tilesOk) => {
-            if (!tilesOk) {
-              console.warn("[MapPicker] Ola tiles may be unhealthy, but keeping Ola as the primary provider");
-            }
-          });
-
           mapControllerRef.current = olaController;
           setMapProvider("ola");
           onPinMove(center.lat, center.lng);
+          void olaMapTilesHealthy(olaMap).then(async (tilesOk) => {
+            if (tilesOk || cancelled || mapControllerRef.current !== olaController) return;
+            console.warn("[MapPicker] Ola tiles stayed blank — switching to Google Maps");
+            await tryGoogle("Ola tiles stayed blank", olaController);
+          });
           return;
         } catch (e) {
           console.error("OlaMaps init:", e);
