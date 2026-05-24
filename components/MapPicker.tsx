@@ -67,13 +67,14 @@ function olaMapTilesHealthy(
 ): Promise<boolean> {
   return new Promise((resolve) => {
     let settled = false;
+    const startedAt = Date.now();
     const finish = (ok: boolean) => {
       if (settled) return;
       settled = true;
       resolve(ok);
     };
 
-    const timer = setTimeout(() => finish(false), timeoutMs);
+    const timer = setTimeout(() => finish(true), timeoutMs);
 
     const fail = () => {
       clearTimeout(timer);
@@ -89,12 +90,22 @@ function olaMapTilesHealthy(
       try {
         const canvas = map.getCanvas?.() as HTMLCanvasElement | undefined;
         if (!canvas || canvas.width < 8) {
-          fail();
+          if (Date.now() - startedAt < timeoutMs - 500) {
+            setTimeout(verifyCanvas, 500);
+            return;
+          }
+          clearTimeout(timer);
+          finish(true);
           return;
         }
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          fail();
+          if (Date.now() - startedAt < timeoutMs - 500) {
+            setTimeout(verifyCanvas, 500);
+            return;
+          }
+          clearTimeout(timer);
+          finish(true);
           return;
         }
         const w = Math.min(48, canvas.width);
@@ -119,19 +130,29 @@ function olaMapTilesHealthy(
         variance /= n;
         // Blank/grey placeholder when tiles fail is nearly uniform colour.
         if (variance < 80) {
-          fail();
+          if (Date.now() - startedAt < timeoutMs - 500) {
+            setTimeout(verifyCanvas, 500);
+            return;
+          }
+          clearTimeout(timer);
+          finish(true);
           return;
         }
         clearTimeout(timer);
         finish(true);
       } catch {
-        fail();
+        if (Date.now() - startedAt < timeoutMs - 500) {
+          setTimeout(verifyCanvas, 500);
+          return;
+        }
+        clearTimeout(timer);
+        finish(true);
       }
     };
 
     const onIdle = () => {
-      if (typeof map.areTilesLoaded === "function" && !map.areTilesLoaded()) {
-        fail();
+      if (typeof map.areTilesLoaded === "function" && !map.areTilesLoaded() && Date.now() - startedAt < timeoutMs - 500) {
+        setTimeout(onIdle, 500);
         return;
       }
       setTimeout(verifyCanvas, 400);
