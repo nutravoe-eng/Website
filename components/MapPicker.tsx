@@ -29,6 +29,27 @@ interface MapController {
   destroy(): void;
 }
 
+function installOlaStyleImageFallback(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  map: any,
+) {
+  const transparentImage = {
+    width: 1,
+    height: 1,
+    data: new Uint8Array([0, 0, 0, 0]),
+  };
+
+  map.on?.("styleimagemissing", (event: { id?: string }) => {
+    const id = event?.id;
+    if (!id || map.hasImage?.(id)) return;
+    try {
+      map.addImage?.(id, transparentImage);
+    } catch {
+      /* ignore duplicate or unsupported image registration */
+    }
+  });
+}
+
 const BENGALURU_LAT = 12.9716;
 const BENGALURU_LNG = 77.5946;
 const ZOOM = 16;
@@ -57,6 +78,52 @@ function clearMapContainer(container: HTMLElement) {
     .split(/\s+/)
     .filter((c) => c && !c.startsWith("maplibregl-"))
     .join(" ");
+}
+
+function sanitizeOlaStyle(style: unknown): unknown {
+  if (!style || typeof style !== "object") return style;
+
+  const styleObj = structuredClone(style) as {
+    layers?: Array<Record<string, unknown>>;
+  };
+
+  if (!Array.isArray(styleObj.layers)) return styleObj;
+
+  styleObj.layers = styleObj.layers.filter((layer) => {
+    const id = typeof layer.id === "string" ? layer.id : "";
+    const sourceLayer = typeof layer["source-layer"] === "string" ? layer["source-layer"] : null;
+    const lowerId = id.toLowerCase();
+    const lowerSourceLayer = (sourceLayer ?? "").toLowerCase();
+
+    if (lowerId.includes("3d")) return false;
+    if (lowerSourceLayer.includes("3d")) return false;
+    if (lowerSourceLayer === "3d_model") return false;
+    return true;
+  });
+
+  return styleObj;
+}
+
+async function loadSanitizedOlaStyle(styleUrl: string, apiKey: string): Promise<unknown> {
+  const url = new URL(styleUrl);
+  url.searchParams.append("api_key", apiKey);
+
+  const response = await fetch(url.toString(), { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load Ola style (${response.status})`);
+  }
+
+  const styleJson: unknown = await response.json();
+  const sanitizedStyle = sanitizeOlaStyle(styleJson);
+
+  if (sanitizedStyle && typeof sanitizedStyle === "object") {
+    Object.defineProperty(sanitizedStyle, "includes", {
+      value: (fragment: string) => styleUrl.includes(fragment),
+      enumerable: false,
+    });
+  }
+
+  return sanitizedStyle;
 }
 
 /** Ola init() can succeed while raster tiles 403 — detect and fall back to Google. */
@@ -122,13 +189,17 @@ async function initOlaMap(
   onPinMove: (lat: number, lng: number) => void,
 ): Promise<{ controller: MapController; map: unknown }> {
   const { OlaMaps, defaultStyleJson } = await import("olamaps-web-sdk");
-  const ola = new OlaMaps({ apiKey: getOlaPublicKey()! });
+  const apiKey = getOlaPublicKey()!;
+  const ola = new OlaMaps({ apiKey });
+  const sanitizedStyle = await loadSanitizedOlaStyle(defaultStyleJson, apiKey);
   const map = await ola.init({
     container: containerId,
     center,
     zoom: ZOOM,
-    style: defaultStyleJson,
+    style: sanitizedStyle,
   });
+
+  installOlaStyleImageFallback(map);
 
   map.scrollZoom.disable();
 
