@@ -330,6 +330,7 @@ function olaMapTilesHealthy(
 
     if (map.loaded?.()) {
       map.once?.("idle", onIdle);
+      setTimeout(onIdle, 0);
       map.triggerRepaint?.();
     } else {
       map.once?.("load", () => map.once?.("idle", onIdle));
@@ -346,17 +347,35 @@ async function initOlaMap(
   const apiKey = getOlaPublicKey()!;
   const ola = new OlaMaps({ apiKey, mode: "2d", threedTileset: "" });
 
-  // Pass defaultStyleJson as-is — the SDK requires its own exact object reference.
-  // Any clone or modification causes the SDK to ignore the style and fall back to
-  // fetching the full style from a URL, which includes terrain and breaks tile rendering.
-  // disableOlaTerrainAnd3d() called after init handles 3D layer / terrain cleanup.
   const map = await ola.init({
     container: containerId,
     center,
     zoom: ZOOM,
     style: defaultStyleJson,
   });
+
+  // The Ola SDK always passes a URL to MapLibre regardless of the style option, and that
+  // URL's style includes terrain. When terrain initialises but the raster-dem source has no
+  // data in Ola's tile servers, MapLibre's rendering pipeline breaks → blank canvas.
+  //
+  // Fix: call map.setStyle(object) directly on the MapLibre instance after init. MapLibre's
+  // setStyle(object) calls _load internally — no network request, no terrain. This replaces
+  // the broken URL-fetched style and triggers a fresh 2-D tile load.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapAny = map as any;
   disableOlaTerrainAnd3d(map);
+  if (typeof mapAny.setStyle === "function") {
+    await new Promise<void>((resolve) => {
+      const safety = setTimeout(resolve, 1500);
+      mapAny.once?.("style.load", () => {
+        clearTimeout(safety);
+        resolve();
+      });
+      mapAny.setStyle(sanitizeOlaStyle(defaultStyleJson));
+    });
+    disableOlaTerrainAnd3d(map);
+  }
+
   const resizeMap = () => {
     try {
       map.resize?.();
@@ -656,7 +675,7 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
 
       if (olaKey) {
         try {
-          const { controller: olaController } = await initOlaMap(
+          const { controller: olaController, map: olaMap } = await initOlaMap(
             mapContainerId,
             [center.lng, center.lat],
             onPinMove,
@@ -667,10 +686,26 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
             return;
           }
           olaController.resize();
-          mapControllerRef.current = olaController;
-          setMapProvider("ola");
-          onPinMove(center.lat, center.lng);
-          return;
+
+          const tilesOk = await olaMapTilesHealthy(olaMap, mapContainerId);
+          if (cancelled) {
+            olaController.destroy();
+            return;
+          }
+
+          if (!tilesOk) {
+            console.warn("[MapPicker] Ola initialized but did not render tiles — switching to Google Maps", {
+              mapContainerId,
+            });
+            const googleOk = await tryGoogle("Ola map did not render", olaController);
+            if (googleOk) return;
+            olaController.destroy();
+          } else {
+            mapControllerRef.current = olaController;
+            setMapProvider("ola");
+            onPinMove(center.lat, center.lng);
+            return;
+          }
         } catch (e) {
           console.error("[MapPicker] OlaMaps init failed — falling back to Google:", e);
           const googleOk = await tryGoogle("Ola Maps failed to initialize");
@@ -951,12 +986,14 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
             <p className="font-body text-[13px] text-stone text-center">{mapError}</p>
           </div>
         ) : (
-          <div
-            ref={containerRef}
-            id={mapContainerId}
-            className="absolute inset-0"
-            style={{ zIndex: 0 }}
-          />
+          <div className="absolute inset-0" style={{ zIndex: 0 }}>
+            <div
+              ref={containerRef}
+              id={mapContainerId}
+              className="h-full w-full"
+              style={{ height: "100%", width: "100%" }}
+            />
+          </div>
         )}
 
         {/* "Use current location" pill — floats over the map */}
