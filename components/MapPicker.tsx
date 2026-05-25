@@ -344,33 +344,17 @@ async function initOlaMap(
 ): Promise<{ controller: MapController; map: unknown }> {
   const { OlaMaps, defaultStyleJson } = await import("olamaps-web-sdk");
   const apiKey = getOlaPublicKey()!;
-  const styleOverrideUrl = process.env.NEXT_PUBLIC_OLA_MAPS_STYLE_URL?.trim();
   const ola = new OlaMaps({ apiKey, mode: "2d", threedTileset: "" });
 
-  // Sanitize the SDK-bundled style to strip 3D layers (3d_model_data, building-3d, terrain, etc.)
-  // before MapLibre validates them — those layers reference source layers that don't exist in
-  // Ola's tile data, which fires fatal error events and triggers an unnecessary Google fallback.
-  const sanitizedDefault = wrapStyleForOlaSdk(sanitizeOlaStyle(defaultStyleJson), "default-light-standard");
-  let mapStyle: string | unknown = sanitizedDefault;
-  if (styleOverrideUrl) {
-    mapStyle = styleOverrideUrl;
-    if (olaStyleNeedsSanitizedObject(styleOverrideUrl)) {
-      try {
-        mapStyle = wrapStyleForOlaSdk(await loadSanitizedOlaStyle(styleOverrideUrl, apiKey), styleOverrideUrl);
-      } catch (styleErr) {
-        if (process.env.NODE_ENV === "development") {
-          console.warn("[MapPicker] Sanitized style fetch failed, falling back to default:", styleErr);
-        }
-        mapStyle = sanitizedDefault;
-      }
-    }
-  }
-
+  // Pass defaultStyleJson as-is — the SDK requires its own exact object reference.
+  // Any clone or modification causes the SDK to ignore the style and fall back to
+  // fetching the full style from a URL, which includes terrain and breaks tile rendering.
+  // disableOlaTerrainAnd3d() called after init handles 3D layer / terrain cleanup.
   const map = await ola.init({
     container: containerId,
     center,
     zoom: ZOOM,
-    style: mapStyle,
+    style: defaultStyleJson,
   });
   disableOlaTerrainAnd3d(map);
   const resizeMap = () => {
