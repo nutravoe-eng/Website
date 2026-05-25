@@ -96,19 +96,42 @@ function sanitizeOlaStyle(style: unknown): unknown {
 
   const styleObj = structuredClone(style) as {
     layers?: Array<Record<string, unknown>>;
+    sources?: Record<string, Record<string, unknown>>;
+    terrain?: unknown;
+    fog?: unknown;
+    sky?: unknown;
   };
+
+  // Ola's default style currently includes terrain / 3D config that can cause
+  // MapLibre worker parse failures in the browser ("expected number, found null").
+  delete styleObj.terrain;
+  delete styleObj.fog;
+  delete styleObj.sky;
+
+  if (styleObj.sources && typeof styleObj.sources === "object") {
+    styleObj.sources = Object.fromEntries(
+      Object.entries(styleObj.sources).filter(([, source]) => {
+        const type = typeof source?.type === "string" ? source.type.toLowerCase() : "";
+        return type !== "raster-dem";
+      }),
+    );
+  }
 
   if (!Array.isArray(styleObj.layers)) return styleObj;
 
   styleObj.layers = styleObj.layers.filter((layer) => {
     const id = typeof layer.id === "string" ? layer.id : "";
+    const type = typeof layer.type === "string" ? layer.type.toLowerCase() : "";
     const sourceLayer = typeof layer["source-layer"] === "string" ? layer["source-layer"] : null;
     const lowerId = id.toLowerCase();
     const lowerSourceLayer = (sourceLayer ?? "").toLowerCase();
 
     if (lowerId.includes("3d")) return false;
+    if (lowerId.includes("terrain")) return false;
+    if (lowerId.includes("hillshade")) return false;
     if (lowerSourceLayer.includes("3d")) return false;
     if (lowerSourceLayer === "3d_model") return false;
+    if (type === "fill-extrusion" || type === "hillshade" || type === "sky") return false;
     return true;
   });
 
@@ -226,8 +249,6 @@ async function initOlaMap(
     setTimeout(() => resizeMap(), 150);
   });
   setTimeout(() => collapseOlaAttribution(containerId), 0);
-  requestAnimationFrame(() => resizeMap());
-  setTimeout(() => resizeMap(), 150);
 
   map.scrollZoom.disable();
 
@@ -571,6 +592,7 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
 
     const notifyResize = () => {
       const rect = container.getBoundingClientRect();
+      if (rect.width < 8 || rect.height < 8) return;
       console.info("[MapPicker] Container resize check", {
         mapContainerId,
         fullscreen: Boolean(fullscreen),
