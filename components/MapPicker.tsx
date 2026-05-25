@@ -26,6 +26,7 @@ interface MapController {
   getMarker(): { lat: number; lng: number };
   zoomIn(): void;
   zoomOut(): void;
+  resize(): void;
   destroy(): void;
 }
 
@@ -208,10 +209,25 @@ async function initOlaMap(
     zoom: ZOOM,
     style: sanitizedStyle,
   });
+  const resizeMap = () => {
+    try {
+      map.resize?.();
+      map.triggerRepaint?.();
+    } catch {
+      /* ignore */
+    }
+  };
 
   installOlaStyleImageFallback(map);
-  map.on?.("load", () => collapseOlaAttribution(containerId));
+  map.on?.("load", () => {
+    collapseOlaAttribution(containerId);
+    resizeMap();
+    requestAnimationFrame(() => resizeMap());
+    setTimeout(() => resizeMap(), 150);
+  });
   setTimeout(() => collapseOlaAttribution(containerId), 0);
+  requestAnimationFrame(() => resizeMap());
+  setTimeout(() => resizeMap(), 150);
 
   map.scrollZoom.disable();
 
@@ -247,6 +263,9 @@ async function initOlaMap(
     },
     zoomOut() {
       map.zoomOut?.();
+    },
+    resize() {
+      resizeMap();
     },
     destroy() {
       const suppressAbort = (e: PromiseRejectionEvent) => {
@@ -386,6 +405,11 @@ async function initGoogleMap(
       const z = map.getZoom();
       if (typeof z === "number") map.setZoom(z - 1);
     },
+    resize() {
+      const pos = readAdvancedMarkerPosition(marker) ?? center;
+      google.maps.event.trigger(map, "resize");
+      map.setCenter(pos);
+    },
     destroy() {
       marker.map = null;
       restoreAuthFailure();
@@ -431,6 +455,13 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
       const center = initialCenterRef.current;
       const olaKey = getOlaPublicKey();
       const googleKey = getGooglePublicKey();
+      console.info("[MapPicker] Booting map", {
+        mapContainerId,
+        fullscreen: Boolean(fullscreen),
+        center,
+        hasOlaKey: Boolean(olaKey),
+        hasGoogleKey: Boolean(googleKey),
+      });
 
       if (!olaKey && !googleKey) {
         setMapError(
@@ -443,6 +474,10 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
 
       const tryGoogle = async (reason: string, destroyPrevious?: MapController) => {
         if (!googleKey || cancelled) return false;
+        console.warn("[MapPicker] Attempting Google fallback", {
+          reason,
+          mapContainerId,
+        });
         destroyPrevious?.destroy();
         if (containerRef.current) clearMapContainer(containerRef.current);
         try {
@@ -476,6 +511,10 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
             [center.lng, center.lat],
             onPinMove,
           );
+          console.info("[MapPicker] Ola init succeeded", {
+            mapContainerId,
+            center,
+          });
           if (cancelled) {
             olaController.destroy();
             return;
@@ -485,6 +524,10 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
           setMapProvider("ola");
           onPinMove(center.lat, center.lng);
           void olaMapTilesHealthy(olaMap).then(async (tilesOk) => {
+            console.info("[MapPicker] Ola tile health check completed", {
+              mapContainerId,
+              tilesOk,
+            });
             if (tilesOk || cancelled || mapControllerRef.current !== olaController) return;
             console.warn("[MapPicker] Ola tiles stayed blank — switching to Google Maps");
             await tryGoogle("Ola tiles stayed blank", olaController);
@@ -521,6 +564,36 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
     controller.setMarker(centerLng, centerLat);
     onChangeRef.current(centerLat, centerLng);
   }, [centerLat, centerLng]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const notifyResize = () => {
+      const rect = container.getBoundingClientRect();
+      console.info("[MapPicker] Container resize check", {
+        mapContainerId,
+        fullscreen: Boolean(fullscreen),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      });
+      requestAnimationFrame(() => {
+        mapControllerRef.current?.resize();
+      });
+    };
+
+    notifyResize();
+    const timeoutId = window.setTimeout(notifyResize, 180);
+    const observer = new ResizeObserver(() => {
+      notifyResize();
+    });
+    observer.observe(container);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      observer.disconnect();
+    };
+  }, [fullscreen, mapContainerId]);
 
   const handleSearchChange = useCallback((value: string) => {
     setQuery(value);
