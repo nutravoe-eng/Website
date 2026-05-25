@@ -299,9 +299,7 @@ function olaMapTilesHealthy(
 
     map.on?.("error", (e: unknown) => {
       if (isBenignOlaMapError(e)) {
-        if (process.env.NODE_ENV === "development") {
-          console.warn("[MapPicker] Ola non-fatal tile/style warning (ignored):", e);
-        }
+        console.warn("[MapPicker] Ola non-fatal tile/style warning (ignored):", e);
         return;
       }
       console.warn("[MapPicker] Ola map error:", e);
@@ -313,8 +311,21 @@ function olaMapTilesHealthy(
         setTimeout(onIdle, 700);
         return;
       }
-      clearTimeout(timer);
-      finish(true);
+      // Wait for MapLibre to flush the WebGL frame before sampling rendered features.
+      // areTilesLoaded() returns true even when every tile failed (e.g. terrain broke the
+      // rendering pipeline) — queryRenderedFeatures() is the only reliable blank-map check.
+      requestAnimationFrame(() => {
+        clearTimeout(timer);
+        if (typeof map.queryRenderedFeatures === "function") {
+          const features: unknown[] = map.queryRenderedFeatures() ?? [];
+          if (features.length === 0) {
+            console.warn("[MapPicker] Ola idle but 0 features rendered — blank map, falling back to Google Maps");
+            finish(false);
+            return;
+          }
+        }
+        finish(true);
+      });
     };
 
     if (map.loaded?.()) {
@@ -644,9 +655,7 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
           mapControllerRef.current = controller;
           setMapProvider("google");
           setMapError(null);
-          if (process.env.NODE_ENV === "development") {
-            console.info(`[MapPicker] Using Google Maps (${reason})`);
-          }
+          console.info(`[MapPicker] Using Google Maps (${reason})`);
           onPinMove(center.lat, center.lng);
           return true;
         } catch (e) {
@@ -668,9 +677,7 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
             [center.lng, center.lat],
             onPinMove,
           );
-          if (process.env.NODE_ENV === "development") {
-            console.info("[MapPicker] Ola init succeeded", { mapContainerId, center });
-          }
+          console.info("[MapPicker] Ola init succeeded", { mapContainerId, center });
           if (cancelled) {
             olaController.destroy();
             return;
