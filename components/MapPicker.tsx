@@ -50,6 +50,16 @@ function installOlaStyleImageFallback(
   });
 }
 
+function collapseOlaAttribution(containerId: string) {
+  const container = document.getElementById(containerId);
+  const attribution = container?.querySelector(".maplibregl-ctrl-attrib");
+  if (!(attribution instanceof HTMLElement)) return;
+
+  attribution.classList.add("maplibregl-compact");
+  attribution.classList.remove("maplibregl-compact-show");
+  attribution.removeAttribute("open");
+}
+
 const BENGALURU_LAT = 12.9716;
 const BENGALURU_LNG = 77.5946;
 const ZOOM = 16;
@@ -200,6 +210,8 @@ async function initOlaMap(
   });
 
   installOlaStyleImageFallback(map);
+  map.on?.("load", () => collapseOlaAttribution(containerId));
+  setTimeout(() => collapseOlaAttribution(containerId), 0);
 
   map.scrollZoom.disable();
 
