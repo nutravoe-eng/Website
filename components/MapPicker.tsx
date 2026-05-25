@@ -91,6 +91,24 @@ function clearMapContainer(container: HTMLElement) {
     .join(" ");
 }
 
+function stripNullDeep<T>(value: T): T {
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => stripNullDeep(item))
+      .filter((item) => item !== null && item !== undefined) as T;
+  }
+  if (typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (val === null) continue;
+      out[key] = stripNullDeep(val);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 function sanitizeOlaStyle(style: unknown): unknown {
   if (!style || typeof style !== "object") return style;
 
@@ -117,15 +135,19 @@ function sanitizeOlaStyle(style: unknown): unknown {
     );
   }
 
-  if (!Array.isArray(styleObj.layers)) return styleObj;
+  if (!Array.isArray(styleObj.layers)) return stripNullDeep(styleObj);
+
+  const sourceIds = new Set(Object.keys(styleObj.sources ?? {}));
 
   styleObj.layers = styleObj.layers.filter((layer) => {
     const id = typeof layer.id === "string" ? layer.id : "";
     const type = typeof layer.type === "string" ? layer.type.toLowerCase() : "";
+    const source = typeof layer.source === "string" ? layer.source : null;
     const sourceLayer = typeof layer["source-layer"] === "string" ? layer["source-layer"] : null;
     const lowerId = id.toLowerCase();
     const lowerSourceLayer = (sourceLayer ?? "").toLowerCase();
 
+    if (source && !sourceIds.has(source)) return false;
     if (lowerId.includes("3d")) return false;
     if (lowerId.includes("terrain")) return false;
     if (lowerId.includes("hillshade")) return false;
@@ -135,7 +157,7 @@ function sanitizeOlaStyle(style: unknown): unknown {
     return true;
   });
 
-  return styleObj;
+  return stripNullDeep(styleObj);
 }
 
 async function loadSanitizedOlaStyle(styleUrl: string, apiKey: string): Promise<unknown> {
@@ -181,22 +203,72 @@ function olaMapTilesHealthy(
       finish(false);
     };
 
-    map.once?.("error", (e: unknown) => {
+    map.on?.("error", (e: unknown) => {
       console.warn("[MapPicker] Ola map error:", e);
       fail();
     });
 
+    let verifyAttempts = 0;
+    const maxVerifyAttempts = 12;
+
     const verifyCanvas = () => {
+      verifyAttempts += 1;
       try {
         const canvas = map.getCanvas?.() as HTMLCanvasElement | undefined;
-        if (!canvas || canvas.width < 8) {
-          setTimeout(verifyCanvas, 700);
+        if (!canvas || canvas.width < 8 || canvas.height < 8) {
+          if (verifyAttempts >= maxVerifyAttempts) {
+            fail();
+            return;
+          }
+          setTimeout(verifyCanvas, 500);
+          return;
+        }
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          if (verifyAttempts >= maxVerifyAttempts) {
+            fail();
+            return;
+          }
+          setTimeout(verifyCanvas, 500);
+          return;
+        }
+        const w = Math.min(48, canvas.width);
+        const h = Math.min(48, canvas.height);
+        const { data } = ctx.getImageData(0, 0, w, h);
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        const n = data.length / 4;
+        for (let i = 0; i < data.length; i += 4) {
+          r += data[i];
+          g += data[i + 1];
+          b += data[i + 2];
+        }
+        r /= n;
+        g /= n;
+        b /= n;
+        let variance = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          variance += (data[i] - r) ** 2 + (data[i + 1] - g) ** 2 + (data[i + 2] - b) ** 2;
+        }
+        variance /= n;
+        // Blank/grey placeholder when tiles fail is nearly uniform colour.
+        if (variance < 80) {
+          if (verifyAttempts >= maxVerifyAttempts) {
+            fail();
+            return;
+          }
+          setTimeout(verifyCanvas, 500);
           return;
         }
         clearTimeout(timer);
         finish(true);
       } catch {
-        setTimeout(verifyCanvas, 700);
+        if (verifyAttempts >= maxVerifyAttempts) {
+          fail();
+          return;
+        }
+        setTimeout(verifyCanvas, 500);
       }
     };
 
@@ -541,19 +613,26 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
             return;
           }
 
-          mapControllerRef.current = olaController;
-          setMapProvider("ola");
-          onPinMove(center.lat, center.lng);
-          void olaMapTilesHealthy(olaMap).then(async (tilesOk) => {
-            console.info("[MapPicker] Ola tile health check completed", {
-              mapContainerId,
-              tilesOk,
-            });
-            if (tilesOk || cancelled || mapControllerRef.current !== olaController) return;
-            console.warn("[MapPicker] Ola tiles stayed blank — switching to Google Maps");
-            await tryGoogle("Ola tiles stayed blank", olaController);
+          const tilesOk = await olaMapTilesHealthy(olaMap);
+          console.info("[MapPicker] Ola tile health check completed", {
+            mapContainerId,
+            tilesOk,
           });
-          return;
+          if (cancelled) {
+            olaController.destroy();
+            return;
+          }
+
+          if (!tilesOk) {
+            console.warn("[MapPicker] Ola tiles unhealthy — switching to Google Maps");
+            const googleOk = await tryGoogle("Ola tiles failed to load", olaController);
+            if (googleOk) return;
+          } else {
+            mapControllerRef.current = olaController;
+            setMapProvider("ola");
+            onPinMove(center.lat, center.lng);
+            return;
+          }
         } catch (e) {
           console.error("OlaMaps init:", e);
           const googleOk = await tryGoogle("Ola Maps failed to initialize");
