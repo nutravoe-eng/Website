@@ -672,7 +672,7 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
 
       if (olaKey) {
         try {
-          const { controller: olaController, map: olaMap } = await initOlaMap(
+          const { controller: olaController } = await initOlaMap(
             mapContainerId,
             [center.lng, center.lat],
             onPinMove,
@@ -682,36 +682,13 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
             olaController.destroy();
             return;
           }
-
           olaController.resize();
-          await new Promise<void>((resolve) => {
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-          });
-          if (cancelled) {
-            olaController.destroy();
-            return;
-          }
-
-          const tilesOk = await olaMapTilesHealthy(olaMap, mapContainerId);
-          if (cancelled) {
-            olaController.destroy();
-            return;
-          }
-
-          if (!tilesOk) {
-            console.warn("[MapPicker] Ola tiles unhealthy — switching to Google Maps", {
-              mapContainerId,
-            });
-            const googleOk = await tryGoogle("Ola tiles failed to load", olaController);
-            if (googleOk) return;
-          }
-
           mapControllerRef.current = olaController;
           setMapProvider("ola");
           onPinMove(center.lat, center.lng);
           return;
         } catch (e) {
-          console.error("OlaMaps init:", e);
+          console.error("[MapPicker] OlaMaps init failed — falling back to Google:", e);
           const googleOk = await tryGoogle("Ola Maps failed to initialize");
           if (googleOk) return;
         }
