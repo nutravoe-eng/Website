@@ -41,8 +41,8 @@ function installOlaStyleImageFallback(
   };
 
   map.on?.("styleimagemissing", (event: { id?: string }) => {
-    const id = event?.id;
-    if (!id || map.hasImage?.(id)) return;
+    if (event?.id === undefined || event?.id === null) return;
+    const id = String(event.id);
     try {
       map.addImage?.(id, transparentImage);
     } catch {
@@ -63,7 +63,16 @@ function collapseOlaAttribution(containerId: string) {
 
 const BENGALURU_LAT = 12.9716;
 const BENGALURU_LNG = 77.5946;
+const OLA_MAX_NATIVE_ZOOM = 14;
 const ZOOM = 16;
+/** Standard style has 3D layers stripped by sanitizeOlaStyle; lite style is visually simpler and not used. */
+const OLA_STYLE_URL_DEFAULT =
+  "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json";
+
+/** Standard style includes 3D building layers; lite does not and should load via URL (sprites). */
+function olaStyleNeedsSanitizedObject(styleUrl: string): boolean {
+  return /default-light-standard|default-dark-standard/i.test(styleUrl);
+}
 const MARKER_COLOR = "#C4714A";
 /** Google demo map ID — works without creating a Map ID in Cloud Console. Override via NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID. */
 const GOOGLE_MAP_ID_FALLBACK = "DEMO_MAP_ID";
@@ -94,9 +103,10 @@ function clearMapContainer(container: HTMLElement) {
 function stripNullDeep<T>(value: T): T {
   if (value === null || value === undefined) return value;
   if (Array.isArray(value)) {
-    return value
-      .map((item) => stripNullDeep(item))
-      .filter((item) => item !== null && item !== undefined) as T;
+    // Do NOT filter null from arrays — null is valid in MapLibre style expressions
+    // (e.g. ["match", ..., null] fallback, ["interpolate", ..., 14, null, ...] stop-value).
+    // Removing nulls from expression arrays produces syntactically broken expressions.
+    return value.map((item) => stripNullDeep(item)) as T;
   }
   if (typeof value === "object") {
     const out: Record<string, unknown> = {};
@@ -160,6 +170,66 @@ function sanitizeOlaStyle(style: unknown): unknown {
   return stripNullDeep(styleObj);
 }
 
+function assertValidOlaStylePayload(styleJson: unknown): void {
+  if (!styleJson || typeof styleJson !== "object") {
+    throw new Error("Ola Maps style response was not JSON");
+  }
+  const payload = styleJson as { message?: unknown; layers?: unknown };
+  if (typeof payload.message === "string" && payload.message.trim()) {
+    throw new Error(`Ola Maps style rejected: ${payload.message.trim()}`);
+  }
+  if (!Array.isArray(payload.layers) || payload.layers.length === 0) {
+    throw new Error(
+      "Ola Maps style has no layers. Add this site's origin to your Ola API key domain allowlist (e.g. https://nutravoe.in).",
+    );
+  }
+}
+
+function disableOlaTerrainAnd3d(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  map: any,
+) {
+  try {
+    map.setTerrain?.(null);
+    map.setPitch?.(0);
+    map.setMaxPitch?.(0);
+  } catch {
+    /* ignore unsupported MapLibre APIs */
+  }
+  for (const layerId of ["building-3d", "3d_model_data"]) {
+    try {
+      if (map.getLayer?.(layerId)) {
+        map.setLayoutProperty?.(layerId, "visibility", "none");
+      }
+    } catch {
+      /* layer may already be removed from sanitized style */
+    }
+  }
+}
+
+function isBenignOlaMapError(event: unknown): boolean {
+  const parts: string[] = [];
+  if (typeof event === "string") parts.push(event);
+  if (event instanceof Error) parts.push(event.message);
+  if (event && typeof event === "object") {
+    const o = event as Record<string, unknown>;
+    if (o.error instanceof Error) parts.push(o.error.message);
+    else if (typeof o.error === "string") parts.push(o.error);
+    if (typeof o.message === "string") parts.push(o.message);
+  }
+  const msg = parts.join(" ");
+  return (
+    msg.includes("Expected value to be of type number") ||
+    msg.includes("expected number") ||
+    msg.includes("styleimagemissing") ||
+    msg.includes("could not be loaded") ||
+    msg.includes("addImage") ||
+    msg.includes("Missing required image") ||
+    msg.includes("does not exist on source") ||
+    msg.includes("Source layer")
+  );
+}
+
 async function loadSanitizedOlaStyle(styleUrl: string, apiKey: string): Promise<unknown> {
   const url = new URL(styleUrl);
   url.searchParams.append("api_key", apiKey);
@@ -170,24 +240,48 @@ async function loadSanitizedOlaStyle(styleUrl: string, apiKey: string): Promise<
   }
 
   const styleJson: unknown = await response.json();
-  const sanitizedStyle = sanitizeOlaStyle(styleJson);
-
-  if (sanitizedStyle && typeof sanitizedStyle === "object") {
-    Object.defineProperty(sanitizedStyle, "includes", {
-      value: (fragment: string) => styleUrl.includes(fragment),
-      enumerable: false,
-    });
-  }
-
-  return sanitizedStyle;
+  assertValidOlaStylePayload(styleJson);
+  return sanitizeOlaStyle(styleJson);
 }
 
-/** Ola init() can succeed while raster tiles 403 — detect and fall back to Google. */
+/**
+ * Ola SDK calls `options.style?.includes("dark")` for logo styling — style must be a
+ * URL string OR an object with a string-like `.includes`. Inline sanitized JSON needs this shim.
+ */
+function wrapStyleForOlaSdk(style: unknown, styleUrl: string): unknown {
+  if (typeof style === "string") return style;
+  if (!style || typeof style !== "object") return style;
+  const target = style as { includes?: (fragment: string) => boolean };
+  if (typeof target.includes === "function") return style;
+  Object.defineProperty(style, "includes", {
+    value: (fragment: string) => styleUrl.includes(String(fragment)),
+    enumerable: false,
+    configurable: true,
+  });
+  return style;
+}
+
+/**
+ * Detect a genuinely blank Ola map (domain/tile failure). Non-fatal MapLibre tile parse
+ * warnings must not trigger Google fallback — those were tolerated when Ola was primary.
+ */
+function mapContainerHasVisibleSize(containerId: string): boolean {
+  const el = document.getElementById(containerId);
+  if (!el) return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width >= 8 && rect.height >= 8;
+}
+
 function olaMapTilesHealthy(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   map: any,
-  timeoutMs = 10000,
+  containerId: string,
+  timeoutMs = 15000,
 ): Promise<boolean> {
+  if (!mapContainerHasVisibleSize(containerId)) {
+    return Promise.resolve(true);
+  }
+
   return new Promise((resolve) => {
     let settled = false;
     const finish = (ok: boolean) => {
@@ -204,80 +298,23 @@ function olaMapTilesHealthy(
     };
 
     map.on?.("error", (e: unknown) => {
+      if (isBenignOlaMapError(e)) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[MapPicker] Ola non-fatal tile/style warning (ignored):", e);
+        }
+        return;
+      }
       console.warn("[MapPicker] Ola map error:", e);
       fail();
     });
-
-    let verifyAttempts = 0;
-    const maxVerifyAttempts = 12;
-
-    const verifyCanvas = () => {
-      verifyAttempts += 1;
-      try {
-        const canvas = map.getCanvas?.() as HTMLCanvasElement | undefined;
-        if (!canvas || canvas.width < 8 || canvas.height < 8) {
-          if (verifyAttempts >= maxVerifyAttempts) {
-            fail();
-            return;
-          }
-          setTimeout(verifyCanvas, 500);
-          return;
-        }
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          if (verifyAttempts >= maxVerifyAttempts) {
-            fail();
-            return;
-          }
-          setTimeout(verifyCanvas, 500);
-          return;
-        }
-        const w = Math.min(48, canvas.width);
-        const h = Math.min(48, canvas.height);
-        const { data } = ctx.getImageData(0, 0, w, h);
-        let r = 0;
-        let g = 0;
-        let b = 0;
-        const n = data.length / 4;
-        for (let i = 0; i < data.length; i += 4) {
-          r += data[i];
-          g += data[i + 1];
-          b += data[i + 2];
-        }
-        r /= n;
-        g /= n;
-        b /= n;
-        let variance = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          variance += (data[i] - r) ** 2 + (data[i + 1] - g) ** 2 + (data[i + 2] - b) ** 2;
-        }
-        variance /= n;
-        // Blank/grey placeholder when tiles fail is nearly uniform colour.
-        if (variance < 80) {
-          if (verifyAttempts >= maxVerifyAttempts) {
-            fail();
-            return;
-          }
-          setTimeout(verifyCanvas, 500);
-          return;
-        }
-        clearTimeout(timer);
-        finish(true);
-      } catch {
-        if (verifyAttempts >= maxVerifyAttempts) {
-          fail();
-          return;
-        }
-        setTimeout(verifyCanvas, 500);
-      }
-    };
 
     const onIdle = () => {
       if (typeof map.areTilesLoaded === "function" && !map.areTilesLoaded()) {
         setTimeout(onIdle, 700);
         return;
       }
-      setTimeout(verifyCanvas, 700);
+      clearTimeout(timer);
+      finish(true);
     };
 
     if (map.loaded?.()) {
@@ -296,14 +333,35 @@ async function initOlaMap(
 ): Promise<{ controller: MapController; map: unknown }> {
   const { OlaMaps, defaultStyleJson } = await import("olamaps-web-sdk");
   const apiKey = getOlaPublicKey()!;
-  const ola = new OlaMaps({ apiKey });
-  const sanitizedStyle = await loadSanitizedOlaStyle(defaultStyleJson, apiKey);
+  const styleOverrideUrl = process.env.NEXT_PUBLIC_OLA_MAPS_STYLE_URL?.trim();
+  const ola = new OlaMaps({ apiKey, mode: "2d", threedTileset: "" });
+
+  // Sanitize the SDK-bundled style to strip 3D layers (3d_model_data, building-3d, terrain, etc.)
+  // before MapLibre validates them — those layers reference source layers that don't exist in
+  // Ola's tile data, which fires fatal error events and triggers an unnecessary Google fallback.
+  const sanitizedDefault = wrapStyleForOlaSdk(sanitizeOlaStyle(defaultStyleJson), "default-light-standard");
+  let mapStyle: string | unknown = sanitizedDefault;
+  if (styleOverrideUrl) {
+    mapStyle = styleOverrideUrl;
+    if (olaStyleNeedsSanitizedObject(styleOverrideUrl)) {
+      try {
+        mapStyle = wrapStyleForOlaSdk(await loadSanitizedOlaStyle(styleOverrideUrl, apiKey), styleOverrideUrl);
+      } catch (styleErr) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[MapPicker] Sanitized style fetch failed, falling back to default:", styleErr);
+        }
+        mapStyle = sanitizedDefault;
+      }
+    }
+  }
+
   const map = await ola.init({
     container: containerId,
     center,
     zoom: ZOOM,
-    style: sanitizedStyle,
+    style: mapStyle,
   });
+  disableOlaTerrainAnd3d(map);
   const resizeMap = () => {
     try {
       map.resize?.();
@@ -315,11 +373,13 @@ async function initOlaMap(
 
   installOlaStyleImageFallback(map);
   map.on?.("load", () => {
+    disableOlaTerrainAnd3d(map);
     collapseOlaAttribution(containerId);
     resizeMap();
     requestAnimationFrame(() => resizeMap());
     setTimeout(() => resizeMap(), 150);
   });
+  map.on?.("style.load", () => disableOlaTerrainAnd3d(map));
   setTimeout(() => collapseOlaAttribution(containerId), 0);
 
   map.scrollZoom.disable();
@@ -548,13 +608,15 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
       const center = initialCenterRef.current;
       const olaKey = getOlaPublicKey();
       const googleKey = getGooglePublicKey();
-      console.info("[MapPicker] Booting map", {
-        mapContainerId,
-        fullscreen: Boolean(fullscreen),
-        center,
-        hasOlaKey: Boolean(olaKey),
-        hasGoogleKey: Boolean(googleKey),
-      });
+      if (process.env.NODE_ENV === "development") {
+        console.info("[MapPicker] Booting map", {
+          mapContainerId,
+          fullscreen: Boolean(fullscreen),
+          center,
+          hasOlaKey: Boolean(olaKey),
+          hasGoogleKey: Boolean(googleKey),
+        });
+      }
 
       if (!olaKey && !googleKey) {
         setMapError(
@@ -582,7 +644,9 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
           mapControllerRef.current = controller;
           setMapProvider("google");
           setMapError(null);
-          console.info(`[MapPicker] Using Google Maps (${reason})`);
+          if (process.env.NODE_ENV === "development") {
+            console.info(`[MapPicker] Using Google Maps (${reason})`);
+          }
           onPinMove(center.lat, center.lng);
           return true;
         } catch (e) {
@@ -604,35 +668,41 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
             [center.lng, center.lat],
             onPinMove,
           );
-          console.info("[MapPicker] Ola init succeeded", {
-            mapContainerId,
-            center,
+          if (process.env.NODE_ENV === "development") {
+            console.info("[MapPicker] Ola init succeeded", { mapContainerId, center });
+          }
+          if (cancelled) {
+            olaController.destroy();
+            return;
+          }
+
+          olaController.resize();
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
           });
           if (cancelled) {
             olaController.destroy();
             return;
           }
 
-          const tilesOk = await olaMapTilesHealthy(olaMap);
-          console.info("[MapPicker] Ola tile health check completed", {
-            mapContainerId,
-            tilesOk,
-          });
+          const tilesOk = await olaMapTilesHealthy(olaMap, mapContainerId);
           if (cancelled) {
             olaController.destroy();
             return;
           }
 
           if (!tilesOk) {
-            console.warn("[MapPicker] Ola tiles unhealthy — switching to Google Maps");
+            console.warn("[MapPicker] Ola tiles unhealthy — switching to Google Maps", {
+              mapContainerId,
+            });
             const googleOk = await tryGoogle("Ola tiles failed to load", olaController);
             if (googleOk) return;
-          } else {
-            mapControllerRef.current = olaController;
-            setMapProvider("ola");
-            onPinMove(center.lat, center.lng);
-            return;
           }
+
+          mapControllerRef.current = olaController;
+          setMapProvider("ola");
+          onPinMove(center.lat, center.lng);
+          return;
         } catch (e) {
           console.error("OlaMaps init:", e);
           const googleOk = await tryGoogle("Ola Maps failed to initialize");
@@ -672,12 +742,14 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
     const notifyResize = () => {
       const rect = container.getBoundingClientRect();
       if (rect.width < 8 || rect.height < 8) return;
-      console.info("[MapPicker] Container resize check", {
-        mapContainerId,
-        fullscreen: Boolean(fullscreen),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      });
+      if (process.env.NODE_ENV === "development") {
+        console.info("[MapPicker] Container resize check", {
+          mapContainerId,
+          fullscreen: Boolean(fullscreen),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        });
+      }
       requestAnimationFrame(() => {
         mapControllerRef.current?.resize();
       });

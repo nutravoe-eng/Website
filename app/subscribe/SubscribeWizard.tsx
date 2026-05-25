@@ -1933,6 +1933,8 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
                 key: `${day}-${bowlId}-${index}`,
                 bowlId,
                 bowl,
+                customizations: state.dayBowlCustomMap?.[day]?.[bowlId]?.[index] ?? [],
+                presets: state.dayBowlPresetMap?.[day]?.[bowlId]?.[index] ?? { baseChoice: 'yogurt' as const, oatsChoice: 'soaked' as const, noSugar: false },
               }));
             });
           const timeLabel = state.timeSlotMode === 'different' ? state.dayTimeSlotMap[day] : state.deliveryTimeSlot;
@@ -1982,6 +1984,59 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
             </div>
           )}
         </div>
+        {/* Bowl breakdown */}
+        {scenario === 'A' && (
+          <div className="bg-white rounded-xl border border-black/8 p-5">
+            <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-4">Your Bowls</p>
+            <div className="space-y-5">
+              {DAYS.filter(d => state.selectedDays.includes(d)).map(day => {
+                const bowlInstances = Object.entries(state.dayBowlCounts[day] ?? {})
+                  .filter(([, count]) => count > 0)
+                  .flatMap(([bowlId, count]) => {
+                    const bowl = findBowlByIdentifier(bowls, bowlId);
+                    return Array.from({ length: count }, (_, index) => ({
+                      key: `${day}-${bowlId}-${index}`,
+                      bowl,
+                      customizations: state.dayBowlCustomMap?.[day]?.[bowlId]?.[index] ?? [],
+                      presets: state.dayBowlPresetMap?.[day]?.[bowlId]?.[index] ?? { baseChoice: 'yogurt' as const, oatsChoice: 'soaked' as const, noSugar: false },
+                    }));
+                  });
+                return (
+                  <div key={day}>
+                    <p className="font-body text-[10px] font-bold uppercase tracking-wider text-stone/60 mb-2">{day}</p>
+                    <div className="space-y-3">
+                      {bowlInstances.map(({ key, bowl, customizations, presets }) => {
+                        const removedIngredients = customizations.filter(c => c.option === 'remove');
+                        const extraIngredients = customizations.filter(c => c.option === 'extra');
+                        return (
+                          <div key={key} className="flex items-start gap-3">
+                            <div className="mt-1 h-4 w-4 shrink-0 rounded-sm border-2 border-sage flex items-center justify-center">
+                              <div className="h-2 w-2 rounded-full bg-sage" />
+                            </div>
+                            <div>
+                              <p className="font-body text-[14px] text-ink">{bowl?.name ?? 'Selected bowl'}</p>
+                              <p className="font-body text-[11px] text-stone mt-0.5">
+                                {presets.baseChoice === 'milk' ? 'Milk' : 'Yogurt'}, {presets.oatsChoice === 'roasted' ? 'Roasted' : 'Soaked'} oats{presets.noSugar ? ', no sugar' : ''}
+                              </p>
+                              {removedIngredients.map(c => {
+                                const ing = bowl?.customizableIngredients?.find(i => i.id === c.ingredientId);
+                                return ing ? <p key={c.ingredientId} className="font-body text-[10px] text-terracotta">−{ing.name}</p> : null;
+                              })}
+                              {extraIngredients.map(c => {
+                                const ing = bowl?.customizableIngredients?.find(i => i.id === c.ingredientId);
+                                return ing ? <p key={c.ingredientId} className="font-body text-[10px] text-sage-dark">+{ing.name}</p> : null;
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {/* Order summary */}
         <div className="bg-white rounded-xl border border-black/8 p-5">
           <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-4">Order Summary</p>
@@ -2097,24 +2152,43 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
 
                 {card.bowls.length > 0 ? (
                   <div className="overflow-x-auto px-4 pb-4">
-                    <div className="flex gap-3 min-w-max">
-                      {card.bowls.map(({ key, bowl }) => (
-                        <div key={key} className="relative h-[154px] w-[180px] shrink-0 overflow-hidden rounded-[24px] bg-[#F5F3EF]">
-                          {bowl ? (
-                            <>
-                              <Image src={bowl.image} alt={bowl.name} fill className="object-cover" sizes="180px" />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-                              <div className="absolute inset-x-0 bottom-0 p-3">
-                                <p className="font-body text-[13px] font-semibold leading-tight text-white">{bowl.name}</p>
-                              </div>
-                            </>
-                          ) : (
-                            <div className="flex h-full items-end bg-gradient-to-t from-black/55 via-black/10 to-transparent p-3">
-                              <p className="font-body text-[13px] font-semibold leading-tight text-white">Selected bowl</p>
+                    <div className="flex gap-3 min-w-max items-start">
+                      {card.bowls.map(({ key, bowl, customizations, presets }) => {
+                        const removedIngredients = customizations.filter(c => c.option === 'remove');
+                        const extraIngredients = customizations.filter(c => c.option === 'extra');
+                        return (
+                          <div key={key} className="flex w-[180px] shrink-0 flex-col gap-2">
+                            <div className="relative h-[154px] w-full overflow-hidden rounded-[24px] bg-[#F5F3EF]">
+                              {bowl ? (
+                                <>
+                                  <Image src={bowl.image} alt={bowl.name} fill className="object-cover" sizes="180px" />
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+                                  <div className="absolute inset-x-0 bottom-0 p-3">
+                                    <p className="font-body text-[13px] font-semibold leading-tight text-white">{bowl.name}</p>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="flex h-full items-end bg-gradient-to-t from-black/55 via-black/10 to-transparent p-3">
+                                  <p className="font-body text-[13px] font-semibold leading-tight text-white">Selected bowl</p>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      ))}
+                            <div className="space-y-0.5 px-1">
+                              <p className="font-body text-[11px] text-stone">
+                                {presets.baseChoice === 'milk' ? 'Milk' : 'Yogurt'}, {presets.oatsChoice === 'roasted' ? 'Roasted' : 'Soaked'} oats{presets.noSugar ? ', no sugar' : ''}
+                              </p>
+                              {removedIngredients.map(c => {
+                                const ing = bowl?.customizableIngredients?.find(i => i.id === c.ingredientId);
+                                return ing ? <p key={c.ingredientId} className="font-body text-[10px] text-terracotta">−{ing.name}</p> : null;
+                              })}
+                              {extraIngredients.map(c => {
+                                const ing = bowl?.customizableIngredients?.find(i => i.id === c.ingredientId);
+                                return ing ? <p key={c.ingredientId} className="font-body text-[10px] text-sage-dark">+{ing.name}</p> : null;
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}
