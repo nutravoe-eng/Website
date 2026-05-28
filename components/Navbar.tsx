@@ -246,7 +246,12 @@ export default function Navbar() {
                   }`}
                   aria-label="Sign In"
                 >
-                  <img src="/nav-sign-in.svg" alt="" aria-hidden="true" className="mb-0.5 h-5 w-5 object-contain" />
+                  <img
+                    src="/nav-sign-in.svg"
+                    alt=""
+                    aria-hidden="true"
+                    className={`mb-0.5 h-5 w-5 object-contain transition-[filter] ${isDark ? "" : "brightness-0 invert"}`}
+                  />
                   <span className="pb-0.5">Sign In</span>
                 </Link>
               ) : (
