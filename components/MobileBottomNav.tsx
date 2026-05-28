@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -10,54 +10,76 @@ import {
   shouldShowMobileBottomNav,
 } from "@/lib/mobile-shell";
 
-const NAV_ITEMS = [
+const NAV_ICON_FILTER = {
+  active: "invert(50%) sepia(18%) saturate(841%) hue-rotate(358deg) brightness(92%) contrast(88%)",
+  hover: "brightness(0) saturate(100%) invert(14%) sepia(0%) saturate(2%) hue-rotate(177deg) brightness(97%) contrast(91%)",
+};
+
+type NavItemKey = "home" | "menu" | "subscribe" | "account";
+
+type NavItem = {
+  key: NavItemKey;
+  href: string;
+  label: string;
+  icon: string;
+  iconSize: number;
+};
+
+function NavImageIcon({
+  src,
+  size = 22,
+  active = false,
+}: {
+  src: string;
+  size?: number;
+  active?: boolean;
+}) {
+  const style = {
+    width: size,
+    height: size,
+    "--nav-icon-filter": active ? NAV_ICON_FILTER.active : "none",
+    "--nav-icon-hover-filter": NAV_ICON_FILTER.hover,
+  } as CSSProperties;
+
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden="true"
+      className="object-contain transition-[filter] [filter:var(--nav-icon-filter)] group-hover:[filter:var(--nav-icon-hover-filter)]"
+      style={style}
+    />
+  );
+}
+
+const NAV_ITEMS: NavItem[] = [
   {
-    key: "home" as const,
+    key: "home",
     href: "/",
     label: "Home",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 10.5 12 4l8 6.5" />
-        <path d="M6.5 9.5V20h11V9.5" />
-      </svg>
-    ),
+    icon: "/nav-home.svg",
+    iconSize: 22,
   },
   {
-    key: "menu" as const,
+    key: "menu",
     href: "/menu",
     label: "Menu",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M7 8V6a5 5 0 0 1 10 0v2" />
-        <path d="M5 8h14l-1 11H6L5 8Z" />
-      </svg>
-    ),
+    icon: "/nav-menu.svg",
+    iconSize: 22,
   },
   {
-    key: "subscribe" as const,
+    key: "subscribe",
     href: "/subscribe",
     label: "Subscription",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m17 2 4 4-4 4" />
-        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-        <path d="m7 22-4-4 4-4" />
-        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-        <rect x="9" y="9.5" width="6" height="4" rx="0.5" />
-        <path d="M9 11.5h6" />
-      </svg>
-    ),
+    icon: "/nav-subscription.svg",
+    iconSize: 28,
   },
   {
-    key: "account" as const,
+    key: "account",
     href: "/account",
     label: "Account",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="8" r="3.5" />
-        <path d="M5 20a7 7 0 0 1 14 0" />
-      </svg>
-    ),
+    icon: "/nav-sign-in.svg",
+    iconSize: 20,
   },
 ];
 
@@ -109,16 +131,16 @@ export default function MobileBottomNav() {
               key={item.key}
               href={href}
               aria-current={isActive ? "page" : undefined}
-              className={`flex min-h-[64px] flex-col items-center justify-center gap-1 px-1 py-1.5 transition-colors ${
-                isActive ? "text-sage-dark" : "text-stone hover:text-ink"
+              className={`group flex min-h-[64px] flex-col items-center justify-center gap-1 px-1 py-1.5 transition-colors ${
+                isActive ? "text-sage-dark hover:text-ink" : "text-stone hover:text-ink"
               }`}
             >
               <span
                 className={`flex h-[34px] w-[34px] items-center justify-center rounded-full transition-colors ${
-                  isActive ? "bg-sage/12 text-sage-dark" : "text-stone"
+                  isActive ? "bg-sage/12 text-sage-dark group-hover:text-ink" : "text-stone group-hover:text-ink"
                 }`}
               >
-                {item.icon}
+                <NavImageIcon src={item.icon} size={item.iconSize} active={isActive} />
               </span>
               <span className="font-body text-[9.5px] font-medium tracking-wide">{label}</span>
             </Link>
