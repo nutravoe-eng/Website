@@ -863,39 +863,44 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
     }
 
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
 
-        initialCenterRef.current = { lat, lng };
-        setShowSuggestions(false);
-        setSuggestions([]);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-        try {
-          mapControllerRef.current?.setMarker(lng, lat);
-        } catch {
-          /* coordinates still saved */
-        }
+    const onSuccess = (position: GeolocationPosition) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
 
-        onChangeRef.current(lat, lng);
-        setLocating(false);
-      },
-      (err) => {
-        let message = "Could not fetch your location. Try search or move the pin manually.";
-        if (err.code === err.PERMISSION_DENIED) {
-          message = "Location permission denied. Use search or move the pin manually.";
-        }
-        if (err.code === err.TIMEOUT) message = "Location lookup timed out. Please try again.";
-        setLocationError(message);
-        setLocating(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 30000,
-      },
-    );
+      initialCenterRef.current = { lat, lng };
+      setShowSuggestions(false);
+      setSuggestions([]);
+
+      try {
+        mapControllerRef.current?.setMarker(lng, lat);
+      } catch {
+        /* coordinates still saved */
+      }
+
+      onChangeRef.current(lat, lng);
+      setLocating(false);
+    };
+
+    const onError = (err: GeolocationPositionError) => {
+      let message = "Could not fetch your location. Try search or move the pin manually.";
+      if (err.code === err.PERMISSION_DENIED) {
+        message = isIOS
+          ? "Location access denied. On iPhone/iPad, go to Settings > Privacy & Security > Location Services > Chrome and set it to \"While Using\"."
+          : "Location permission denied. Use search or move the pin manually.";
+      }
+      if (err.code === err.TIMEOUT) message = "Location lookup timed out. Please try again.";
+      setLocationError(message);
+      setLocating(false);
+    };
+
+    navigator.geolocation.getCurrentPosition(onSuccess, onError, {
+      enableHighAccuracy: false,
+      timeout: 10000,
+      maximumAge: 30000,
+    });
   }, []);
 
   if (fullscreen) {
