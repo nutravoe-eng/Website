@@ -864,8 +864,6 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
 
     setLocating(true);
 
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
     const onSuccess = (position: GeolocationPosition) => {
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
@@ -887,9 +885,27 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
     const onError = (err: GeolocationPositionError) => {
       let message = "Could not fetch your location. Try search or move the pin manually.";
       if (err.code === err.PERMISSION_DENIED) {
-        message = isIOS
-          ? "Location access denied. On iPhone/iPad, go to Settings > Privacy & Security > Location Services > Chrome and set it to \"While Using\"."
-          : "Location permission denied. Use search or move the pin manually.";
+        const ua = navigator.userAgent;
+        const isIOS = /iPad|iPhone|iPod/.test(ua);
+        const isAndroid = /Android/.test(ua);
+        if (isIOS) {
+          const isIOSChrome = /CriOS/.test(ua);
+          message = isIOSChrome
+            ? "Location access is denied for Chrome. To fix it, go to Settings › Privacy & Security › Location Services › Chrome and set it to \"While Using\"."
+            : "Location access is denied for Safari. To fix it, go to Settings › Privacy & Security › Location Services › Safari and set it to \"While Using\".";
+        } else if (isAndroid) {
+          message = "Location access is denied. Tap the lock icon in your browser's address bar › Permissions › Location › Allow.";
+        } else {
+          const isFirefox = /Firefox/.test(ua);
+          const isMacSafari = /^((?!chrome|android).)*safari/i.test(ua);
+          if (isFirefox) {
+            message = "Location access is denied. Click the lock icon in the address bar, clear the location permission, then refresh the page.";
+          } else if (isMacSafari) {
+            message = "Location access is denied. Go to Safari › Settings › Websites › Location and allow access for this site.";
+          } else {
+            message = "Location access is denied. Click the lock icon in your browser's address bar › Site settings › Location › Allow.";
+          }
+        }
       }
       if (err.code === err.TIMEOUT) message = "Location lookup timed out. Please try again.";
       setLocationError(message);
@@ -902,6 +918,35 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
       maximumAge: 30000,
     });
   }, []);
+
+  const locationErrorPopup = locationError ? (
+    <div
+      className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-ink/50 backdrop-blur-sm"
+      onClick={() => setLocationError(null)}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 flex flex-col items-center gap-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-12 h-12 rounded-full bg-terracotta/10 flex items-center justify-center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-terracotta">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+            <line x1="12" y1="7" x2="12" y2="11" />
+            <circle cx="12" cy="14" r="0.6" fill="currentColor" stroke="none" />
+          </svg>
+        </div>
+        <p className="font-display text-[16px] font-medium text-ink text-center">Location Access</p>
+        <p className="font-body text-[13px] text-stone text-center leading-relaxed">{locationError}</p>
+        <button
+          type="button"
+          onClick={() => setLocationError(null)}
+          className="w-full bg-sage text-white font-body text-[14px] font-medium py-3 rounded-xl hover:bg-sage/90 transition-colors"
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  ) : null;
 
   if (fullscreen) {
     return (
@@ -980,10 +1025,12 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
             )}
           </div>
 
-          {(locationError || searchError) && (
-            <p className="font-body text-[11px] text-terracotta mt-2 px-1">{locationError ?? searchError}</p>
+          {searchError && (
+            <p className="font-body text-[11px] text-terracotta mt-2 px-1">{searchError}</p>
           )}
         </div>
+
+        {locationErrorPopup}
 
         {/* Map fills the entire area */}
         {mapError ? (
@@ -1093,9 +1140,11 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
             </button>
           )}
         </div>
-        {(locationError || searchError) && (
-          <p className="font-body text-[11px] text-terracotta mt-1">{locationError ?? searchError}</p>
+        {searchError && (
+          <p className="font-body text-[11px] text-terracotta mt-1">{searchError}</p>
         )}
+
+        {locationErrorPopup}
 
         {showSuggestions && suggestions.length > 0 && (
           <ul className="absolute z-[1000] top-full left-0 right-0 mt-1 bg-white border border-black/10 rounded-lg shadow-lg overflow-hidden max-h-52 overflow-y-auto">
