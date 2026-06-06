@@ -596,6 +596,7 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [locatedViaAutoDetect, setLocatedViaAutoDetect] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapProvider, setMapProvider] = useState<MapProvider | null>(null);
@@ -610,6 +611,7 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
 
   useEffect(() => {
     let cancelled = false;
+    const hasExplicitCenter = centerLat != null && centerLng != null;
 
     const onPinMove = (lat: number, lng: number) => {
       onChangeRef.current(lat, lng);
@@ -659,7 +661,7 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
           setMapProvider("google");
           setMapError(null);
           console.info(`[MapPicker] Using Google Maps (${reason})`);
-          onPinMove(center.lat, center.lng);
+          if (hasExplicitCenter) onPinMove(center.lat, center.lng);
           return true;
         } catch (e) {
           console.error("Google Maps init:", e);
@@ -703,7 +705,7 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
           } else {
             mapControllerRef.current = olaController;
             setMapProvider("ola");
-            onPinMove(center.lat, center.lng);
+            if (hasExplicitCenter) onPinMove(center.lat, center.lng);
             return;
           }
         } catch (e) {
@@ -879,6 +881,7 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
       }
 
       onChangeRef.current(lat, lng);
+      setLocatedViaAutoDetect(true);
       setLocating(false);
     };
 
@@ -891,8 +894,8 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
         if (isIOS) {
           const isIOSChrome = /CriOS/.test(ua);
           message = isIOSChrome
-            ? "Location access is denied for Chrome. To fix it, go to Settings › Privacy & Security › Location Services › Chrome and set it to \"While Using\"."
-            : "Location access is denied for Safari. To fix it, go to Settings › Privacy & Security › Location Services › Safari and set it to \"While Using\".";
+            ? "Location access is denied for Chrome. Go to Settings › Privacy & Security › Location Services › Chrome and set it to \"While Using\", then tap Try again."
+            : "Location access is denied for Safari. Go to Settings › Privacy & Security › Location Services › Safari and set it to \"While Using\". If it is already on, try refreshing this page — Safari may need a reload to pick up the change.";
         } else if (isAndroid) {
           message = "Location access is denied. Tap the lock icon in your browser's address bar › Permissions › Location › Allow.";
         } else {
@@ -937,13 +940,22 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
         </div>
         <p className="font-display text-[16px] font-medium text-ink text-center">Location Access</p>
         <p className="font-body text-[13px] text-stone text-center leading-relaxed">{locationError}</p>
-        <button
-          type="button"
-          onClick={() => setLocationError(null)}
-          className="w-full bg-sage text-white font-body text-[14px] font-medium py-3 rounded-xl hover:bg-sage/90 transition-colors"
-        >
-          Got it
-        </button>
+        <div className="flex gap-3 w-full">
+          <button
+            type="button"
+            onClick={() => setLocationError(null)}
+            className="flex-1 border border-black/20 text-ink font-body text-[14px] font-medium py-3 rounded-xl hover:bg-black/5 transition-colors"
+          >
+            Dismiss
+          </button>
+          <button
+            type="button"
+            onClick={() => { setLocationError(null); handleLocateMe(); }}
+            className="flex-1 bg-sage text-white font-body text-[14px] font-medium py-3 rounded-xl hover:bg-sage/90 transition-colors"
+          >
+            Try again
+          </button>
+        </div>
       </div>
     </div>
   ) : null;
@@ -1071,6 +1083,7 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
             Use current location
           </button>
         )}
+
       </div>
     );
   }
@@ -1142,6 +1155,11 @@ export default function MapPicker({ centerLat, centerLng, onChange, onAddressSel
         </div>
         {searchError && (
           <p className="font-body text-[11px] text-terracotta mt-1">{searchError}</p>
+        )}
+        {locatedViaAutoDetect && !locationError && (
+          <p className="font-body text-[11px] text-amber-600 mt-1">
+            Auto-location may not be precise — drag the pin to your exact entrance.
+          </p>
         )}
 
         {locationErrorPopup}

@@ -191,8 +191,6 @@ function SignInForm() {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         setMapCenter({ lat, lng });
-        setPinLat(lat);
-        setPinLng(lng);
         setLocationGeolocating(false);
         setLocationSubStep("map");
       },
@@ -206,9 +204,6 @@ function SignInForm() {
 
   const handleLocationSearchSelect = (s: { lat: number; lng: number; display_name: string }) => {
     setMapCenter({ lat: s.lat, lng: s.lng });
-    setPinLat(s.lat);
-    setPinLng(s.lng);
-    setLocationDisplayName(s.display_name);
     setLocationSubStep("map");
   };
 
