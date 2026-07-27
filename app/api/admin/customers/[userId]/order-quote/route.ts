@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 import { buildAuthoritativeOrder, type CheckoutItemInput } from '@/lib/checkout-security';
-import { requestOriginReferrer } from '@/lib/ola-maps';
 
 /**
  * Server-authoritative one-time order quote (subtotal, delivery, line items) for admin preview.
@@ -61,9 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
   }
 
   try {
-    const quote = await buildAuthoritativeOrder(items, address, null, {
-      httpReferrer: requestOriginReferrer(req),
-    });
+    const quote = await buildAuthoritativeOrder(items, address, null);
     return NextResponse.json({
       subtotal: quote.subtotal,
       deliveryFee: quote.deliveryFee,

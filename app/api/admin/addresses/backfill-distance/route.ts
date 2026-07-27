@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { adminSupabase } from "@/lib/supabase/admin";
-import { requestOriginReferrer } from "@/lib/ola-maps";
 import { resolveDeliveryDistanceKm } from "@/lib/road-distance";
 import { syncAddressDeliveryMetadata } from "@/lib/address-delivery-sync";
 
@@ -52,18 +51,15 @@ export async function POST(req: NextRequest) {
   const rows = (data ?? []) as BackfillRow[];
   const failures: Array<{ id: string; error: string }> = [];
   let updated = 0;
-  const referrer = requestOriginReferrer(req);
 
   for (const row of rows) {
     try {
       if (dryRun) {
-        await resolveDeliveryDistanceKm(row.lat, row.lng, { httpReferrer: referrer });
+        await resolveDeliveryDistanceKm(row.lat, row.lng);
         updated += 1;
         continue;
       }
-      await syncAddressDeliveryMetadata(adminSupabase, row.id, row.lat, row.lng, {
-        httpReferrer: referrer,
-      });
+      await syncAddressDeliveryMetadata(adminSupabase, row.id, row.lat, row.lng);
       updated += 1;
     } catch (err) {
       failures.push({

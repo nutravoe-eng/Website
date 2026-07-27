@@ -1,14 +1,13 @@
 /**
- * Google Maps Platform — server-side fallbacks when OLA Maps is unavailable.
+ * Google Maps Platform — server-side geocoding, places search, and driving distance.
  *
- * Enable on the same API key: Routes API (driving distance), Geocoding API,
- * Places API (Autocomplete + Place Details for address search).
+ * Enable on the same API key: Routes API, Geocoding API, Places API (New).
  */
 
 const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
 const GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
-const AUTOCOMPLETE_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json";
-const PLACE_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json";
+const PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete";
+const PLACES_DETAILS_BASE = "https://places.googleapis.com/v1/places";
 const TIMEOUT_MS = 5000;
 
 export interface GoogleGeocodeHit {
@@ -53,6 +52,45 @@ async function googleFetchJson<T>(url: URL): Promise<T | null> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function googleFetchPlaces<T>(
+  url: string,
+  init: RequestInit & { fieldMask?: string },
+): Promise<T | null> {
+  const key = getGoogleMapsApiKey();
+  if (!key) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const headers = new Headers(init.headers);
+  headers.set("X-Goog-Api-Key", key);
+  if (init.fieldMask) headers.set("X-Goog-FieldMask", init.fieldMask);
+
+  try {
+    const res = await fetch(url, { ...init, headers, cache: "no-store", signal: controller.signal });
+    if (!res.ok) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(`[google-maps] HTTP ${res.status} for ${url}`);
+      }
+      return null;
+    }
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function placeIdFromPrediction(prediction: { placeId?: string; place?: string }): string | null {
+  if (typeof prediction.placeId === "string" && prediction.placeId.length) {
+    return prediction.placeId;
+  }
+  if (typeof prediction.place === "string" && prediction.place.length) {
+    return prediction.place.replace(/^places\//, "");
+  }
+  return null;
 }
 
 type GeocodeResponse = {
@@ -116,50 +154,67 @@ export async function googleGeocodeSearch(q: string, limit = 5): Promise<GoogleG
   return hitsFromGeocodeResponse(data, limit);
 }
 
-type AutocompleteResponse = {
-  status?: string;
-  predictions?: Array<{ description?: string; place_id?: string }>;
+type PlacesAutocompleteResponse = {
+  suggestions?: Array<{
+    placePrediction?: {
+      place?: string;
+      placeId?: string;
+      text?: { text?: string };
+    };
+  }>;
 };
 
-type PlaceDetailsResponse = {
-  status?: string;
-  result?: {
-    formatted_address?: string;
-    geometry?: { location?: { lat?: number; lng?: number } };
-  };
+type PlacesDetailsResponse = {
+  formattedAddress?: string;
+  location?: { latitude?: number; longitude?: number };
 };
 
 async function googlePlaceDetailsHit(placeId: string): Promise<GoogleGeocodeHit | null> {
-  const url = new URL(PLACE_DETAILS_URL);
-  url.searchParams.set("place_id", placeId);
-  url.searchParams.set("fields", "geometry,formatted_address");
+  const data = await googleFetchPlaces<PlacesDetailsResponse>(
+    `${PLACES_DETAILS_BASE}/${encodeURIComponent(placeId)}`,
+    {
+      method: "GET",
+      fieldMask: "formattedAddress,location",
+    },
+  );
+  if (!data) return null;
 
-  const data = await googleFetchJson<PlaceDetailsResponse>(url);
-  if (!data || data.status !== "OK" || !data.result) return null;
-
-  const lat = data.result.geometry?.location?.lat;
-  const lng = data.result.geometry?.location?.lng;
-  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  const lat = data.location?.latitude;
+  const lng = data.location?.longitude;
+  if (typeof lat !== "number" || typeof lng !== "number" || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
 
   return {
     lat,
     lng,
-    display_name: data.result.formatted_address ?? `${lat}, ${lng}`,
+    display_name: data.formattedAddress ?? `${lat}, ${lng}`,
   };
 }
 
-/** Places Autocomplete + details — mirrors Ola autocomplete search UX. */
+/** Places Autocomplete (New) + Place Details (New) — address search for MapPicker and geocode API. */
 export async function googlePlacesSearch(q: string, limit = 5): Promise<GoogleGeocodeHit[]> {
   const trimmed = q.trim();
   if (trimmed.length < 3) return googleGeocodeSearch(trimmed, limit);
 
-  const url = new URL(AUTOCOMPLETE_URL);
-  url.searchParams.set("input", trimmed);
-  url.searchParams.set("components", "country:in");
-  url.searchParams.set("types", "geocode");
+  const data = await googleFetchPlaces<PlacesAutocompleteResponse>(PLACES_AUTOCOMPLETE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    fieldMask: "suggestions.placePrediction.placeId,suggestions.placePrediction.place,suggestions.placePrediction.text.text",
+    body: JSON.stringify({
+      input: trimmed,
+      includedRegionCodes: ["in"],
+      languageCode: "en",
+      regionCode: "IN",
+    }),
+  });
 
-  const data = await googleFetchJson<AutocompleteResponse>(url);
-  if (!data || data.status !== "OK" || !Array.isArray(data.predictions) || !data.predictions.length) {
+  const predictions =
+    data?.suggestions
+      ?.map((s) => s.placePrediction)
+      .filter((p): p is NonNullable<typeof p> => Boolean(p)) ?? [];
+
+  if (!predictions.length) {
     return googleGeocodeSearch(trimmed, limit);
   }
 
@@ -167,9 +222,13 @@ export async function googlePlacesSearch(q: string, limit = 5): Promise<GoogleGe
   const seen = new Set<string>();
   const predictionLimit = Math.min(limit, 3);
   const detailedHits = await Promise.all(
-    data.predictions.slice(0, predictionLimit).map(async (prediction) => {
-      if (!prediction.place_id) return null;
-      return googlePlaceDetailsHit(prediction.place_id);
+    predictions.slice(0, predictionLimit).map(async (prediction) => {
+      const placeId = placeIdFromPrediction(prediction);
+      if (!placeId) return null;
+      const hit = await googlePlaceDetailsHit(placeId);
+      if (!hit) return null;
+      const label = prediction.text?.text?.trim();
+      return label ? { ...hit, display_name: label } : hit;
     }),
   );
 

@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { adminSupabase } from "@/lib/supabase/admin";
 import { buildSubscriptionQuote, getCustomizationUpcharge } from "@/lib/checkout-security";
 import { DELIVERY_FEE_RS, deliveryFeeFromDistanceKm } from "@/lib/delivery";
-import { requestOriginReferrer } from "@/lib/ola-maps";
 import { resolveDeliveryDistanceKm } from "@/lib/road-distance";
 import { getAllBowls } from "@/lib/sanity";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -192,9 +191,7 @@ export async function POST(req: NextRequest) {
 
   let quote;
   try {
-    quote = await buildSubscriptionQuote(planId, address, normalizedDayConfigs, {
-      httpReferrer: requestOriginReferrer(req),
-    });
+    quote = await buildSubscriptionQuote(planId, address, normalizedDayConfigs);
   } catch (err) {
     console.error("Quote error:", err);
     const message = err instanceof Error ? err.message : "Unable to price this subscription";
@@ -216,7 +213,7 @@ export async function POST(req: NextRequest) {
     ? deliveryFeeFromDistanceKm(address.distance_km as number)
     : addrCoords
       ? deliveryFeeFromDistanceKm(
-          (await resolveDeliveryDistanceKm(addrCoords.lat, addrCoords.lng, { httpReferrer: requestOriginReferrer(req) }))
+          (await resolveDeliveryDistanceKm(addrCoords.lat, addrCoords.lng))
             .distanceKm,
         )
       : DELIVERY_FEE_RS;

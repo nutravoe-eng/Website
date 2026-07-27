@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 import { buildSubscriptionQuote } from '@/lib/checkout-security';
-import { requestOriginReferrer } from '@/lib/ola-maps';
 import { getAllBowls } from '@/lib/sanity';
 import type { IngredientCustomization } from '@/types';
 
@@ -109,9 +108,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
   let quote: Awaited<ReturnType<typeof buildSubscriptionQuote>>;
   try {
     const configs = deliveryStyle === 'spread' ? normalizedDayConfigs : [];
-    quote = await buildSubscriptionQuote(planId, address, configs, {
-      httpReferrer: requestOriginReferrer(req),
-    });
+    quote = await buildSubscriptionQuote(planId, address, configs);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unable to price subscription';
     return NextResponse.json({ error: message }, { status: 400 });

@@ -5,7 +5,6 @@ import { sendBrevoEmail } from '@/lib/brevo';
 import { getNextDateForDayOfWeek, scheduleDeliveryDates } from '@/lib/subscription';
 import { buildSubscriptionQuote } from '@/lib/checkout-security';
 import { getAllBowls } from '@/lib/sanity';
-import { requestOriginReferrer } from '@/lib/ola-maps';
 
 const ALLOWED_PAYMENT_STATUSES = new Set(['pending', 'paid', 'failed', 'refunded']);
 const ALLOWED_SUBSCRIPTION_STATUSES = new Set(['pending', 'active', 'paused', 'cancelled', 'expired']);
@@ -151,9 +150,7 @@ export async function PATCH(
         customizations: Array.isArray(c.customizations) ? c.customizations : [],
       }));
 
-      const quote = await buildSubscriptionQuote(planSlug, addrRecord, dayConfigs, {
-        httpReferrer: requestOriginReferrer(req),
-      });
+      const quote = await buildSubscriptionQuote(planSlug, addrRecord, dayConfigs);
 
       if (quote.totalAmountRs !== oldSub.total_amount_rs) {
         console.log(`Correcting sub ${id} total_amount_rs: ${oldSub.total_amount_rs} → ${quote.totalAmountRs}`);

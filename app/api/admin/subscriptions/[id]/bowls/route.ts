@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 import { buildSubscriptionQuote } from '@/lib/checkout-security';
-import { requestOriginReferrer } from '@/lib/ola-maps';
 import { getAllBowls } from '@/lib/sanity';
 
 const DAY_SLUGS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
@@ -261,9 +260,7 @@ export async function PATCH(
       : {};
     const planSlug = (sub.subscription_plans as any)?.slug ?? sub.plan_id;
 
-    const quote = await buildSubscriptionQuote(planSlug, addrRecord, updatedConfigs, {
-      httpReferrer: requestOriginReferrer(req),
-    });
+    const quote = await buildSubscriptionQuote(planSlug, addrRecord, updatedConfigs);
     newTotal = roundCurrency(quote.totalAmountRs);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to calculate new price';

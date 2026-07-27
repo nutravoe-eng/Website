@@ -3,7 +3,6 @@ import { randomBytes } from 'crypto';
 import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 import { sendBrevoEmail } from '@/lib/brevo';
-import { requestOriginReferrer } from '@/lib/ola-maps';
 import { syncAddressDeliveryMetadata } from '@/lib/address-delivery-sync';
 
 function generatePassword(): string {
@@ -137,9 +136,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await syncAddressDeliveryMetadata(adminSupabase, addrRow.id, lat, lng, {
-      httpReferrer: requestOriginReferrer(req),
-    });
+    await syncAddressDeliveryMetadata(adminSupabase, addrRow.id, lat, lng);
   } catch (e) {
     console.error('[admin/customers] address delivery sync failed', e);
   }

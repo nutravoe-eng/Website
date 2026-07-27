@@ -324,7 +324,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
             return;
           }
           setAddressServiceabilityError("");
-          // Prefer stored route distance (synced on address save) to avoid duplicate Ola on load
+          // Prefer stored route distance (synced on address save) to avoid duplicate routing API calls on load
           if (typeof def.distance_km === "number" && Number.isFinite(def.distance_km)) {
             setDeliveryDistanceKm(Math.round(def.distance_km * 10) / 10);
           } else {

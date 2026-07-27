@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { adminSupabase } from "@/lib/supabase/admin";
-import { geocodeIndianPincode } from "@/lib/ola-maps";
+import { geocodeIndianPincode } from "@/lib/geocode";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();

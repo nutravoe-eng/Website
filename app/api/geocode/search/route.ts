@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { geocodeSearchIndia, requestOriginReferrer } from "@/lib/ola-maps";
+import { geocodeSearchIndia } from "@/lib/geocode";
 
 export async function GET(req: NextRequest) {
   const limited = await enforceRateLimit(req, "geocode-search", 20, 60);
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const hits = await geocodeSearchIndia(q, requestOriginReferrer(req));
+    const hits = await geocodeSearchIndia(q);
     return NextResponse.json(hits, { headers: limited.headers });
   } catch {
     return NextResponse.json({ error: "Search failed" }, { status: 500, headers: limited.headers });

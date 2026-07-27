@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requestOriginReferrer } from "@/lib/ola-maps";
 import { syncAddressDeliveryMetadataById } from "@/lib/address-delivery-sync";
 
 /**
  * Recompute and store `nearest_hub_id` + `distance_km` for the signed-in user's address
- * (same Ola/road logic as /api/delivery-distance). Clears `delivery_fee` on the row.
+ * (same road-distance logic as /api/delivery-distance). Clears `delivery_fee` on the row.
  */
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -37,9 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await syncAddressDeliveryMetadataById(supabase, addressId, {
-      httpReferrer: requestOriginReferrer(req),
-    });
+    const result = await syncAddressDeliveryMetadataById(supabase, addressId);
     return NextResponse.json({
       ...result,
     });

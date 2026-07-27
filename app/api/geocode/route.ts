@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { googleReverseGeocode } from "@/lib/google-maps";
-import { geocodeIndianPincode, requestOriginReferrer } from "@/lib/ola-maps";
+import { geocodeIndianPincode } from "@/lib/geocode";
 
 const INDIAN_STATES_AND_UTS = new Set([
   "andhra pradesh",
@@ -190,7 +190,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      const hit = await geocodeIndianPincode(pincode, requestOriginReferrer(req));
+      const hit = await geocodeIndianPincode(pincode);
       if (!hit) {
         return NextResponse.json({ error: "Location not found" }, { status: 404, headers: limited.headers });
       }

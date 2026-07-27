@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { deliveryPricingFromDistanceKm } from "@/lib/delivery";
-import { requestOriginReferrer } from "@/lib/ola-maps";
 import { resolveDeliveryDistanceKm } from "@/lib/road-distance";
 
 /**
  * GET ?lat=&lng=
- * Returns driving distance (when OLA_MAPS_API_KEY / OLAMAPS_API_KEY is set) or straight-line fallback,
+ * Returns driving distance via Google Maps Routes (or straight-line fallback),
  * plus pricing breakdown for the cart / navbar / subscribe UI.
  */
 export async function GET(req: NextRequest) {
@@ -20,9 +19,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { hub, distanceKm, source } = await resolveDeliveryDistanceKm(lat, lng, {
-      httpReferrer: requestOriginReferrer(req),
-    });
+    const { hub, distanceKm, source } = await resolveDeliveryDistanceKm(lat, lng);
     const breakdown = deliveryPricingFromDistanceKm(distanceKm);
     const deliveryFee = breakdown.isFree ? 0 : breakdown.customerPaysRs;
     return NextResponse.json(

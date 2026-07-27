@@ -6,7 +6,7 @@ import {
   subscriptionWeeklyFeeFromDistanceKm,
   type DeliveryPriceBreakdown,
 } from "@/lib/delivery";
-import { geocodeIndianPincode } from "@/lib/ola-maps";
+import { geocodeIndianPincode } from "@/lib/geocode";
 import { resolveDeliveryDistanceKm } from "@/lib/road-distance";
 import { getAllBowls, getSubscriptionPlans } from "@/lib/sanity";
 import { getSubscriptionBaseUnitPriceForBowl } from "@/lib/subscription-pricing";
@@ -22,6 +22,7 @@ export interface AddressForPricing {
 }
 
 interface PricingContextOptions {
+  /** @deprecated No longer used — kept for call-site compatibility. */
   httpReferrer?: string | null;
 }
 
@@ -63,10 +64,10 @@ async function resolveAddressCoordinates(address: AddressForPricing): Promise<{ 
 /**
  * Distance (km) for delivery pricing.
  *
- * Only trusts a cached `distance_km` when `distance_source === "road"` (OLA Maps driving
+ * Only trusts a cached `distance_km` when `distance_source === "road"` (Google Maps driving
  * distance). If the cached value came from a haversine fallback ("straight_line"), it
  * under-estimates the actual road distance, which can suppress the delivery fee for
- * addresses near the 10 km free-zone boundary. In that case we re-attempt OLA; if it
+ * addresses near the 10 km free-zone boundary. In that case we re-attempt routing; if it
  * still fails we keep the haversine value rather than blocking checkout.
  */
 async function resolveDistanceKmForDeliveryPricing(
@@ -92,11 +93,9 @@ async function resolveDistanceKmForDeliveryPricing(
 
   if (!coords) return null;
 
-  const { distanceKm, source } = await resolveDeliveryDistanceKm(coords.lat, coords.lng, {
-    httpReferrer: options?.httpReferrer,
-  });
+  const { distanceKm, source } = await resolveDeliveryDistanceKm(coords.lat, coords.lng);
 
-  // When OLA still unavailable, fall back to the cached haversine value (if any) rather
+  // When routing is still unavailable, fall back to the cached haversine value (if any) rather
   // than returning null and triggering the ₹60 hard fallback.
   if (source === "straight_line" && typeof address.distance_km === "number" && Number.isFinite(address.distance_km)) {
     return address.distance_km;

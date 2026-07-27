@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 import { buildAuthoritativeOrder, type CheckoutItemInput } from '@/lib/checkout-security';
-import { requestOriginReferrer } from '@/lib/ola-maps';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   const admin = await verifyAdmin();
@@ -64,9 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
 
   let quote;
   try {
-    quote = await buildAuthoritativeOrder(items, address, null, {
-      httpReferrer: requestOriginReferrer(req),
-    });
+    quote = await buildAuthoritativeOrder(items, address, null);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unable to price order';
     return NextResponse.json({ error: message }, { status: 400 });

@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { adminSupabase } from "@/lib/supabase/admin";
 import { buildAuthoritativeOrder, type CheckoutItemInput } from "@/lib/checkout-security";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { requestOriginReferrer } from "@/lib/ola-maps";
 import {
   isPaidFlexibleWalletEligible,
   planSlugForCheckoutPricing,
@@ -110,9 +109,7 @@ export async function POST(req: NextRequest) {
   let quote;
   try {
     const activePlanSlug = await planSlugForCheckoutPricing(adminSupabase, pricedSub ?? undefined);
-    quote = await buildAuthoritativeOrder(items, resolvedAddress, activePlanSlug, {
-      httpReferrer: requestOriginReferrer(req),
-    });
+    quote = await buildAuthoritativeOrder(items, resolvedAddress, activePlanSlug);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unable to price this order";
     return NextResponse.json({ error: message }, { status: 400, headers: limited.headers });

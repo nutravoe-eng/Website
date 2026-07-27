@@ -8,7 +8,7 @@ export interface SyncAddressDeliveryResult {
 }
 
 /**
- * Ola (or straight-line fallback) from hub → pin, then persist `nearest_hub_id` + `distance_km`.
+ * Google driving distance (or straight-line fallback) from hub → pin, then persist `nearest_hub_id` + `distance_km`.
  * Does not set `delivery_fee` — that is derived in app code from `distance_km` (one-off rule).
  */
 export async function syncAddressDeliveryMetadata(
@@ -16,15 +16,12 @@ export async function syncAddressDeliveryMetadata(
   addressId: string,
   lat: number,
   lng: number,
-  options?: { httpReferrer?: string | null },
 ): Promise<SyncAddressDeliveryResult> {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     throw new Error("Valid lat and lng are required");
   }
 
-  const { hub, distanceKm, source } = await resolveDeliveryDistanceKm(lat, lng, {
-    httpReferrer: options?.httpReferrer,
-  });
+  const { hub, distanceKm, source } = await resolveDeliveryDistanceKm(lat, lng);
 
   const slug = hub.id;
   const { data: hubRow } = await supabase.from("delivery_hubs").select("id").eq("slug", slug).maybeSingle();
@@ -53,7 +50,6 @@ export async function syncAddressDeliveryMetadata(
 export async function syncAddressDeliveryMetadataById(
   supabase: SupabaseClient,
   addressId: string,
-  options?: { httpReferrer?: string | null },
 ): Promise<SyncAddressDeliveryResult> {
   const { data: row, error } = await supabase
     .from("addresses")
@@ -66,5 +62,5 @@ export async function syncAddressDeliveryMetadataById(
     throw new Error("Address not found or missing map coordinates");
   }
 
-  return syncAddressDeliveryMetadata(supabase, addressId, row.lat, row.lng, options);
+  return syncAddressDeliveryMetadata(supabase, addressId, row.lat, row.lng);
 }
