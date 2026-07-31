@@ -24,18 +24,18 @@ export const DEFAULT_DELIVERY_POLICY: DeliveryPolicy = {
   blackoutExemptSlotKeys: [],
 };
 
-/** Nutravoe delivery window: 7 AM–3 PM IST (slots start at 7, last slot 2–3 PM). */
+/** Nutravoe delivery window: 7 AM–7 PM IST (slots start at 7, last slot 6–7 PM). */
 export const BUSINESS_HOURS = {
   firstSlotHour: 7,
-  lastHourExclusive: 15,
+  lastHourExclusive: 19,
   earlyMorningFirstHour: 7,
   earlyMorningLastBookableHour: 9,
   orderEarlyMorningByHour: 23,
   tomorrowLateEarliestHour: 10,
-  displayWindow: "7 AM–3 PM",
-  displayWindowPlain: "7 AM-3 PM",
+  displayWindow: "7 AM–7 PM",
+  displayWindowPlain: "7 AM-7 PM",
   earlyMorningWindow: "7–10 AM",
-  sameDayCutoffDisplay: "3 PM",
+  sameDayCutoffDisplay: "7 PM",
 } as const;
 
 export const DELIVERY_POLICY_CONSTANTS = {
