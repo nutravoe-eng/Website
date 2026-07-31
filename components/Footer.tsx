@@ -76,7 +76,7 @@ function FullFooter() {
           </Link>
           <p className="max-w-xs font-body text-[13px] leading-relaxed text-[#9A9590]">
             Fresh protein yogurt bowls crafted daily and delivered to your door.
-            7 AM-3 PM. Bangalore, Karnataka.
+            7 AM-7 PM. Bangalore, Karnataka.
           </p>
           <div className="mt-5">
             <SocialIcons />

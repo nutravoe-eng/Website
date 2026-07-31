@@ -628,7 +628,7 @@ export default function CartPage() {
                     className={`rounded-xl border px-3 py-3 text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${deliveryMode === "asap" ? "border-sage bg-sage/8" : "border-black/10 bg-[#F9F8F6]"}`}
                   >
                     <p className="font-body text-[13px] font-bold text-ink">In 60 min</p>
-                    <p className="font-body text-[11px] text-stone">{asapSlot ? asapSlot.label : "7 AM–3 PM only"}</p>
+                    <p className="font-body text-[11px] text-stone">{asapSlot ? asapSlot.label : "7 AM–7 PM only"}</p>
                   </button>
                   <button
                     type="button"
@@ -1320,7 +1320,7 @@ export default function CartPage() {
               <div className="mx-3 mt-2.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 flex gap-2 items-start shrink-0">
                 <svg className="text-amber-500 shrink-0 mt-0.5" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
                 <p className="font-body text-[11px] text-amber-800 leading-relaxed">
-                  <strong>7–10 AM deliveries</strong> require ordering by <strong>11 PM</strong> the night before. Same-day closes at <strong>3 PM</strong>.
+                  <strong>7–10 AM deliveries</strong> require ordering by <strong>11 PM</strong> the night before. Same-day closes at <strong>7 PM</strong>.
                 </p>
               </div>
 

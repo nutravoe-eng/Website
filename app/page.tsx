@@ -37,7 +37,7 @@ export default async function HomePage() {
                   className="mb-2.5 font-body text-[9px] font-medium tracking-[0.22em] text-sage-light"
                   style={{ textShadow: "0 3px 12px rgba(0,0,0,0.42)" }}
                 >
-                  Bangalore · Fresh Daily · Delivered 7 AM-3 PM
+                  Bangalore · Fresh Daily · Delivered 7 AM-7 PM
                 </p>
                 <h1
                   className="mb-3 font-display text-white"
@@ -113,7 +113,7 @@ export default async function HomePage() {
                   className="mb-5 font-body text-[11px] font-medium tracking-[0.25em] text-sage-light"
                   style={{ textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}
                 >
-                  Bangalore · Fresh Daily · Delivered 7 AM–3 PM
+                  Bangalore · Fresh Daily · Delivered 7 AM–7 PM
                 </p>
                 <h1
                   className="mb-7 font-display text-white"
@@ -230,8 +230,8 @@ export default async function HomePage() {
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
               ),
-              title: "Delivered 7 AM-3 PM",
-              sub: "Last same-day order by 3 PM",
+              title: "Delivered 7 AM-7 PM",
+              sub: "Last same-day order by 7 PM",
             },
           ].map(({ icon, title, sub }) => (
             <div
@@ -304,7 +304,7 @@ export default async function HomePage() {
       <section className="bg-cream px-5 py-16 text-center md:px-6 md:py-28 lg:px-16">
         <div className="mx-auto max-w-3xl">
           <p className="mb-8 font-body text-xs font-medium uppercase tracking-[0.22em] text-stone">
-            Delivered 7 AM-3 PM · Bangalore
+            Delivered 7 AM-7 PM · Bangalore
           </p>
           <h2
             className="mb-10 font-display text-ink"

@@ -46,7 +46,7 @@ const TRUST = [
         <polyline points="12 6 12 12 16 14" />
       </svg>
     ),
-    title: "Delivered 7 AM–3 PM",
+    title: "Delivered 7 AM–7 PM",
     sub: "Order anytime, same day",
   },
 ] as const;
@@ -105,7 +105,7 @@ export default function HeroPreviewPage() {
                 className="font-body text-[11px] font-medium tracking-[0.25em] mb-4 text-sage-light"
                 style={{ textShadow: "0 2px 10px rgba(0,0,0,0.3)" }}
               >
-                FRESH · BANGALORE · DELIVERED 7 AM–3 PM
+                FRESH · BANGALORE · DELIVERED 7 AM–7 PM
               </p>
               <h1 className="font-display text-white mb-5" style={{ fontSize: "clamp(40px, 5vw, 64px)", lineHeight: "1.05" }}>
                 Wholesome protein bowls.
@@ -169,7 +169,7 @@ export default function HeroPreviewPage() {
                 className="font-body text-[11px] font-medium tracking-[0.25em] mb-4 text-sage-light"
                 style={{ textShadow: "0 1px 8px rgba(0,0,0,0.45)" }}
               >
-                FRESH · BANGALORE · DELIVERED 7 AM–3 PM
+                FRESH · BANGALORE · DELIVERED 7 AM–7 PM
               </p>
               <h1
                 className="font-display text-white mb-5 drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]"
@@ -236,7 +236,7 @@ export default function HeroPreviewPage() {
                 className="font-body text-[11px] font-medium tracking-[0.25em] mb-4 text-sage-light"
                 style={{ textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}
               >
-                FRESH · BANGALORE · DELIVERED 7 AM–3 PM
+                FRESH · BANGALORE · DELIVERED 7 AM–7 PM
               </p>
               <h1 className="font-display text-white mb-5" style={{ fontSize: "clamp(40px, 5vw, 64px)", lineHeight: "1.05" }}>
                 Wholesome protein bowls.
@@ -300,7 +300,7 @@ export default function HeroPreviewPage() {
                 className="font-body text-[11px] font-medium tracking-[0.25em] mb-4 text-sage-dark"
                 style={{ textShadow: "0 1px 12px rgba(250,249,246,0.9), 0 1px 3px rgba(44,44,44,0.15)" }}
               >
-                FRESH · BANGALORE · DELIVERED 7 AM–3 PM
+                FRESH · BANGALORE · DELIVERED 7 AM–7 PM
               </p>
               <h1
                 className="font-display text-ink mb-5"

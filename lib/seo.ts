@@ -5,7 +5,7 @@ import { getSiteUrl } from "@/lib/site";
 const SITE_NAME = "Nutravoe";
 const DEFAULT_OG_IMAGE = "/hero-image.png";
 const DEFAULT_DESCRIPTION =
-  "Premium protein yogurt bowls made fresh daily in Bangalore. No added sugar, probiotic base, delivered 7 AM-3 PM. Order via WhatsApp.";
+  "Premium protein yogurt bowls made fresh daily in Bangalore. No added sugar, probiotic base, delivered 7 AM-7 PM. Order via WhatsApp.";
 
 export function getAbsoluteUrl(path = "/"): string {
   const siteUrl = getSiteUrl();
@@ -130,7 +130,7 @@ export function getOrganizationSchema() {
               "Sunday",
             ],
             opens: "07:00",
-            closes: "15:00",
+            closes: "19:00",
           },
         ],
         priceRange: "INR 299-399",
