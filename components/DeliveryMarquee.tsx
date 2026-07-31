@@ -6,10 +6,6 @@ import { BUSINESS_HOURS } from "@/lib/delivery-policy";
 
 const ITEMS = [
   {
-    icon: "🌅",
-    text: `Want delivery between ${BUSINESS_HOURS.earlyMorningWindow}? Place your order before 11 PM the night before`,
-  },
-  {
     icon: "⚡",
     text: `Delivery in 60 min is available from ${BUSINESS_HOURS.displayWindow}`,
   },
