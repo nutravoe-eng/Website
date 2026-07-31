@@ -126,7 +126,7 @@ export default async function DeliveryReceiptPage({
           </div>
 
           <p style={{ fontSize: '11px', color: '#BFBBB6', fontFamily: 'sans-serif', lineHeight: '1.7', marginBottom: '32px' }}>
-            Domlur Kitchen, Victoria II Apartment · 314/8 Patel Ram Reddy Rd, Domlur, Bengaluru 560071<br />
+            2nd Floor, Maruthi Nilayam, 267, Domlur I Stage, Amarjyoti Layout, Domlur, Bengaluru, Karnataka 560071<br />
             nutravoe.in · @nutravoe
           </p>
 

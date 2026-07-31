@@ -113,8 +113,10 @@ export function getOrganizationSchema() {
         },
         address: {
           "@type": "PostalAddress",
+          streetAddress: "2nd Floor, Maruthi Nilayam, 267, Domlur I Stage, Amarjyoti Layout",
           addressLocality: "Bengaluru",
           addressRegion: "Karnataka",
+          postalCode: "560071",
           addressCountry: "IN",
         },
         openingHoursSpecification: [
