@@ -609,7 +609,7 @@ export default function CartPage() {
                   </div>
                 )}
                 {!deliveryFeeLoading && (
-                  <p className="font-body text-[10px] text-stone/60">Free within 10 km from Domlur Kitchen.</p>
+                  <p className="font-body text-[10px] text-stone/60">Free within 5 km from Domlur Kitchen.</p>
                 )}
                 <div className="border-t border-black/6 pt-2.5 flex items-center justify-between">
                   <span className="font-body text-[14px] font-bold text-ink">To pay</span>
@@ -966,7 +966,7 @@ export default function CartPage() {
                       )}
                       {!deliveryFeeLoading && (
                         <p className="font-body text-[10px] text-stone/70">
-                          Delivery is free within 10 km. If delivery is charged, your address is beyond 10 km from Domlur Kitchen.
+                          Delivery is free within 5 km. If delivery is charged, your address is beyond 5 km from Domlur Kitchen.
                         </p>
                       )}
                     </div>

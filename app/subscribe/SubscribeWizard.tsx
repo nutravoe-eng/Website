@@ -998,7 +998,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
               )}
               {planCards}
               <p className="text-center font-body text-[11px] leading-relaxed text-stone/80 pb-2">
-                Delivery is free within 10 km. Extra delivery charges apply beyond 10 km.
+                Delivery is free within 5 km. Extra delivery charges apply beyond 5 km.
               </p>
             </div>
             {/* Footer CTA */}
@@ -1041,7 +1041,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
               {planCards}
             </div>
             <p className="mb-8 text-center font-body text-[11px] leading-relaxed text-stone/80 md:text-[12px]">
-              Delivery is free within 10 km. Extra delivery charges apply beyond 10 km.
+              Delivery is free within 5 km. Extra delivery charges apply beyond 5 km.
             </p>
             <div className="flex justify-end">
               <button
@@ -1439,7 +1439,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
               {currentPlan.ratePremium != null && currentPlan.ratePremium > 0
                 ? `Standard bowls ${formatCurrency(currentPlan.perBowl)}/bowl; premium ${formatCurrency(currentPlan.ratePremium)}/bowl. `
                 : `Starts from ${formatCurrency(currentPlan.perBowl)} per bowl. `}
-              Delivery is free within 10 km; beyond 10 km, delivery charges are added based on distance.
+              Delivery is free within 5 km; beyond 5 km, delivery charges are added based on distance.
             </p>
           </div>
           <StepIndicator />
@@ -2084,7 +2084,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
                 )}
               </div>
             )}
-            {scenario !== 'D' && <p className="font-body text-[10px] text-stone/70 mb-2">Delivery is free within 10 km. If your address is beyond 10 km, the additional delivery fee is shown above.</p>}
+            {scenario !== 'D' && <p className="font-body text-[10px] text-stone/70 mb-2">Delivery is free within 5 km. If your address is beyond 5 km, the additional delivery fee is shown above.</p>}
             <div className="flex items-center justify-between">
               <span className="font-body text-sm font-bold uppercase tracking-wider text-ink/70">Week 1</span>
               <span className="font-display text-2xl font-medium text-sage-dark">{formatCurrency(totalWeeklyPrice)}</span>
