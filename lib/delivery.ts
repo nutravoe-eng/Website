@@ -63,9 +63,9 @@ export function getNearestHub(
 export interface DeliveryPriceBreakdown {
   distanceKm: number;
   ceilKm: number;
-  totalCostRs: number; // ceil(km) × 10
-  nutravoeCoverageRs: number; // ceil(km) × 5 — Nutravoe covers half
-  customerPaysRs: number; // ceil(km) × 5
+  totalCostRs: number; // ceil(km) × 11
+  nutravoeCoverageRs: number; // 50% of totalCostRs (rounded)
+  customerPaysRs: number; // 50% of totalCostRs (remainder, so the two always sum to totalCostRs)
 }
 
 /** Full pricing from a distance in km (road or straight-line). */
@@ -78,15 +78,16 @@ export function deliveryPricingFromDistanceKm(
     return { isFree: true, distanceKm };
   }
   const ceilKm = Math.ceil(distanceKm);
-  const totalCostRs = ceilKm * 10;
-  const half = ceilKm * 5;
+  const totalCostRs = ceilKm * 11;
+  const customerPaysRs = Math.round(totalCostRs / 2);
+  const nutravoeCoverageRs = totalCostRs - customerPaysRs;
   return {
     isFree: false,
     distanceKm,
     ceilKm,
     totalCostRs,
-    nutravoeCoverageRs: half,
-    customerPaysRs: half,
+    nutravoeCoverageRs,
+    customerPaysRs,
   };
 }
 
@@ -96,11 +97,16 @@ export function deliveryPricingFromDistanceKm(
  */
 export function subscriptionWeeklyFeeFromDistanceKm(distanceKm: number, uniqueDeliveryDays: number): number {
   if (distanceKm <= FREE_ZONE_RADIUS_KM) return 0;
-  return Math.ceil(distanceKm) * 5 * uniqueDeliveryDays;
+  const ceilKm = Math.ceil(distanceKm);
+  const totalCostRs = ceilKm * 11;
+  const customerPaysRs = Math.round(totalCostRs / 2);
+  return customerPaysRs * uniqueDeliveryDays;
 }
 
 /** Single-order delivery fee from km (0 in free zone). */
 export function deliveryFeeFromDistanceKm(distanceKm: number): number {
   if (distanceKm <= FREE_ZONE_RADIUS_KM) return 0;
-  return Math.ceil(distanceKm) * 5;
+  const ceilKm = Math.ceil(distanceKm);
+  const totalCostRs = ceilKm * 11;
+  return Math.round(totalCostRs / 2);
 }

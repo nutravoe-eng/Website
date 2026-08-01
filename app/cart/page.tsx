@@ -248,12 +248,13 @@ export default function CartPage() {
           setDeliveryDistanceKm(guestCtx.distanceKm);
           if (guestCtx.deliveryFee > 0) {
             const ceilKm = Math.ceil(guestCtx.distanceKm);
+            const totalCostRs = ceilKm * 11;
             setDeliveryBreakdown({
               isFree: false,
               distanceKm: guestCtx.distanceKm,
               ceilKm,
-              totalCostRs: ceilKm * 10,
-              nutravoeCoverageRs: ceilKm * 5,
+              totalCostRs,
+              nutravoeCoverageRs: totalCostRs - guestCtx.deliveryFee,
               customerPaysRs: guestCtx.deliveryFee,
             });
           } else {
