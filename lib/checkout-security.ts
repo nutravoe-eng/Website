@@ -67,7 +67,7 @@ async function resolveAddressCoordinates(address: AddressForPricing): Promise<{ 
  * Only trusts a cached `distance_km` when `distance_source === "road"` (Google Maps driving
  * distance). If the cached value came from a haversine fallback ("straight_line"), it
  * under-estimates the actual road distance, which can suppress the delivery fee for
- * addresses near the 10 km free-zone boundary. In that case we re-attempt routing; if it
+ * addresses near the 5 km free-zone boundary. In that case we re-attempt routing; if it
  * still fails we keep the haversine value rather than blocking checkout.
  */
 async function resolveDistanceKmForDeliveryPricing(

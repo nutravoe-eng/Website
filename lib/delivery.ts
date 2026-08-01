@@ -1,5 +1,5 @@
 export const DELIVERY_FEE_RS = 60;
-export const FREE_ZONE_RADIUS_KM = 10;
+export const FREE_ZONE_RADIUS_KM = 5;
 
 export interface Hub {
   id: string;
