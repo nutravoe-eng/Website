@@ -28,13 +28,8 @@ export const DEFAULT_DELIVERY_POLICY: DeliveryPolicy = {
 export const BUSINESS_HOURS = {
   firstSlotHour: 7,
   lastHourExclusive: 19,
-  earlyMorningFirstHour: 7,
-  earlyMorningLastBookableHour: 9,
-  orderEarlyMorningByHour: 23,
-  tomorrowLateEarliestHour: 10,
   displayWindow: "7 AM–7 PM",
   displayWindowPlain: "7 AM-7 PM",
-  earlyMorningWindow: "7–10 AM",
   sameDayCutoffDisplay: "7 PM",
 } as const;
 
@@ -43,9 +38,7 @@ export const DELIVERY_POLICY_CONSTANTS = {
   sameDayCutoffHour: BUSINESS_HOURS.lastHourExclusive,
   firstSameDaySlotHour: BUSINESS_HOURS.firstSlotHour,
   lastDeliveryHour: BUSINESS_HOURS.lastHourExclusive,
-  tomorrowEarlySlotCutoffHour: BUSINESS_HOURS.orderEarlyMorningByHour,
   tomorrowEarliestHour: BUSINESS_HOURS.firstSlotHour,
-  tomorrowLateEarliestHour: BUSINESS_HOURS.tomorrowLateEarliestHour,
 };
 
 const SLOT_HOUR_COUNT = BUSINESS_HOURS.lastHourExclusive - BUSINESS_HOURS.firstSlotHour;
@@ -145,10 +138,7 @@ export function generateScheduledSlotsWithOptions(
     }
   }
 
-  const tomorrowStartHour =
-    currentHour >= DELIVERY_POLICY_CONSTANTS.tomorrowEarlySlotCutoffHour
-      ? DELIVERY_POLICY_CONSTANTS.tomorrowLateEarliestHour
-      : DELIVERY_POLICY_CONSTANTS.tomorrowEarliestHour;
+  const tomorrowStartHour = DELIVERY_POLICY_CONSTANTS.tomorrowEarliestHour;
   for (let hour = tomorrowStartHour; hour < DELIVERY_POLICY_CONSTANTS.lastDeliveryHour; hour += 1) {
     if (!options.ignoreBlackout && isBlockedByBlackout(policy, tomorrowIso, hour)) continue;
     if (!options.ignoreDisabled && isDisabled(policy, tomorrowIso, hour)) continue;
@@ -223,23 +213,7 @@ export function formatCalendarSlotLabel(dateIso: string, startHour: number): str
   return `${formatDateLabel(dateIso)} · ${fmtHour(startHour)} – ${fmtHour(startHour + 1)}`;
 }
 
-/**
- * 7–10 AM slots (hours 7–9) for delivery date D can only be booked on or before 11:00 PM
- * IST on D−1 (night before). After that, those hours for D are closed even if "today" at 1 AM.
- */
-function isEarlyMorningSlotBookableForDate(dateIso: string, startHour24: number, nowIst: Date): boolean {
-  if (
-    startHour24 < BUSINESS_HOURS.earlyMorningFirstHour ||
-    startHour24 > BUSINESS_HOURS.earlyMorningLastBookableHour
-  ) {
-    return true;
-  }
-  const prev = addDays(dateIso, -1);
-  const deadlineMs = new Date(`${prev}T23:00:00+05:30`).getTime();
-  return nowIst.getTime() <= deadlineMs;
-}
-
-/** Available hours (7–14) for a given date, respecting policy blackouts, same-day hour cutoff, and 7–10 AM “order by 11 PM previous day” rule. */
+/** Available hours (7–18) for a given date, respecting policy blackouts and the same-day hour cutoff. */
 export function getSlotAvailabilityForDate(
   policy: DeliveryPolicy,
   dateIso: string,
@@ -255,9 +229,6 @@ export function getSlotAvailabilityForDate(
   const isToday = dateIso === todayIso;
   const cutoff = isToday ? getIstHour(nowIst) + 1 : BUSINESS_HOURS.firstSlotHour;
   return Array.from({ length: SLOT_HOUR_COUNT }, (_, i) => i + BUSINESS_HOURS.firstSlotHour).map((hour) => {
-    if (!isEarlyMorningSlotBookableForDate(dateIso, hour, nowIst)) {
-      return { hour, available: false };
-    }
     const available =
       hour >= (isToday ? Math.max(BUSINESS_HOURS.firstSlotHour, cutoff) : BUSINESS_HOURS.firstSlotHour) &&
       !isBlockedByBlackout(policy, dateIso, hour) &&

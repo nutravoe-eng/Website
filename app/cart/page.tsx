@@ -1320,7 +1320,7 @@ export default function CartPage() {
               <div className="mx-3 mt-2.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 flex gap-2 items-start shrink-0">
                 <svg className="text-amber-500 shrink-0 mt-0.5" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
                 <p className="font-body text-[11px] text-amber-800 leading-relaxed">
-                  <strong>7–10 AM deliveries</strong> require ordering by <strong>11 PM</strong> the night before. Same-day closes at <strong>7 PM</strong>.
+                  Same-day orders close at <strong>7 PM</strong>. Next-day slots open from <strong>7 AM</strong>.
                 </p>
               </div>
 
