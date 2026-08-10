@@ -44,21 +44,43 @@ export default function MenuClient({
   }, [activeTag, activeTier, bowls]);
 
   const groupedByCategory = useMemo(() => {
-    const groups = new Map<string, { title: string; displayOrder: number; bowls: Bowl[] }>();
+    const groups = new Map<string, { title: string; slug: string; displayOrder: number; bowls: Bowl[] }>();
     const UNCATEGORIZED_KEY = "__uncategorized";
 
     for (const bowl of filtered) {
       const key = bowl.category?.slug ?? UNCATEGORIZED_KEY;
       const title = bowl.category?.title ?? "More Bowls";
+      const slug = bowl.category?.slug ?? UNCATEGORIZED_KEY;
       const displayOrder = bowl.category?.displayOrder ?? Number.MAX_SAFE_INTEGER;
       if (!groups.has(key)) {
-        groups.set(key, { title, displayOrder, bowls: [] });
+        groups.set(key, { title, slug, displayOrder, bowls: [] });
       }
       groups.get(key)!.bowls.push(bowl);
     }
 
     return Array.from(groups.values()).sort((a, b) => a.displayOrder - b.displayOrder);
   }, [filtered]);
+
+  const allCategories = useMemo(() => {
+    const seen = new Map<string, { title: string; slug: string; displayOrder: number }>();
+    for (const bowl of bowls) {
+      if (!bowl.category) continue;
+      const { slug, title, displayOrder } = bowl.category;
+      if (!seen.has(slug)) {
+        seen.set(slug, { title, slug, displayOrder: displayOrder ?? Number.MAX_SAFE_INTEGER });
+      }
+    }
+    return Array.from(seen.values()).sort((a, b) => a.displayOrder - b.displayOrder);
+  }, [bowls]);
+
+  const scrollToCategory = (slug: string) => {
+    const el = document.getElementById(`category-${slug}`);
+    if (el) {
+      const yOffset = -120; // account for sticky header + filter bar
+      const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }
+  };
 
   return (
     <>
@@ -82,6 +104,23 @@ export default function MenuClient({
           </div>
         </div>
       </section>
+
+      {allCategories.length > 0 && (
+        <section className="border-b border-ink/8 px-5 py-3 md:px-6 lg:px-16">
+          <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto pb-1">
+            {allCategories.map((cat) => (
+              <button
+                key={cat.slug}
+                type="button"
+                onClick={() => scrollToCategory(cat.slug)}
+                className="shrink-0 rounded-full border border-sage/30 bg-sage/8 px-3.5 py-1.5 font-body text-[9px] font-bold uppercase tracking-[0.14em] text-sage-dark transition-colors hover:border-sage hover:bg-sage/15"
+              >
+                {cat.title}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="sticky top-16 z-40 border-b border-ink/8 bg-cream/95 px-5 py-2.5 backdrop-blur-sm md:px-6 lg:px-16">
         <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto pb-1">
@@ -142,7 +181,7 @@ export default function MenuClient({
           ) : (
             <div className="flex flex-col gap-10 md:gap-14">
               {groupedByCategory.map((group) => (
-                <div key={group.title}>
+                <div key={group.title} id={`category-${group.slug}`} className="scroll-mt-32">
                   <h2 className="mb-4 font-display text-[22px] italic text-ink md:mb-6 md:text-[32px]">
                     {group.title}
                   </h2>
