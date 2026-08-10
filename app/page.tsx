@@ -4,6 +4,12 @@ import BowlCard from "@/components/BowlCard";
 import MobileBowlCard from "@/components/MobileBowlCard";
 import TestimonialsCarousel from "@/components/TestimonialsCarousel";
 import DeliveryMarquee from "@/components/DeliveryMarquee";
+import HeroImageScroller from "@/components/HeroImageScroller";
+
+const HERO_IMAGES = [
+  { src: "/hero-scroll-1.png", alt: "Fresh yoghurt bowl with dragon fruit, blueberries, pomegranate, mango, and granola" },
+  { src: "/hero-scroll-2.png", alt: "Fresh ingredients used in Nutravoe bowls: yoghurt, berries, mango, nuts, and honey" },
+];
 
 export default async function HomePage() {
   const bowls = await getAllBowls();
@@ -15,16 +21,7 @@ export default async function HomePage() {
         <div className="px-4 md:hidden">
           <div className="relative overflow-hidden rounded-[28px] shadow-[0_24px_60px_rgba(62,48,32,0.18)]">
             <div className="relative aspect-[1.18/1] min-h-[320px]">
-              <video
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="h-full w-full object-cover"
-                poster="/hero-image.png"
-              >
-                <source src="/hero-vid-slow.mp4" type="video/mp4" />
-              </video>
+              <HeroImageScroller images={HERO_IMAGES} intervalMs={3000} priority />
               <div
                 className="absolute inset-0"
                 style={{
@@ -33,12 +30,6 @@ export default async function HomePage() {
                 }}
               />
               <div className="absolute inset-x-0 bottom-0 p-4">
-                <p
-                  className="mb-2.5 font-body text-[9px] font-medium tracking-[0.22em] text-sage-light"
-                  style={{ textShadow: "0 3px 12px rgba(0,0,0,0.42)" }}
-                >
-                  Bangalore · Fresh Daily · Delivered 7 AM-7 PM
-                </p>
                 <h1
                   className="mb-3 font-display text-white"
                   style={{
@@ -47,18 +38,17 @@ export default async function HomePage() {
                     textShadow: "0 8px 28px rgba(0,0,0,0.38)",
                   }}
                 >
-                  Wholesome,
+                  Wholesome
                   <br />
-                  nourishin&apos;
+                  Nourishin&apos;
                   <br />
-                  <em className="text-sage-light">yoghurt bowls</em>
+                  <em className="text-sage-light">greek yogurt bowls</em>
                 </h1>
                 <p
                   className="mb-4 max-w-[15.5rem] font-body text-[11px] font-light leading-relaxed text-white/95"
                   style={{ textShadow: "0 2px 10px rgba(0,0,0,0.42)" }}
                 >
-                  High protein, high fibre, gut-friendly, no added sugar - a complete meal for busy
-                  days.
+                  Protein milk and vegan options available
                 </p>
                 <div className="flex flex-wrap items-center gap-2.5">
                   <Link
@@ -81,16 +71,7 @@ export default async function HomePage() {
 
         <div className="relative hidden min-h-[400px] flex-col md:flex lg:min-h-[440px]">
           <div className="absolute inset-x-0 bottom-0 top-[-64px] z-[-1] overflow-hidden" aria-hidden="true">
-            <video
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="h-full w-full object-cover"
-              poster="/hero-image.png"
-            >
-              <source src="/hero-vid-slow.mp4" type="video/mp4" />
-            </video>
+            <HeroImageScroller images={HERO_IMAGES} intervalMs={3000} priority />
             <div
               className="absolute inset-0"
               style={{
@@ -109,23 +90,18 @@ export default async function HomePage() {
           <div className="relative z-10 flex min-h-0 flex-1 flex-col justify-end px-6 pb-24 pt-10 lg:px-16">
             <div className="mx-auto w-full max-w-7xl">
               <div className="max-w-2xl">
-                <p
-                  className="mb-5 font-body text-[11px] font-medium tracking-[0.25em] text-sage-light"
-                  style={{ textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}
-                >
-                  Bangalore · Fresh Daily · Delivered 7 AM–7 PM
-                </p>
                 <h1
                   className="mb-7 font-display text-white"
                   style={{ fontSize: "clamp(46px, 6vw, 76px)", lineHeight: "1.05" }}
                 >
-                  Wholesome, nourishin&apos;
+                  Wholesome
                   <br />
-                  <em className="text-sage-light">yoghurt bowls</em>
+                  Nourishin&apos;
+                  <br />
+                  <em className="text-sage-light">greek yogurt bowls</em>
                 </h1>
                 <p className="mb-10 max-w-md font-body text-[15px] font-light leading-relaxed text-white/90">
-                  High protein, high fibre, gut-friendly, no added sugar — a complete meal delivered
-                  to your doorstep whenever you need one.
+                  Protein milk and vegan options available
                 </p>
                 <div className="flex flex-wrap items-center gap-4">
                   <Link
