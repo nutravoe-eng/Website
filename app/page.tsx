@@ -1,9 +1,19 @@
 import Link from "next/link";
+import Image from "next/image";
 import { getAllBowls } from "@/lib/sanity";
 import TestimonialsCarousel from "@/components/TestimonialsCarousel";
 import DeliveryMarquee from "@/components/DeliveryMarquee";
 import HeroImageScroller from "@/components/HeroImageScroller";
 import HomeMenuCard from "@/components/HomeMenuCard";
+
+const SEEN_AROUND_IMAGES = [
+  "/seen-around-1.webp",
+  "/seen-around-2.webp",
+  "/seen-around-3.webp",
+  "/seen-around-4.webp",
+  "/seen-around-5.webp",
+  "/seen-around-6.webp",
+];
 
 const HERO_IMAGES = [
   { src: "/hero-scroll-1.png", alt: "Fresh yoghurt bowl with dragon fruit, blueberries, pomegranate, mango, and granola" },
@@ -268,6 +278,38 @@ export default async function HomePage() {
 
 
       <TestimonialsCarousel />
+
+      <section className="px-5 py-14 md:px-6 md:py-24 lg:px-16">
+        <div className="mx-auto max-w-7xl text-center">
+          <h2
+            className="font-display italic text-ink"
+            style={{ fontSize: "clamp(22px, 3.2vw, 38px)" }}
+          >
+            You&apos;ve probably seen us around...
+          </h2>
+          <p className="mx-auto mt-2 max-w-md font-body text-[12.5px] leading-relaxed text-stone md:text-sm">
+            At gyms, studios, and events across Bangalore.
+          </p>
+
+          <div className="-mx-5 mt-8 flex snap-x gap-3 overflow-x-auto px-5 pb-2 md:mx-0 md:mt-10 md:grid md:grid-cols-6 md:gap-4 md:overflow-visible md:px-0">
+            {SEEN_AROUND_IMAGES.map((src, i) => (
+              <div
+                key={src}
+                className="relative aspect-square w-[150px] shrink-0 snap-start overflow-hidden rounded-2xl md:w-auto"
+              >
+                <Image
+                  src={src}
+                  alt="Nutravoe at a Bangalore gym, studio, or brand event"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 150px, 16vw"
+                  priority={i === 0}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <section className="bg-cream px-5 py-16 text-center md:px-6 md:py-28 lg:px-16">
         <div className="mx-auto max-w-3xl">
