@@ -272,23 +272,25 @@ export default async function HomePage() {
       <section className="bg-cream px-5 py-16 text-center md:px-6 md:py-28 lg:px-16">
         <div className="mx-auto max-w-3xl">
           <p className="mb-8 font-body text-xs font-medium uppercase tracking-[0.22em] text-stone">
-            Delivered 7 AM-7 PM · Bangalore
+            The Nutravoe Promise
           </p>
-          <h2
+          <p
             className="mb-10 font-display text-ink"
-            style={{ fontSize: "clamp(28px, 4vw, 60px)", lineHeight: "1.2" }}
+            style={{ fontSize: "clamp(19px, 2.4vw, 28px)", lineHeight: "1.7" }}
           >
-            A proper meal.
+            Every Nutravoe bowl is built from whole-food ingredients: real fruit (never pur&eacute;es
+            or concentrate), live-culture yoghurt, and nuts and seeds we portion by hand. No
+            preservatives. No artificial anything. Nothing we wouldn&apos;t eat ourselves.
             <br />
-            <strong className="font-medium italic text-sage-dark">
-              At your doorstep, whenever you need one.
-            </strong>
-          </h2>
+            <br />
+            We make in small batches and deliver fresh across Bangalore &mdash; because a bowl this
+            good shouldn&apos;t sit on a shelf.
+          </p>
           <Link
             href="/menu"
             className="inline-block btn-sage px-4 py-2.5 text-[10px] tracking-[0.18em] shadow-[0_4px_20px_rgba(196,165,116,0.35)] transition-all duration-300 hover:shadow-[0_4px_25px_rgba(196,165,116,0.55)] md:px-6 md:py-3.5 md:text-[11px] md:tracking-widest"
           >
-            Order Now →
+            Order Now &rarr;
           </Link>
         </div>
       </section>
