@@ -34,11 +34,6 @@ const commitments = [
   },
   {
     icon: "05",
-    title: "Direct and Personal",
-    body: "You message us on WhatsApp. We confirm, prepare, and deliver. No middlemen, no algorithms.",
-  },
-  {
-    icon: "06",
     title: "Built for Habit",
     body: "The goal is a subscription you look forward to. A wholesome ritual you can count on.",
   },
@@ -72,7 +67,6 @@ export default function AboutPage() {
             <p className="max-w-lg font-body text-[13px] font-light leading-relaxed text-stone md:text-[15px] md:leading-loose">
               So she built one. Nutravoe is her answer to the gap: a premium daily ritual,
               made by hand in small batches each day and delivered to your doorstep.
-              No apps, no aggregators, just you and a bowl worth looking forward to.
             </p>
           </div>
           <div className="relative h-[280px] overflow-hidden rounded-2xl md:h-[440px] md:rounded-sm">
