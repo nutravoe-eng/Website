@@ -54,7 +54,7 @@ export async function findAccountsForPhone(phone10: string): Promise<CandidateAc
 
   const candidates: CandidateAccount[] = [];
 
-  for (const row of byId.values()) {
+  for (const row of Array.from(byId.values())) {
     const { data: authResult } = await adminSupabase.auth.admin.getUserById(row.id);
     const authUser = authResult?.user;
     if (!authUser) continue;
