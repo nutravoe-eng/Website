@@ -240,7 +240,7 @@ export default function Navbar() {
             <div className="relative">
               {!user ? (
                 <Link
-                  href="/signin"
+                  href="/login"
                   className={`hidden md:flex items-center gap-2 font-body text-[13px] font-medium transition-colors cursor-pointer ${
                     isDark ? "text-stone hover:text-sage-dark" : "text-white/85 hover:text-white drop-shadow-md"
                   }`}
@@ -475,7 +475,7 @@ export default function Navbar() {
                       </Link>
                     )
                   ) : (
-                    <Link href="/signin" onClick={() => setShowLocationModal(false)} className="w-full flex justify-center items-center bg-terracotta hover:bg-terracotta/90 text-white font-body text-[13px] font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm cursor-pointer border border-black/5">
+                    <Link href="/login" onClick={() => setShowLocationModal(false)} className="w-full flex justify-center items-center bg-terracotta hover:bg-terracotta/90 text-white font-body text-[13px] font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm cursor-pointer border border-black/5">
                       Sign in to see your addresses
                     </Link>
                   )}
