@@ -73,7 +73,7 @@ function ResetPasswordForm() {
     setSuccess(true);
     
     setTimeout(() => {
-      router.push("/signin");
+      router.push("/login");
     }, 4000);
   };
 
@@ -83,7 +83,7 @@ function ResetPasswordForm() {
         {!success ? (
           <>
             <div className="flex-none flex items-center px-5 pt-4 pb-2">
-              <Link href="/signin" aria-label="Back to sign in" className="flex items-center justify-center h-10 w-10 -ml-2 rounded-full text-ink transition-colors hover:bg-black/5">
+              <Link href="/login" aria-label="Back to sign in" className="flex items-center justify-center h-10 w-10 -ml-2 rounded-full text-ink transition-colors hover:bg-black/5">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m15 18-6-6 6-6" />
                 </svg>
