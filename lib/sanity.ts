@@ -352,7 +352,8 @@ export async function getAllBowls(): Promise<Bowl[]> {
     displayOrder,
     ingredients,
     nutrition,
-    customizableIngredients
+    customizableIngredients,
+    "category": category->{title, "slug": slug.current, displayOrder}
   }`;
 
   try {
@@ -395,7 +396,8 @@ export async function getBowlBySlug(slug: string): Promise<Bowl | null> {
     displayOrder,
     ingredients,
     nutrition,
-    customizableIngredients
+    customizableIngredients,
+    "category": category->{title, "slug": slug.current, displayOrder}
   }`;
 
   try {
