@@ -2,18 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Bowl, BowlTag } from "@/types";
+import { Bowl } from "@/types";
 import BowlCard from "@/components/BowlCard";
 import MobileBowlCard from "@/components/MobileBowlCard";
 import { getWhatsAppHref } from "@/lib/contact";
-import { MENU_TIER_OPTIONS, resolveBowlTier } from "@/lib/mobile-shell";
-
-const TAG_OPTIONS: { label: string; value: BowlTag | "all" }[] = [
-  { label: "All", value: "all" },
-  { label: "Bestseller", value: "bestseller" },
-  { label: "High Protein", value: "high-protein" },
-  { label: "Seasonal", value: "seasonal" },
-];
 
 const NUTRITION_SNAPSHOT_ROWS = [
   { name: "Tropical Mango", calories: "510 kcal", protein: "20 g", carbs: "58 g", fibre: "11 g", healthyFats: "18 g" },
@@ -23,25 +15,25 @@ const NUTRITION_SNAPSHOT_ROWS = [
   { name: "Very Nutty", calories: "550 kcal", protein: "21 g", carbs: "67 g", fibre: "14 g", healthyFats: "30 g" },
 ] as const;
 
-export default function MenuClient({
-  bowls,
-  initialTier = "all",
-}: {
-  bowls: Bowl[];
-  initialTier?: "standard" | "premium" | "all";
-}) {
-  const [activeTier, setActiveTier] = useState<"standard" | "premium" | "all">(
-    initialTier,
-  );
-  const [activeTag, setActiveTag] = useState<BowlTag | "all">("all");
+export default function MenuClient({ bowls }: { bowls: Bowl[] }) {
+  const [activeCategory, setActiveCategory] = useState<string>("all");
+
+  const allCategories = useMemo(() => {
+    const seen = new Map<string, { title: string; slug: string; displayOrder: number }>();
+    for (const bowl of bowls) {
+      if (!bowl.category) continue;
+      const { slug, title, displayOrder } = bowl.category;
+      if (!seen.has(slug)) {
+        seen.set(slug, { title, slug, displayOrder: displayOrder ?? Number.MAX_SAFE_INTEGER });
+      }
+    }
+    return Array.from(seen.values()).sort((a, b) => a.displayOrder - b.displayOrder);
+  }, [bowls]);
 
   const filtered = useMemo(() => {
-    return bowls.filter((bowl) => {
-      const tierMatch = activeTier === "all" ? true : resolveBowlTier(bowl) === activeTier;
-      const tagMatch = activeTag === "all" ? true : bowl.tags?.includes(activeTag);
-      return tierMatch && tagMatch;
-    });
-  }, [activeTag, activeTier, bowls]);
+    if (activeCategory === "all") return bowls;
+    return bowls.filter((bowl) => bowl.category?.slug === activeCategory);
+  }, [activeCategory, bowls]);
 
   const groupedByCategory = useMemo(() => {
     const groups = new Map<string, { title: string; slug: string; displayOrder: number; bowls: Bowl[] }>();
@@ -61,27 +53,6 @@ export default function MenuClient({
     return Array.from(groups.values()).sort((a, b) => a.displayOrder - b.displayOrder);
   }, [filtered]);
 
-  const allCategories = useMemo(() => {
-    const seen = new Map<string, { title: string; slug: string; displayOrder: number }>();
-    for (const bowl of bowls) {
-      if (!bowl.category) continue;
-      const { slug, title, displayOrder } = bowl.category;
-      if (!seen.has(slug)) {
-        seen.set(slug, { title, slug, displayOrder: displayOrder ?? Number.MAX_SAFE_INTEGER });
-      }
-    }
-    return Array.from(seen.values()).sort((a, b) => a.displayOrder - b.displayOrder);
-  }, [bowls]);
-
-  const scrollToCategory = (slug: string) => {
-    const el = document.getElementById(`category-${slug}`);
-    if (el) {
-      const yOffset = -120; // account for sticky header + filter bar
-      const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
-      window.scrollTo({ top: y, behavior: "smooth" });
-    }
-  };
-
   return (
     <>
       <section className="border-b border-ink/8 px-5 pb-5 pt-24 md:px-6 md:pb-12 md:pt-28 lg:px-16">
@@ -95,7 +66,7 @@ export default function MenuClient({
                 <em className="text-sage">kind of craving.</em>
               </h1>
               <p className="mt-2 max-w-md font-body text-[11px] leading-relaxed text-stone md:hidden">
-                Browse everyday Premium bowls or switch to Exotic bowls without leaving the same mobile list.
+                Pick a category below to jump straight to what you&apos;re craving.
               </p>
             </div>
             <p className="hidden max-w-xs font-body text-sm leading-relaxed text-stone md:block">
@@ -105,65 +76,31 @@ export default function MenuClient({
         </div>
       </section>
 
-      {allCategories.length > 0 && (
-        <section className="border-b border-ink/8 px-5 py-3 md:px-6 lg:px-16">
-          <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto pb-1">
-            {allCategories.map((cat) => (
-              <button
-                key={cat.slug}
-                type="button"
-                onClick={() => scrollToCategory(cat.slug)}
-                className="shrink-0 rounded-full border border-sage/30 bg-sage/8 px-3.5 py-1.5 font-body text-[9px] font-bold uppercase tracking-[0.14em] text-sage-dark transition-colors hover:border-sage hover:bg-sage/15"
-              >
-                {cat.title}
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="sticky top-16 z-40 border-b border-ink/8 bg-cream/95 px-5 py-2.5 backdrop-blur-sm md:px-6 lg:px-16">
-        <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto pb-1">
+      <section className="sticky top-16 z-40 border-b border-ink/8 bg-cream/95 px-5 py-3.5 backdrop-blur-sm md:px-6 lg:px-16">
+        <div className="mx-auto flex max-w-7xl gap-2.5 overflow-x-auto pb-1">
           <button
             type="button"
-            onClick={() => {
-              setActiveTier("all");
-              setActiveTag("all");
-            }}
-            className={`shrink-0 rounded-full border px-3 py-1.5 font-body text-[9px] font-bold uppercase tracking-[0.14em] transition-colors ${
-              activeTier === "all"
+            onClick={() => setActiveCategory("all")}
+            className={`shrink-0 rounded-full border-2 px-5 py-2.5 font-body text-[11px] font-bold uppercase tracking-[0.14em] transition-colors ${
+              activeCategory === "all"
                 ? "border-ink bg-ink text-white"
-                : "border-black/10 bg-white text-stone hover:border-ink/25 hover:text-ink"
+                : "border-black/12 bg-white text-ink hover:border-ink/40"
             }`}
           >
-            All bowls
+            All
           </button>
-          {MENU_TIER_OPTIONS.map((tier) => (
+          {allCategories.map((cat) => (
             <button
-              key={tier.key}
+              key={cat.slug}
               type="button"
-              onClick={() => setActiveTier(tier.key)}
-              className={`shrink-0 rounded-full border px-3 py-1.5 font-body text-[9px] font-bold uppercase tracking-[0.14em] transition-colors ${
-                activeTier === tier.key
-                  ? "border-ink bg-ink text-white"
-                  : "border-black/10 bg-white text-stone hover:border-ink/25 hover:text-ink"
+              onClick={() => setActiveCategory(cat.slug)}
+              className={`shrink-0 rounded-full border-2 px-5 py-2.5 font-body text-[11px] font-bold uppercase tracking-[0.14em] transition-colors ${
+                activeCategory === cat.slug
+                  ? "border-sage bg-sage text-white"
+                  : "border-sage/30 bg-sage/8 text-sage-dark hover:border-sage hover:bg-sage/15"
               }`}
             >
-              {tier.label}
-            </button>
-          ))}
-          {TAG_OPTIONS.filter(({ value }) => value !== "all").map(({ label, value }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setActiveTag(value)}
-              className={`shrink-0 rounded-full border px-3 py-1.5 font-body text-[9px] font-bold uppercase tracking-[0.14em] transition-colors ${
-                activeTag === value
-                  ? "border-ink bg-ink text-white"
-                  : "border-black/10 bg-white text-stone hover:border-ink/25 hover:text-ink"
-              }`}
-            >
-              {label}
+              {cat.title}
             </button>
           ))}
         </div>
@@ -173,9 +110,9 @@ export default function MenuClient({
         <div className="mx-auto max-w-7xl">
           {filtered.length === 0 ? (
             <div className="rounded-2xl border border-black/6 bg-[#F9F8F6] px-6 py-16 text-center">
-              <p className="font-display text-2xl italic text-stone">No bowls match this combination yet.</p>
+              <p className="font-display text-2xl italic text-stone">No bowls in this category yet.</p>
               <p className="mt-2 font-body text-[13px] text-stone">
-                Try switching tiers or clearing the tag filter to browse the full menu.
+                Try another category or browse all bowls.
               </p>
             </div>
           ) : (
