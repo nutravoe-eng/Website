@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { sendOtp } from "@/lib/message-central";
+import { sendPhoneOtp } from "@/lib/message-central";
 
 export async function POST(req: NextRequest) {
   const limited = await enforceRateLimit(req, "auth-phone-send-otp", 5, 60);
@@ -19,15 +19,23 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { verificationId } = await sendOtp(phone);
+    const result = await sendPhoneOtp(phone);
+    if (result.error || !result.data) {
+      console.error("[send-otp] MC error:", result.error);
+      return NextResponse.json(
+        { error: result.error ?? "Couldn't send OTP right now. Please try again." },
+        { status: 502, headers: limited.headers }
+      );
+    }
 
     const cookieStore = await cookies();
     cookieStore.set(
       "phone_otp_session",
-      JSON.stringify({ phone, verificationId, issuedAt: Date.now() }),
+      JSON.stringify({ phone, verificationId: result.data, issuedAt: Date.now() }),
       {
         httpOnly: true,
-        secure: true,
+        // Secure cookies are dropped on http://localhost — only require HTTPS in production
+        secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 600, // 10 minutes
         path: "/",

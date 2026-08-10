@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 type Step = "phone" | "otp";
 
@@ -27,7 +28,7 @@ export default function PhoneOtpLogin({ redirectTo = "/account" }: { redirectTo?
 
   const digitsOnly = phone.replace(/\D/g, "");
   const isPhoneValid = digitsOnly.length === 10;
-  const isCodeValid = /^\d{4,8}$/.test(code);
+  const isCodeValid = /^\d{6}$/.test(code);
 
   async function sendOtp() {
     if (!isPhoneValid || loading) return;
@@ -66,13 +67,40 @@ export default function PhoneOtpLogin({ redirectTo = "/account" }: { redirectTo?
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         setError(data?.error || "Incorrect code. Please try again.");
+        setLoading(false);
         return;
       }
+
+      // Kundaligram-style session bridge (no redirect)
+      const supabase = createClient();
+      const { error: sessionError } = await supabase.auth.verifyOtp({
+        email: data.email,
+        token: data.otp,
+        type: "magiclink",
+      });
+
+      if (sessionError) {
+        setError(sessionError.message || "Couldn't sign you in. Please try again.");
+        setLoading(false);
+        return;
+      }
+
+      // Optional: mergedAccounts means we absorbed a duplicate phone-only account
+      if (typeof data?.mergedAccounts === "number" && data.mergedAccounts > 0) {
+        try {
+          sessionStorage.setItem(
+            "nutravoe_account_merged",
+            String(data.mergedAccounts)
+          );
+        } catch {
+          /* ignore */
+        }
+      }
+
       router.push(redirectTo);
       router.refresh();
     } catch {
       setError("Something went wrong. Please check your connection and try again.");
-    } finally {
       setLoading(false);
     }
   }
@@ -131,9 +159,9 @@ export default function PhoneOtpLogin({ redirectTo = "/account" }: { redirectTo?
             type="text"
             inputMode="numeric"
             autoComplete="one-time-code"
-            maxLength={8}
+            maxLength={6}
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
             onKeyDown={(e) => e.key === "Enter" && verifyOtp()}
             placeholder="123456"
             className="w-full rounded-xl border border-black/12 px-3.5 py-3 text-center font-body text-lg tracking-[0.3em] text-ink outline-none focus:border-sage"
