@@ -43,6 +43,23 @@ export default function MenuClient({
     });
   }, [activeTag, activeTier, bowls]);
 
+  const groupedByCategory = useMemo(() => {
+    const groups = new Map<string, { title: string; displayOrder: number; bowls: Bowl[] }>();
+    const UNCATEGORIZED_KEY = "__uncategorized";
+
+    for (const bowl of filtered) {
+      const key = bowl.category?.slug ?? UNCATEGORIZED_KEY;
+      const title = bowl.category?.title ?? "More Bowls";
+      const displayOrder = bowl.category?.displayOrder ?? Number.MAX_SAFE_INTEGER;
+      if (!groups.has(key)) {
+        groups.set(key, { title, displayOrder, bowls: [] });
+      }
+      groups.get(key)!.bowls.push(bowl);
+    }
+
+    return Array.from(groups.values()).sort((a, b) => a.displayOrder - b.displayOrder);
+  }, [filtered]);
+
   return (
     <>
       <section className="border-b border-ink/8 px-5 pb-5 pt-24 md:px-6 md:pb-12 md:pt-28 lg:px-16">
@@ -123,19 +140,27 @@ export default function MenuClient({
               </p>
             </div>
           ) : (
-            <>
-              <div className="md:hidden">
-                {filtered.map((bowl) => (
-                  <MobileBowlCard key={bowl._id} bowl={bowl} />
-                ))}
-              </div>
+            <div className="flex flex-col gap-10 md:gap-14">
+              {groupedByCategory.map((group) => (
+                <div key={group.title}>
+                  <h2 className="mb-4 font-display text-[22px] italic text-ink md:mb-6 md:text-[32px]">
+                    {group.title}
+                  </h2>
 
-              <div className="hidden grid-cols-1 gap-6 md:grid md:grid-cols-2 lg:grid-cols-3">
-                {filtered.map((bowl) => (
-                  <BowlCard key={bowl._id} bowl={bowl} />
-                ))}
-              </div>
-            </>
+                  <div className="md:hidden">
+                    {group.bowls.map((bowl) => (
+                      <MobileBowlCard key={bowl._id} bowl={bowl} />
+                    ))}
+                  </div>
+
+                  <div className="hidden grid-cols-1 gap-6 md:grid md:grid-cols-2 lg:grid-cols-3">
+                    {group.bowls.map((bowl) => (
+                      <BowlCard key={bowl._id} bowl={bowl} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </section>
