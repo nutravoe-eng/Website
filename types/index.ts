@@ -32,6 +32,11 @@ export interface Bowl {
   available: boolean;
   inStock?: boolean;
   displayOrder: number;
+  category?: {
+    title: string;
+    slug: string;
+    displayOrder?: number;
+  } | null;
   nutrition?: {
     calories: number;
     protein: number;
