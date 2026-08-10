@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { getAllBowls } from "@/lib/sanity";
-import BowlCard from "@/components/BowlCard";
-import MobileBowlCard from "@/components/MobileBowlCard";
 import TestimonialsCarousel from "@/components/TestimonialsCarousel";
 import DeliveryMarquee from "@/components/DeliveryMarquee";
 import HeroImageScroller from "@/components/HeroImageScroller";
+import HomeMenuCard from "@/components/HomeMenuCard";
 
 const HERO_IMAGES = [
   { src: "/hero-scroll-1.png", alt: "Fresh yoghurt bowl with dragon fruit, blueberries, pomegranate, mango, and granola" },
@@ -13,7 +12,7 @@ const HERO_IMAGES = [
 
 export default async function HomePage() {
   const bowls = await getAllBowls();
-  const featured = bowls.slice(0, 3);
+  const featured = bowls.slice(0, 6);
 
   return (
     <>
@@ -239,41 +238,34 @@ export default async function HomePage() {
 
       <DeliveryMarquee variant="dark" />
 
-      <section className="px-5 py-16 md:px-6 md:py-28 lg:px-16">
+      <section className="px-5 py-12 md:px-6 md:py-20 lg:px-16">
         <div className="mx-auto max-w-7xl">
-          <div className="mb-10 flex flex-col md:mb-16 md:flex-row md:items-end md:justify-between">
+          <div className="mb-6 flex items-end justify-between gap-4 md:mb-8">
             <div>
-              <p className="section-eyebrow mb-4">The Menu</p>
-              <h2 className="section-heading" style={{ fontSize: "clamp(26px, 4.5vw, 60px)" }}>
+              <h2 className="font-display text-ink" style={{ fontSize: "clamp(24px, 3.5vw, 40px)" }}>
                 Our menu.
-                <br />
-                <em className="text-sage">Curated with intention.</em>
               </h2>
+              <p className="mt-1 font-display italic text-sage" style={{ fontSize: "clamp(13px, 1.6vw, 18px)" }}>
+                20g+ protein. Gut friendly. Complete meal that keeps you full.
+              </p>
             </div>
-            <p className="mt-2 max-w-xs font-body text-[11px] leading-relaxed text-stone md:mt-0 md:text-right md:text-sm">
-              Made with real ingredients. Kept refrigerated. Best consumed within 24 hours.
-            </p>
-          </div>
-
-          <div className="md:hidden">
-            {featured.map((bowl) => (
-              <MobileBowlCard key={bowl._id} bowl={bowl} />
-            ))}
-          </div>
-
-          <div className="hidden gap-6 md:grid md:grid-cols-3">
-            {featured.map((bowl) => (
-              <BowlCard key={bowl._id} bowl={bowl} />
-            ))}
-          </div>
-
-          <div className="mt-12 text-center">
-            <Link href="/menu" className="btn-ghost">
-              See All Bowls →
+            <Link
+              href="/menu"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-black/12 bg-white px-4 py-2 font-body text-[11px] font-bold uppercase tracking-[0.1em] text-ink transition-colors hover:border-ink/30 md:px-5 md:py-2.5 md:text-[12px]"
+            >
+              View Menu
+              <span aria-hidden="true">&rarr;</span>
             </Link>
+          </div>
+
+          <div className="-mx-5 flex snap-x gap-3.5 overflow-x-auto px-5 pb-2 md:-mx-6 md:gap-5 md:px-6 lg:-mx-16 lg:px-16">
+            {featured.map((bowl) => (
+              <HomeMenuCard key={bowl._id} bowl={bowl} />
+            ))}
           </div>
         </div>
       </section>
+
 
       <TestimonialsCarousel />
 
