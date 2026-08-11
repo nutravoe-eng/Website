@@ -5,6 +5,7 @@ import { Bowl } from "@/types";
 import CustomizationModal from "./CustomizationModal";
 import RepeatCustomisationChoiceSheet from "./RepeatCustomisationChoiceSheet";
 import { useBowlOrderControls } from "@/lib/use-bowl-order-controls";
+import { priceUnitLabel } from "@/lib/price-unit-label";
 
 interface BowlCardProps {
   bowl: Bowl;
@@ -81,7 +82,9 @@ export default function BowlCard({ bowl }: BowlCardProps) {
           <div className="flex items-center justify-between">
             <span className="flex items-baseline gap-1">
               <span className="font-display text-[22px] text-sage-dark">&#8377; {bowl.price}</span>
-              <span className="font-body text-[12px] text-stone/60">/bowl</span>
+              {priceUnitLabel(bowl.category) ? (
+                <span className="font-body text-[12px] text-stone/60">{priceUnitLabel(bowl.category)}</span>
+              ) : null}
             </span>
 
             {bowl.inStock === false ? (
