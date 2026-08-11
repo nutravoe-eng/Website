@@ -18,6 +18,18 @@ export interface BowlPresetOptions {
   noSugar: boolean;
 }
 
+export interface BowlVariantOption {
+  name: string;
+  priceDelta: number;
+  isDefault?: boolean;
+}
+
+export interface BowlVariantGroup {
+  name: string;
+  required?: boolean;
+  options: BowlVariantOption[];
+}
+
 export interface Bowl {
   _id: string;
   name: string;
@@ -44,6 +56,8 @@ export interface Bowl {
   };
   ingredients?: string[];
   customizableIngredients?: BowlIngredient[];
+  /** Size/portion/style groups, e.g. an "Oats" group with "With Oats" / "No Oats" options. */
+  variants?: BowlVariantGroup[];
 }
 
 export type BowlTag = "bestseller" | "high-protein" | "seasonal";
