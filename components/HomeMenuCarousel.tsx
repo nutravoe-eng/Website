@@ -125,7 +125,7 @@ export default function HomeMenuCarousel({ bowls }: HomeMenuCarouselProps) {
   return (
     <div
       ref={rootRef}
-      className="relative"
+      className="group/carousel relative"
       onMouseEnter={() => {
         pauseAutoRef.current = true;
       }}
@@ -136,7 +136,7 @@ export default function HomeMenuCarousel({ bowls }: HomeMenuCarouselProps) {
       <button
         type="button"
         onClick={() => scrollByStep("left")}
-        className="absolute left-1 top-[84px] z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white text-ink shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-colors hover:border-ink/20 hover:bg-cream md:left-2 md:top-[110px] md:h-11 md:w-11"
+        className="absolute left-1 top-[84px] z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white text-ink shadow-[0_8px_24px_rgba(0,0,0,0.12)] opacity-0 pointer-events-none transition-opacity duration-200 hover:border-ink/20 hover:bg-cream md:left-2 md:top-[110px] md:flex md:h-11 md:w-11 md:group-hover/carousel:opacity-100 md:group-hover/carousel:pointer-events-auto md:focus-visible:opacity-100 md:focus-visible:pointer-events-auto"
         aria-label="Show previous bowls"
       >
         <ChevronIcon direction="left" />
@@ -145,7 +145,7 @@ export default function HomeMenuCarousel({ bowls }: HomeMenuCarouselProps) {
       <button
         type="button"
         onClick={() => scrollByStep("right")}
-        className="absolute right-1 top-[84px] z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white text-ink shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition-colors hover:border-ink/20 hover:bg-cream md:right-2 md:top-[110px] md:h-11 md:w-11"
+        className="absolute right-1 top-[84px] z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white text-ink shadow-[0_8px_24px_rgba(0,0,0,0.12)] opacity-0 pointer-events-none transition-opacity duration-200 hover:border-ink/20 hover:bg-cream md:right-2 md:top-[110px] md:flex md:h-11 md:w-11 md:group-hover/carousel:opacity-100 md:group-hover/carousel:pointer-events-auto md:focus-visible:opacity-100 md:focus-visible:pointer-events-auto"
         aria-label="Show next bowls"
       >
         <ChevronIcon direction="right" />
