@@ -29,9 +29,11 @@ function ChevronIcon({ direction }: { direction: "left" | "right" }) {
 }
 
 export default function HomeMenuCarousel({ bowls }: HomeMenuCarouselProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const activeIndexRef = useRef(0);
   const pauseAutoRef = useRef(false);
+  const inViewRef = useRef(true);
 
   const goTo = useCallback(
     (index: number) => {
@@ -40,7 +42,10 @@ export default function HomeMenuCarousel({ bowls }: HomeMenuCarouselProps) {
 
       const nextIndex = ((index % bowls.length) + bowls.length) % bowls.length;
       const target = track.children[nextIndex] as HTMLElement | undefined;
-      target?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+      if (!target) return;
+
+      // Scroll only the carousel track — never the page.
+      track.scrollTo({ left: target.offsetLeft - track.offsetLeft, behavior: "smooth" });
       activeIndexRef.current = nextIndex;
     },
     [bowls.length],
@@ -70,7 +75,7 @@ export default function HomeMenuCarousel({ bowls }: HomeMenuCarouselProps) {
       let closestDistance = Number.POSITIVE_INFINITY;
 
       children.forEach((child, index) => {
-        const distance = Math.abs(child.offsetLeft - trackLeft);
+        const distance = Math.abs(child.offsetLeft - track.offsetLeft - trackLeft);
         if (distance < closestDistance) {
           closestDistance = distance;
           closestIndex = index;
@@ -91,10 +96,24 @@ export default function HomeMenuCarousel({ bowls }: HomeMenuCarouselProps) {
   }, [bowls.length]);
 
   useEffect(() => {
+    const root = rootRef.current;
+    if (!root || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        inViewRef.current = entry?.isIntersecting ?? false;
+      },
+      { threshold: 0.2 },
+    );
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (bowls.length <= 1) return;
 
     const intervalId = window.setInterval(() => {
-      if (pauseAutoRef.current) return;
+      if (pauseAutoRef.current || !inViewRef.current) return;
       goTo(activeIndexRef.current + 1);
     }, AUTO_ADVANCE_MS);
 
@@ -105,6 +124,7 @@ export default function HomeMenuCarousel({ bowls }: HomeMenuCarouselProps) {
 
   return (
     <div
+      ref={rootRef}
       className="relative"
       onMouseEnter={() => {
         pauseAutoRef.current = true;
