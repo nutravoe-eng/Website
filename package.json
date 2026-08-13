@@ -10,6 +10,7 @@
     "normalize:subscription-bowl-slugs:apply": "node scripts/normalize-subscription-bowl-slugs.mjs --apply"
   },
   "dependencies": {
+    "@cashfreepayments/cashfree-js": "^1.0.7",
     "@googlemaps/js-api-loader": "^2.0.2",
     "@next/third-parties": "^16.2.4",
     "@sanity/client": "^6.15.7",

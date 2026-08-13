@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
   const deliveryMode = body?.deliveryMode;
   const incomingItems: unknown[] = Array.isArray(body?.items) ? body.items : [];
   const rawNotes = typeof body?.notes === "string" ? body.notes.trim() : null;
+  const awaitOnlinePayment = body?.awaitOnlinePayment === true;
   if (rawNotes && rawNotes.length > 300) {
     return NextResponse.json({ error: "Notes must be 300 characters or fewer" }, { status: 422, headers: limited.headers });
   }
@@ -135,7 +136,7 @@ export async function POST(req: NextRequest) {
       delivery_fee: quote.deliveryFee,
       subtotal: quote.subtotal,
       total: quote.total,
-      payment_method: "whatsapp_cod",
+      payment_method: awaitOnlinePayment ? "razorpay" : "whatsapp_cod",
       payment_status: "pending",
       notes,
     })
@@ -155,7 +156,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to save order items" }, { status: 500, headers: limited.headers });
   }
 
-  await sendOrderRequestNotificationEmail({
+  if (!awaitOnlinePayment) {
+    await sendOrderRequestNotificationEmail({
     requestId: order.id,
     createdAt: order.created_at,
     customer: {
@@ -173,6 +175,7 @@ export async function POST(req: NextRequest) {
     items: quote.lineItems,
     notes,
   });
+  }
 
   return NextResponse.json({ id: order.id, subtotal: quote.subtotal, total: quote.total }, { headers: limited.headers });
 }

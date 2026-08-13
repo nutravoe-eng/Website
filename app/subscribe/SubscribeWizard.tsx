@@ -30,6 +30,7 @@ import { getSubscriberBaseFromPlanConfig } from "@/lib/subscription-pricing";
 import { DELIVERY_TIME_SLOTS } from "@/lib/delivery-slots";
 import { addCalendarDaysIst, formatIstYmd } from "@/lib/datetime-ist";
 import { BENGALURU_NOT_SERVICEABLE_MESSAGE, isBengaluruServiceableAddress } from "@/lib/serviceability";
+import { runCashfreeCheckout } from "@/lib/payments/run-cashfree-checkout";
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 type Day = typeof DAYS[number];
@@ -210,6 +211,14 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
   const [error, setError] = useState('');
   const [notes, setNotes] = useState('');
   const [requestSubmitted, setRequestSubmitted] = useState(false);
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("paid") === "1") {
+      setPaymentCompleted(true);
+      setRequestSubmitted(true);
+    }
+  }, [searchParams]);
   const [hasActiveSub, setHasActiveSub] = useState(false);
   const [activeSubEndDate, setActiveSubEndDate] = useState<string | null>(null);
   const [isRenewalFlow, setIsRenewalFlow] = useState(false);
@@ -687,9 +696,17 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
     try {
       const saved = await saveSubscription();
       if (!saved) {
-        return; // saveSubscription already set the specific error
+        return;
       }
+
+      const payment = await runCashfreeCheckout({ kind: "subscription", resourceId: saved.id });
+      if (!payment.paid) {
+        setError(payment.error ?? "Payment was not completed.");
+        return;
+      }
+
       try { sessionStorage.removeItem(WIZARD_SESSION_KEY); } catch { /* ignore */ }
+      setPaymentCompleted(true);
       setRequestSubmitted(true);
     } catch {
       setError('Something went wrong while creating your subscription. Please try again.');
@@ -698,8 +715,8 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
     }
   }
 
-  async function saveSubscription(): Promise<boolean> {
-    if (!currentPlan || !user) return false;
+  async function saveSubscription(): Promise<{ id: string; totalAmountRs: number } | null> {
+    if (!currentPlan || !user) return null;
     const scenario = getScenario();
 
     // Build day_configs for spread/daily scenarios
@@ -738,6 +755,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        awaitOnlinePayment: true,
         planId: state.planId,
         deliveryStyle: state.deliveryStyle ?? 'spread',
         deliveryTimeSlot: scenario !== 'D' ? state.deliveryTimeSlot : null,
@@ -757,16 +775,16 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
     if (!res.ok) {
       const payload = await res.json().catch(() => null);
       setError(typeof payload?.error === 'string' ? payload.error : 'Failed to save subscription. Please contact support.');
-      return false;
+      return null;
     }
 
-    const newSub = await res.json() as { id?: string };
+    const newSub = await res.json() as { id?: string; totalAmountRs?: number };
     if (!newSub.id) {
       setError('Failed to save subscription. Please contact support.');
-      return false;
+      return null;
     }
 
-    return true;
+    return { id: newSub.id, totalAmountRs: Number(newSub.totalAmountRs ?? 0) };
   }
 
   function markResumeAfterAuth() {
@@ -863,7 +881,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
     );
   }
 
-  if (requestSubmitted && currentPlan) {
+  if ((requestSubmitted || searchParams.get("paid") === "1") && (currentPlan || paymentCompleted)) {
     const submittedContent = (
       <>
         <div className="w-16 h-16 rounded-full bg-terracotta/10 flex items-center justify-center mx-auto mb-6">
@@ -871,9 +889,28 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
             <path d="M20 6 9 17l-5-5" />
           </svg>
         </div>
-        <h2 className="font-display text-3xl font-medium text-ink mb-3 text-center">Request Sent!</h2>
+        <h2 className="font-display text-3xl font-medium text-ink mb-3 text-center">
+          {paymentCompleted ? "Subscription Active!" : "Request Sent!"}
+        </h2>
         <p className="font-body text-[14px] text-stone leading-relaxed mb-6 text-center">
-          Your <strong className="text-ink">{currentPlan.name}</strong> subscription request has been received. Our team will review it and confirm once payment is completed.
+          {paymentCompleted ? (
+            <>
+              {currentPlan ? (
+                <>
+                  Your <strong className="text-ink">{currentPlan.name}</strong> subscription is active and payment is confirmed.
+                  {state.deliveryStyle === "flexible"
+                    ? " Your wallet balance is ready — order bowls anytime from the menu."
+                    : " We'll deliver your bowls on the schedule you chose."}
+                </>
+              ) : (
+                <>Your subscription is active and payment is confirmed.</>
+              )}
+            </>
+          ) : (
+            <>
+              Your <strong className="text-ink">{currentPlan?.name ?? "subscription"}</strong> subscription request has been received. Our team will review it and confirm once payment is completed.
+            </>
+          )}
         </p>
         <Link
           href="/subscriptions"
@@ -2312,9 +2349,9 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
                     disabled={submitting || !deliveryAddress || hasUnserviceableDeliveryAddress}
                     className="w-full rounded-[20px] bg-ink py-4 font-body text-[16px] font-bold text-white shadow-sm transition-colors hover:bg-ink/90 disabled:bg-black/10 disabled:text-stone"
                   >
-                    {submitting ? 'Submitting request...' : 'Start subscription'}
+                    {submitting ? 'Processing payment…' : `Pay ₹${totalWeeklyPrice.toLocaleString('en-IN')}`}
                   </button>
-                  <p className="font-body text-[11px] text-stone text-center">Your request will be reviewed by our team and confirmed after payment.</p>
+                  <p className="font-body text-[11px] text-stone text-center">Pay securely with UPI, cards, or net banking.</p>
                 </div>
               </div>
             )}
@@ -2345,9 +2382,9 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
               <>
                 <div className="space-y-4 mb-6">{step3UserContent}</div>
                 <button onClick={handlePayment} disabled={submitting || !deliveryAddress || hasUnserviceableDeliveryAddress} className="w-full bg-terracotta hover:bg-[#D55F43] disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm">
-                  {submitting ? 'Submitting request...' : 'Start subscription'}
+                  {submitting ? 'Processing payment…' : `Pay ₹${totalWeeklyPrice.toLocaleString('en-IN')}`}
                 </button>
-                <p className="font-body text-[11px] text-stone text-center mt-3">Your request will be reviewed by our team and confirmed after payment.</p>
+                <p className="font-body text-[11px] text-stone text-center mt-3">Pay securely with UPI, cards, or net banking.</p>
               </>
             )}
 

@@ -31,6 +31,7 @@ import {
   parseSlotKey,
 } from "@/lib/delivery-policy";
 import { getIstWeekdayIndex, getIstYearMonth } from "@/lib/datetime-ist";
+import { runCashfreeCheckout } from "@/lib/payments/run-cashfree-checkout";
 
 
 interface StoredUser {
@@ -314,11 +315,12 @@ export default function CartPage() {
     const parsed = parseSlotKey(selectedSlot);
     return parsed ? formatCalendarSlotLabel(parsed.dateIso, parsed.startHour) : selectedSlot;
   })();
-  const recordOrder = async (): Promise<{ ok: true } | { ok: false; error: string }> => {
+  const recordOrder = async (): Promise<{ ok: true; id: string } | { ok: false; error: string }> => {
     const res = await fetch("/api/orders/request", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        awaitOnlinePayment: true,
         deliveryMode,
         selectedSlot: deliveryMode === "scheduled" ? selectedSlot : undefined,
         addressId: selectedAddress?.id,
@@ -332,7 +334,11 @@ export default function CartPage() {
       }),
     });
 
-    if (res.ok) return { ok: true };
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (typeof data?.id === "string") return { ok: true, id: data.id };
+      return { ok: false, error: "Failed to place order. Please try again." };
+    }
 
     const data = await res.json().catch(() => null);
     return {
@@ -429,8 +435,15 @@ export default function CartPage() {
         setError(result.error);
         return;
       }
+
+      const payment = await runCashfreeCheckout({ kind: "order", resourceId: result.id });
+      if (!payment.paid) {
+        setError(payment.error ?? "Payment was not completed.");
+        return;
+      }
+
       clearCart();
-      window.location.href = "/confirmation";
+      window.location.href = "/confirmation?source=online";
     } catch {
       setError("Something went wrong while placing your order.");
     } finally {
@@ -736,7 +749,7 @@ export default function CartPage() {
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="font-body text-[15px] font-bold">
-                  {submitting ? "Placing…" : canPayFromWallet ? "Place order instead" : "Place Order"}
+                  {submitting ? "Processing…" : canPayFromWallet ? "Place order instead" : `Pay ${formatCurrency(grandTotal)}`}
                 </span>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m9 18 6-6-6-6"/>
@@ -1101,11 +1114,11 @@ export default function CartPage() {
                     disabled={submitting || hasOutOfStockItems || hasUnserviceableSelectedAddress}
                     className={`hidden sm:block w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-4 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 hover:bg-black/30 text-ink" : "bg-terracotta hover:bg-[#D55F43]"}`}
                   >
-                    {canPayFromWallet ? "Place order instead" : "Place order"}
+                    {canPayFromWallet ? "Place order instead" : `Pay ${formatCurrency(grandTotal)}`}
                   </button>
 
                   <p className="font-body text-[11px] text-stone text-center mt-4">
-                    {user ? (canPayFromWallet ? "" : "Your order request will be sent directly to our team for confirmation.") : "You will be asked to sign in to your Nutravoe account to continue."}
+                    {user ? (canPayFromWallet ? "" : "Pay securely with UPI, cards, or net banking.") : "You will be asked to sign in to your Nutravoe account to continue."}
                   </p>
                 </div>
               )}
@@ -1154,7 +1167,7 @@ export default function CartPage() {
                 disabled={submitting || hasOutOfStockItems || hasUnserviceableSelectedAddress}
                 className={`w-full disabled:bg-black/10 disabled:text-stone text-white font-body text-sm font-bold tracking-wide py-3.5 rounded-md transition-colors shadow-sm ${canPayFromWallet ? "bg-black/20 text-ink" : "bg-terracotta"}`}
               >
-                {canPayFromWallet ? "Place order instead" : "Place order"}
+                {canPayFromWallet ? "Place order instead" : `Pay ${formatCurrency(grandTotal)}`}
               </button>
             </div>
           </div>

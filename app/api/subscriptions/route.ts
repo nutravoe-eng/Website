@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Notes must be 300 characters or fewer" }, { status: 422, headers: limited.headers });
   }
   const customerNotes = rawNotes || null;
+  const awaitOnlinePayment = body?.awaitOnlinePayment === true;
 
   if (!planId || !["spread", "flexible"].includes(deliveryStyle)) {
     return NextResponse.json({ error: "Invalid subscription request" }, { status: 400, headers: limited.headers });
@@ -304,7 +305,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  await sendSubscriptionRequestNotificationEmail({
+  if (!awaitOnlinePayment) {
+    await sendSubscriptionRequestNotificationEmail({
     requestId: subscription.id,
     createdAt: subscription.created_at,
     customer: {
@@ -332,6 +334,7 @@ export async function POST(req: NextRequest) {
     bowls: allBowls,
     notes: customerNotes,
   });
+  }
 
   return NextResponse.json({
     id: subscription.id,
