@@ -4,7 +4,7 @@ import { getAllBowls } from "@/lib/sanity";
 import TestimonialsCarousel from "@/components/TestimonialsCarousel";
 import DeliveryMarquee from "@/components/DeliveryMarquee";
 import HeroImageScroller from "@/components/HeroImageScroller";
-import HomeMenuCard from "@/components/HomeMenuCard";
+import HomeMenuCarousel from "@/components/HomeMenuCarousel";
 
 const SEEN_AROUND_IMAGES = [
   "/seen-around-1.webp",
@@ -268,11 +268,7 @@ export default async function HomePage() {
             </Link>
           </div>
 
-          <div className="-mx-5 flex snap-x gap-3.5 overflow-x-auto px-5 pb-2 md:-mx-6 md:gap-5 md:px-6 lg:-mx-16 lg:px-16">
-            {featured.map((bowl) => (
-              <HomeMenuCard key={bowl._id} bowl={bowl} />
-            ))}
-          </div>
+          <HomeMenuCarousel bowls={featured} />
         </div>
       </section>
 
@@ -291,18 +287,18 @@ export default async function HomePage() {
             At gyms, studios, and events across Bangalore.
           </p>
 
-          <div className="-mx-5 mt-8 flex snap-x gap-3 overflow-x-auto px-5 pb-2 md:mx-0 md:mt-10 md:grid md:grid-cols-6 md:gap-4 md:overflow-visible md:px-0">
+          <div className="mt-8 grid grid-cols-2 gap-3 md:mt-10 md:grid-cols-3 md:gap-4">
             {SEEN_AROUND_IMAGES.map((src, i) => (
               <div
                 key={src}
-                className="relative aspect-square w-[150px] shrink-0 snap-start overflow-hidden rounded-2xl md:w-auto"
+                className="relative aspect-square overflow-hidden rounded-2xl"
               >
                 <Image
                   src={src}
                   alt="Nutravoe at a Bangalore gym, studio, or brand event"
                   fill
                   className="object-cover"
-                  sizes="(max-width: 768px) 150px, 16vw"
+                  sizes="(max-width: 768px) 50vw, 33vw"
                   priority={i === 0}
                 />
               </div>
@@ -345,18 +341,26 @@ export default async function HomePage() {
               className="mb-6 font-display text-ink"
               style={{ fontSize: "clamp(28px, 3.5vw, 54px)", lineHeight: "1.12" }}
             >
-              Feeding your team? <em className="text-sage-dark">We&apos;ve got you.</em>
+              Feeding a group? <em className="text-sage-dark">We&apos;ve got you.</em>
             </h2>
-            <p className="mb-8 max-w-md font-body text-[13px] font-light leading-relaxed text-stone md:text-[15px]">
-              Volume pricing, weekly invoicing, and a dedicated point of contact. We deliver to
-              corporate offices, gyms, hotels, and co-working spaces across Bangalore.
+            <p className="mb-4 max-w-md font-body text-[13px] font-light leading-relaxed text-sage-dark md:text-[15px]">
+              Fresh wholesome bowls delivered in bulk. Whether it&apos;s daily office breakfast, post-class fuel for your studio, or catering for an event.
+            </p>
+            <p className="mb-8 max-w-md font-body text-[13px] font-medium leading-relaxed text-sage-dark md:text-[15px]">
+              One contact. Simple billing. Zero Hassle.
             </p>
 
             <div className="mb-10 flex flex-wrap gap-2.5">
-              {["Corporate Offices", "Gyms & Studios", "Hotels & Hospitality"].map((label) => (
+              {[
+                "Corporate Offices & Co-working Spaces",
+                "Gyms & Studios",
+                "Hotels & Hospitality",
+                "Events & Catering",
+                "Hospitals & Care",
+              ].map((label) => (
                 <span
                   key={label}
-                  className="rounded-full border border-sage/30 bg-white/60 px-4 py-2 font-body text-[11px] font-medium tracking-wide text-sage-dark md:text-xs"
+                  className="rounded-full border border-black/10 bg-white/60 px-4 py-2 font-body text-[11px] font-medium tracking-wide text-ink md:text-xs"
                 >
                   {label}
                 </span>
