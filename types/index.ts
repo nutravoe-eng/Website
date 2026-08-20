@@ -36,7 +36,10 @@ export interface Bowl {
     title: string;
     slug: string;
     displayOrder?: number;
+    unitLabel?: string;
   } | null;
+  /** Defaults to true when unset. Turn off in Studio for drinks/smoothies where Base/Oats/No-Sugar don't apply. */
+  showStandardCustomizations?: boolean;
   nutrition?: {
     calories: number;
     protein: number;

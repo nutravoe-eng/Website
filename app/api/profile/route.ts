@@ -14,13 +14,14 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const fullName = typeof body?.full_name === "string" ? body.full_name.trim() : "";
-  const phone = typeof body?.phone === "string" ? body.phone.replace(/\D/g, "") : "";
+  const phoneProvided = typeof body?.phone === "string";
+  const phone = phoneProvided ? body.phone.replace(/\D/g, "") : "";
 
   if (!fullName) {
     return NextResponse.json({ error: "Full name is required" }, { status: 400 });
   }
 
-  if (phone && !/^\d{10}$/.test(phone)) {
+  if (phoneProvided && phone && !/^\d{10}$/.test(phone)) {
     return NextResponse.json({ error: "Valid phone number required" }, { status: 400 });
   }
 
@@ -28,7 +29,7 @@ export async function PATCH(req: NextRequest) {
     .from("users")
     .update({
       full_name: fullName,
-      phone: phone || null,
+      ...(phoneProvided ? { phone: phone || null } : {}),
     })
     .eq("id", user.id);
 

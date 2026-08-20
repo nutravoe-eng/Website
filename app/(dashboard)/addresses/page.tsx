@@ -22,8 +22,8 @@ interface Address {
   delivery_fee?: number | null;
 }
 
-type FormData = { label: string; line1: string; line2: string; city: string; state: string; pincode: string };
-const BLANK_FORM: FormData = { label: "Home", line1: "", line2: "", city: "Bengaluru", state: "Karnataka", pincode: "" };
+type FormData = { fullName: string; label: string; line1: string; line2: string; city: string; state: string; pincode: string };
+const BLANK_FORM: FormData = { fullName: "", label: "Home", line1: "", line2: "", city: "Bengaluru", state: "Karnataka", pincode: "" };
 
 // ── Shared form fields renderer ───────────────────────────────────────
 // DEFINED OUTSIDE common component to prevent unmounting on every keystroke
@@ -53,11 +53,16 @@ function AddressFields({
       .then(r => r.json())
       .then(d => {
         if (d.lat && d.lng) {
-          setMapCenter({ lat: d.lat, lng: d.lng });
           setForm({ ...formRef.current, city: typeof d.city === "string" ? d.city : formRef.current.city, state: typeof d.state === "string" ? d.state : formRef.current.state });
-          onCoordsChange(d.lat, d.lng);
           setIsIndianPincode(true);
           onPinValid(true);
+          // Only use the pincode's generic area-center to suggest a starting
+          // point when the person hasn't already placed a precise pin — never
+          // silently override a location they've already set on the map.
+          if (pLat == null && pLng == null) {
+            setMapCenter({ lat: d.lat, lng: d.lng });
+            onCoordsChange(d.lat, d.lng);
+          }
         } else {
           setIsIndianPincode(false);
           onPinValid(false);
@@ -72,6 +77,15 @@ function AddressFields({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+      <div className="md:col-span-2">
+        <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Full Name</label>
+        <input
+          required type="text" placeholder="Who should we address this to?"
+          value={form.fullName}
+          onChange={e => setForm({ ...form, fullName: e.target.value })}
+          className="w-full border border-black/20 rounded-md px-3 py-2.5 font-body text-sm outline-none focus:border-sage bg-white"
+        />
+      </div>
       <div>
         <label className="block font-body text-[12px] font-medium text-stone mb-1.5 uppercase tracking-wider">Address Tag</label>
         <select
@@ -169,6 +183,7 @@ export default function AddressesPage() {
   const [saving, setSaving] = useState(false);
   const [addError, setAddError] = useState("");
   const [formData, setFormData] = useState<FormData>(BLANK_FORM);
+  const [profileFullName, setProfileFullName] = useState("");
   const [pinLat, setPinLat] = useState<number | null>(null);
   const [pinLng, setPinLng] = useState<number | null>(null);
   const [isIndianPincode, setIsIndianPincode] = useState<boolean | null>(null);
@@ -220,6 +235,11 @@ export default function AddressesPage() {
     setAddresses(addrs);
     setLoading(false);
     syncNavbar(addrs);
+
+    const { data: profile } = await supabase.from("users").select("full_name").eq("id", user.id).maybeSingle();
+    const name = profile?.full_name ?? "";
+    setProfileFullName(name);
+    setFormData(f => (f.fullName ? f : { ...f, fullName: name }));
   }
 
   function syncNavbar(addrs: Address[]) {
@@ -242,6 +262,7 @@ export default function AddressesPage() {
   function openEdit(addr: Address) {
     setEditingId(addr.id);
     setEditForm({
+      fullName: profileFullName,
       label: addr.label,
       line1: addr.line1,
       line2: addr.line2 ?? "",
@@ -271,6 +292,10 @@ export default function AddressesPage() {
     e.preventDefault();
     if (!editingId) return;
     setEditError("");
+    if (!editForm.fullName.trim()) {
+      setEditError("Full name is required.");
+      return;
+    }
     if (editIsIndianPincode === false) {
       setEditError("Enter a valid PIN code in India.");
       return;
@@ -280,6 +305,15 @@ export default function AddressesPage() {
       return;
     }
     setEditSaving(true);
+    const user = await getUserWithRetry(supabase);
+    if (user && editForm.fullName.trim() !== profileFullName) {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: editForm.fullName.trim() }),
+      });
+      if (res.ok) setProfileFullName(editForm.fullName.trim());
+    }
     const { data, error } = await supabase
       .from("addresses")
       .update({
@@ -306,6 +340,10 @@ export default function AddressesPage() {
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     setAddError("");
+    if (!formData.fullName.trim()) {
+      setAddError("Full name is required.");
+      return;
+    }
     if (isIndianPincode === false || isIndianPincode === null) {
       setAddError("Enter a valid PIN code in India.");
       return;
@@ -317,6 +355,14 @@ export default function AddressesPage() {
     setSaving(true);
     const user = await getUserWithRetry(supabase);
     if (!user) { setSaving(false); return; }
+    if (formData.fullName.trim() !== profileFullName) {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: formData.fullName.trim() }),
+      });
+      if (res.ok) setProfileFullName(formData.fullName.trim());
+    }
     const { data, error } = await supabase
       .from("addresses")
       .insert({

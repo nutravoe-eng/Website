@@ -67,6 +67,7 @@ export default function CustomizationModal({
 }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const ingredients = (bowl.customizableIngredients ?? []).filter(i => !i.isBase);
+  const showStandardCustomizations = bowl.showStandardCustomizations !== false;
   useDialogAccessibility(dialogRef, onClose);
 
   const [optionMap, setOptionMap] = useState<Record<string, IngredientOption>>(
@@ -124,6 +125,7 @@ export default function CustomizationModal({
         </div>
 
         <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+          {showStandardCustomizations && (
           <div className="space-y-3">
             <div>
               <p className="font-body text-[11px] font-bold uppercase tracking-wider text-stone mb-2">
@@ -211,8 +213,9 @@ export default function CustomizationModal({
               )}
             </div>
           </div>
+          )}
 
-          <div className="border-t border-black/5 pt-4 space-y-3">
+          <div className={showStandardCustomizations ? "border-t border-black/5 pt-4 space-y-3" : "space-y-3"}>
             {ingredients.length === 0 ? (
               <p className="font-body text-[13px] text-stone text-center py-6 italic">
                 Standard recipe — no customisations available

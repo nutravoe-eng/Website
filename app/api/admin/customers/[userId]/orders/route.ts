@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/admin-auth';
 import { adminSupabase } from '@/lib/supabase/admin';
 import { buildAuthoritativeOrder, type CheckoutItemInput } from '@/lib/checkout-security';
+import { sendOrderRequestNotificationEmail } from '@/lib/request-notification-email';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   const admin = await verifyAdmin();
@@ -106,6 +107,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
       { error: itemsError.message || 'Failed to save order items' },
       { status: 500 },
     );
+  }
+
+  const [{ data: customer }, { data: addressDetail }] = await Promise.all([
+    adminSupabase.from('users').select('full_name, phone, email').eq('id', userId).maybeSingle(),
+    adminSupabase.from('addresses').select('line1, line2, pincode, city, state').eq('id', address.id).maybeSingle(),
+  ]);
+
+  if (customer && addressDetail) {
+    await sendOrderRequestNotificationEmail({
+      requestId: order.id,
+      createdAt: new Date().toISOString(),
+      customer: {
+        name: customer.full_name || 'Customer',
+        phone: customer.phone || 'NA',
+        email: customer.email,
+      },
+      address: addressDetail,
+      orderLabel: 'Order placed by admin',
+      deliveryDate,
+      deliveryTimeSlot,
+      subtotal: quote.subtotal,
+      deliveryFee: quote.deliveryFee,
+      total: quote.total,
+      items: quote.lineItems,
+      notes: 'requested_via_whatsapp',
+    });
   }
 
   return NextResponse.json({ id: order.id, subtotal: quote.subtotal, total: quote.total });

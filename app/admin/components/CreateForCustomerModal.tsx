@@ -178,8 +178,6 @@ function Step2CreateAccount({ prefill, onCreated }: {
   useEffect(() => {
     if (pincode.length !== 6) {
       setIsIndianPincode(null);
-      setPinLat(null);
-      setPinLng(null);
       return;
     }
     setPincodeLookupLoading(true);
@@ -187,19 +185,22 @@ function Step2CreateAccount({ prefill, onCreated }: {
       .then(r => r.json())
       .then(d => {
         if (d.lat && d.lng) {
-          setMapCenter({ lat: d.lat, lng: d.lng });
-          setPinLat(d.lat);
-          setPinLng(d.lng);
           if (typeof d.city === 'string') setCity(d.city);
           if (typeof d.state === 'string') setState(d.state);
           setIsIndianPincode(true);
+          // Only use the pincode's generic area-center to suggest a starting
+          // point when no pin has been placed yet — never silently override
+          // a location that's already been set on the map.
+          setPinLat(prevLat => {
+            if (prevLat == null) setMapCenter({ lat: d.lat, lng: d.lng });
+            return prevLat == null ? d.lat : prevLat;
+          });
+          setPinLng(prevLng => (prevLng == null ? d.lng : prevLng));
         } else {
           setIsIndianPincode(false);
-          setPinLat(null);
-          setPinLng(null);
         }
       })
-      .catch(() => { setIsIndianPincode(false); setPinLat(null); setPinLng(null); })
+      .catch(() => { setIsIndianPincode(false); })
       .finally(() => setPincodeLookupLoading(false));
   }, [pincode]);
 
