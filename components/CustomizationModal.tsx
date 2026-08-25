@@ -152,6 +152,16 @@ export default function CustomizationModal({
                 >
                   Protein milk base
                 </button>
+                <button
+                  onClick={() => setPresetOptions(prev => ({ ...prev, baseChoice: "vegan" }))}
+                  className={`px-3 py-2 rounded-lg text-[12px] font-body font-semibold border transition-colors ${
+                    presetOptions.baseChoice === "vegan"
+                      ? "bg-sage/10 border-sage/30 text-sage-dark"
+                      : "bg-white border-black/10 text-stone hover:bg-black/5"
+                  }`}
+                >
+                  Vegan
+                </button>
               </div>
             </div>
 
@@ -179,6 +189,16 @@ export default function CustomizationModal({
                   }`}
                 >
                   Roasted oats
+                </button>
+                <button
+                  onClick={() => setPresetOptions(prev => ({ ...prev, oatsChoice: "none" }))}
+                  className={`px-3 py-2 rounded-lg text-[12px] font-body font-semibold border transition-colors ${
+                    presetOptions.oatsChoice === "none"
+                      ? "bg-sage/10 border-sage/30 text-sage-dark"
+                      : "bg-white border-black/10 text-stone hover:bg-black/5"
+                  }`}
+                >
+                  No Oats
                 </button>
               </div>
             </div>
