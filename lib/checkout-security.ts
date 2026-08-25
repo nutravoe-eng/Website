@@ -42,8 +42,8 @@ export interface CheckoutLineItem {
   customizations: {
     removed?: string[];
     added?: string[];
-    baseChoice?: "yogurt" | "milk";
-    oatsChoice?: "soaked" | "roasted";
+    baseChoice?: "yogurt" | "milk" | "vegan";
+    oatsChoice?: "soaked" | "roasted" | "none";
     noSugar?: boolean;
     noSugarNote?: string;
   } | null;
@@ -132,8 +132,8 @@ function summarizeCustomizations(
 ): {
   removed?: string[];
   added?: string[];
-  baseChoice?: "yogurt" | "milk";
-  oatsChoice?: "soaked" | "roasted";
+  baseChoice?: "yogurt" | "milk" | "vegan";
+  oatsChoice?: "soaked" | "roasted" | "none";
   noSugar?: boolean;
   noSugarNote?: string;
 } | null {
