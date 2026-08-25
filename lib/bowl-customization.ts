@@ -1,4 +1,5 @@
 import type { Bowl, BowlPresetOptions, IngredientCustomization } from "@/types";
+import { baseChoiceLabel, oatsChoiceLabel } from "@/lib/preset-labels";
 
 /** Align with CustomizationModal / SubscribeWizard defaults. */
 export const DEFAULT_BOWL_PRESET: BowlPresetOptions = {
@@ -59,7 +60,7 @@ export function formatBowlCustomizationSummary(
     )
     .filter(Boolean) as string[];
   const parts: string[] = [];
-  parts.push(`Base: ${presetOptions.baseChoice} · Oats: ${presetOptions.oatsChoice}`);
+  parts.push(`Base: ${baseChoiceLabel(presetOptions.baseChoice)} · Oats: ${oatsChoiceLabel(presetOptions.oatsChoice)}`);
   if (presetOptions.noSugar) parts.push("No sugar");
   if (removed.length) parts.push(`Remove: ${removed.join(", ")}`);
   if (extras.length) parts.push(`Extra: ${extras.join(", ")}`);
