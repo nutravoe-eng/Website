@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { parseIstYmd, NUTRAVOE_TIMEZONE } from '@/lib/datetime-ist';
 import { DELIVERY_TIME_SLOTS } from '@/lib/delivery-slots';
+import { baseChoiceLabel, oatsChoiceLabel, parseBaseChoiceFromIngredientIds, parseOatsChoiceFromIngredientIds } from '@/lib/preset-labels';
 
 export interface AdminOrder {
   id: string;
@@ -31,8 +32,8 @@ export interface AdminOrder {
     customizations: {
       removed?: string[];
       added?: string[];
-      baseChoice?: "yogurt" | "milk";
-      oatsChoice?: "soaked" | "roasted";
+      baseChoice?: "yogurt" | "milk" | "vegan";
+      oatsChoice?: "soaked" | "roasted" | "none";
       noSugar?: boolean;
       noSugarNote?: string;
     } | Array<{ ingredientId: string; option: "default" | "remove" | "extra" }> | Array<Array<{ ingredientId: string; option: "default" | "remove" | "extra" }>> | null
@@ -42,8 +43,8 @@ export interface AdminOrder {
 type LegacyOrderCustomization = {
   removed?: string[];
   added?: string[];
-  baseChoice?: "yogurt" | "milk";
-  oatsChoice?: "soaked" | "roasted";
+  baseChoice?: "yogurt" | "milk" | "vegan";
+  oatsChoice?: "soaked" | "roasted" | "none";
   noSugar?: boolean;
   noSugarNote?: string;
 };
@@ -91,18 +92,13 @@ function toOrderCustomizationView(value: unknown): LegacyOrderCustomization {
 
   const removed: string[] = [];
   const added: string[] = [];
-  let baseChoice: "yogurt" | "milk" | undefined;
-  let oatsChoice: "soaked" | "roasted" | undefined;
   let noSugar = false;
+  const presetIds: string[] = [];
 
   for (const item of list) {
     const id = item.ingredientId;
-    if (id === "__preset_base_milk") {
-      baseChoice = "milk";
-      continue;
-    }
-    if (id === "__preset_oats_roasted") {
-      oatsChoice = "roasted";
+    if (id.startsWith("__preset_base_") || id.startsWith("__preset_oats_")) {
+      presetIds.push(id);
       continue;
     }
     if (id === "__preset_no_sugar") {
@@ -118,8 +114,8 @@ function toOrderCustomizationView(value: unknown): LegacyOrderCustomization {
   return {
     removed: removed.length ? removed : undefined,
     added: added.length ? added : undefined,
-    baseChoice: baseChoice ?? "yogurt",
-    oatsChoice: oatsChoice ?? "soaked",
+    baseChoice: parseBaseChoiceFromIngredientIds(presetIds),
+    oatsChoice: parseOatsChoiceFromIngredientIds(presetIds),
     noSugar,
   };
 }
@@ -508,12 +504,12 @@ export default function OrdersTable({ orders, loading, onOrderUpdated, showDate 
                               )}
                               {instance.baseChoice && (
                                 <p className="font-body text-[10px] text-stone">
-                                  Base: {instance.baseChoice === "milk" ? "Milk" : "Yogurt"}
+                                  Base: {baseChoiceLabel(instance.baseChoice)}
                                 </p>
                               )}
                               {instance.oatsChoice && (
                                 <p className="font-body text-[10px] text-stone">
-                                  Oats: {instance.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                                  Oats: {oatsChoiceLabel(instance.oatsChoice)}
                                 </p>
                               )}
                               {typeof instance.noSugar === "boolean" && (
