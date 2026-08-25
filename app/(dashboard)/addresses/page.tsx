@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, FormEvent } from "react";
 import dynamic from "next/dynamic";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getUserWithRetry } from "@/lib/supabase/auth-client";
 
@@ -175,6 +175,7 @@ function AddressFields({
 export default function AddressesPage() {
   const supabase = createClient();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -204,6 +205,17 @@ export default function AddressesPage() {
       setIsAdding(true);
     }
   }, [searchParams]);
+
+  const nextParam = searchParams.get("next");
+  const isNameReason = searchParams.get("reason") === "name";
+
+  function goBackToNextIfSet() {
+    if (nextParam && nextParam.startsWith("/")) {
+      router.push(nextParam);
+      return true;
+    }
+    return false;
+  }
 
   async function syncSavedAddressDeliveryMeta(addressId: string) {
     try {
@@ -334,6 +346,7 @@ export default function AddressesPage() {
     }
     setEditSaving(false);
     cancelEdit();
+    if (!error) goBackToNextIfSet();
   };
 
   // ── Add new address ───────────────────────────────────────────────────
@@ -386,6 +399,7 @@ export default function AddressesPage() {
     setIsAdding(false);
     setFormData(BLANK_FORM);
     setPinLat(null); setPinLng(null); setIsIndianPincode(null);
+    if (!error) goBackToNextIfSet();
   };
 
   // ── Remove & set default ──────────────────────────────────────────────
@@ -417,6 +431,13 @@ export default function AddressesPage() {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+      {isNameReason && (
+        <div className="mb-5 rounded-lg border border-sage/30 bg-sage/8 px-4 py-3">
+          <p className="font-body text-[13px] text-sage-dark">
+            One more thing before you order — add your name to an address below (or edit an existing one) so we know who to deliver to.
+          </p>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-display text-2xl font-medium text-ink">Delivery Addresses</h2>
         {!isAdding && !editingId && (
