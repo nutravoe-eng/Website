@@ -12,7 +12,7 @@ type DayConfigInput = {
   bowlId: string;
   quantity: number;
   customizations?: SingleCustomization[] | SingleCustomization[][];
-  presetOptions?: { baseChoice: 'yogurt' | 'milk'; oatsChoice: 'soaked' | 'roasted'; noSugar: boolean };
+  presetOptions?: { baseChoice: 'yogurt' | 'milk' | 'vegan'; oatsChoice: 'soaked' | 'roasted' | 'none'; noSugar: boolean };
   deliveryTimeSlot?: string;
 };
 
