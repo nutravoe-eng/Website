@@ -13,8 +13,8 @@ export interface IngredientCustomization {
 }
 
 export interface BowlPresetOptions {
-  baseChoice: "yogurt" | "milk";
-  oatsChoice: "soaked" | "roasted";
+  baseChoice: "yogurt" | "milk" | "vegan";
+  oatsChoice: "soaked" | "roasted" | "none";
   noSugar: boolean;
 }
 
