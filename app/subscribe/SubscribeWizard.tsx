@@ -9,6 +9,7 @@ const WIZARD_SESSION_VERSION = 1;
 const WIZARD_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 import Link from "next/link";
 import Image from "next/image";
+import { baseChoiceLabel, oatsChoiceLabel } from "@/lib/preset-labels";
 import type {
   Bowl,
   BowlPresetOptions,
@@ -2053,7 +2054,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
                             <div>
                               <p className="font-body text-[14px] text-ink">{bowl?.name ?? 'Selected bowl'}</p>
                               <p className="font-body text-[11px] text-stone mt-0.5">
-                                {presets.baseChoice === 'milk' ? 'Milk' : 'Yogurt'}, {presets.oatsChoice === 'roasted' ? 'Roasted' : 'Soaked'} oats{presets.noSugar ? ', no sugar' : ''}
+                                {baseChoiceLabel(presets.baseChoice)}, {oatsChoiceLabel(presets.oatsChoice)}{presets.oatsChoice === 'none' ? '' : ' oats'}{presets.noSugar ? ', no sugar' : ''}
                               </p>
                               {removedIngredients.map(c => {
                                 const ing = bowl?.customizableIngredients?.find(i => i.id === c.ingredientId);
@@ -2212,7 +2213,7 @@ export default function SubscribeWizard({ bowls, plans: sanityPlans }: Props) {
                             </div>
                             <div className="space-y-0.5 px-1">
                               <p className="font-body text-[11px] text-stone">
-                                {presets.baseChoice === 'milk' ? 'Milk' : 'Yogurt'}, {presets.oatsChoice === 'roasted' ? 'Roasted' : 'Soaked'} oats{presets.noSugar ? ', no sugar' : ''}
+                                {baseChoiceLabel(presets.baseChoice)}, {oatsChoiceLabel(presets.oatsChoice)}{presets.oatsChoice === 'none' ? '' : ' oats'}{presets.noSugar ? ', no sugar' : ''}
                               </p>
                               {removedIngredients.map(c => {
                                 const ing = bowl?.customizableIngredients?.find(i => i.id === c.ingredientId);
