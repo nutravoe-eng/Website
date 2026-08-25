@@ -171,7 +171,8 @@ export default function CartPage() {
       const supabase = createClient();
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
-        const name = (authUser.user_metadata?.full_name as string | undefined) ?? authUser.email?.split("@")[0] ?? "";
+        const { data: profile } = await supabase.from("users").select("full_name").eq("id", authUser.id).maybeSingle();
+        const name = profile?.full_name || (authUser.user_metadata?.full_name as string | undefined) || authUser.email?.split("@")[0] || "";
         setUser({ name, phone: "", email: authUser.email ?? "" });
       }
 
@@ -415,6 +416,10 @@ export default function CartPage() {
 
     if (!user) {
       router.push("/signin?next=/cart");
+      return;
+    }
+    if (!user.name) {
+      router.push("/addresses?next=/cart&reason=name");
       return;
     }
     if (!selectedAddress) {
