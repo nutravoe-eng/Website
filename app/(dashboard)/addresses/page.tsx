@@ -43,6 +43,9 @@ function AddressFields({
   const formRef = useRef(form);
   formRef.current = form;
 
+  const pinCoordsRef = useRef<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
+  useEffect(() => { pinCoordsRef.current = { lat: pLat, lng: pLng }; }, [pLat, pLng]);
+
   useEffect(() => {
     if (form.pincode.length !== 6) {
       setIsIndianPincode(null);
@@ -59,7 +62,9 @@ function AddressFields({
           // Only use the pincode's generic area-center to suggest a starting
           // point when the person hasn't already placed a precise pin — never
           // silently override a location they've already set on the map.
-          if (pLat == null && pLng == null) {
+          // Reads the ref (not the closed-over prop) so a pin dropped while
+          // this fetch was still in flight is never clobbered once it resolves.
+          if (pinCoordsRef.current.lat == null && pinCoordsRef.current.lng == null) {
             setMapCenter({ lat: d.lat, lng: d.lng });
             onCoordsChange(d.lat, d.lng);
           }
