@@ -1,4 +1,5 @@
 import type { Bowl, BowlPresetOptions, IngredientCustomization, SubscriptionPriceTier } from "@/types";
+import { baseChoiceLabel, oatsChoiceLabel } from "@/lib/preset-labels";
 
 export const MOBILE_SHELL_CUSTOMER_PREFIXES = [
   "/",
@@ -161,8 +162,8 @@ export function summarizeCustomizations(
     .filter(Boolean) as string[];
   const parts: string[] = [];
   if (presetOptions) {
-    parts.push(`Base: ${presetOptions.baseChoice}`);
-    parts.push(`Oats: ${presetOptions.oatsChoice}`);
+    parts.push(`Base: ${baseChoiceLabel(presetOptions.baseChoice)}`);
+    parts.push(`Oats: ${oatsChoiceLabel(presetOptions.oatsChoice)}`);
     if (presetOptions.noSugar) parts.push("No sugar");
   }
   if (removed.length) parts.push(`Remove: ${removed.join(", ")}`);
