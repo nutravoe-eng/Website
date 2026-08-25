@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartContext";
+import { baseChoiceLabel, oatsChoiceLabel } from "@/lib/preset-labels";
 import { formatCurrency } from "@/lib/utils";
 import { getActivePlanConfig } from "@/lib/subscription";
 import { getWallet } from "@/lib/wallet";
@@ -523,7 +524,7 @@ export default function CartPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-display text-[16px] leading-snug text-ink">{item.bowl.name}</p>
                         <p className="font-body text-[11px] text-stone mt-0.5">
-                          {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"}, {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"} oats{item.presetOptions.noSugar ? ", no sugar" : ""}
+                          {baseChoiceLabel(item.presetOptions.baseChoice)}, {oatsChoiceLabel(item.presetOptions.oatsChoice)}{item.presetOptions.oatsChoice === "none" ? "" : " oats"}{item.presetOptions.noSugar ? ", no sugar" : ""}
                         </p>
                         {removed.map(c => {
                           const ing = item.bowl.customizableIngredients?.find(i => i.id === c.ingredientId);
@@ -831,7 +832,7 @@ export default function CartPage() {
                             {(removed.length > 0 || extras.length > 0) && (
                               <div className="mt-1.5 space-y-0.5">
                                 <p className="font-body text-[11px] text-stone leading-relaxed break-words">
-                                  Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} | Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                                  Base: {baseChoiceLabel(item.presetOptions.baseChoice)} | Oats: {oatsChoiceLabel(item.presetOptions.oatsChoice)}
                                 </p>
                                 {item.presetOptions.noSugar && (
                                   <p className="font-body text-[11px] text-terracotta leading-relaxed break-words">
@@ -861,7 +862,7 @@ export default function CartPage() {
                             {removed.length === 0 && extras.length === 0 && (
                               <div className="mt-1.5 space-y-0.5">
                                 <p className="font-body text-[11px] text-stone leading-relaxed break-words">
-                                  Base: {item.presetOptions.baseChoice === "milk" ? "Milk" : "Yogurt"} | Oats: {item.presetOptions.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                                  Base: {baseChoiceLabel(item.presetOptions.baseChoice)} | Oats: {oatsChoiceLabel(item.presetOptions.oatsChoice)}
                                 </p>
                                 {item.presetOptions.noSugar && (
                                   <p className="font-body text-[11px] text-terracotta leading-relaxed break-words">
