@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { useCart } from "@/components/CartContext";
 import type { Bowl, BowlPresetOptions, IngredientCustomization } from "@/types";
 import { useDialogAccessibility } from "@/lib/use-dialog-accessibility";
+import { DEFAULT_BOWL_PRESET } from "@/lib/bowl-customization";
 
 export interface BowlOrderControls {
   cartItem: ReturnType<typeof useCart>["items"][number] | undefined;
@@ -30,6 +31,12 @@ export interface BowlOrderControls {
 
 function hasNonDefaultCustomizations(customizations: IngredientCustomization[]): boolean {
   return customizations.some((item) => item.option !== "default");
+}
+
+/** True when this item has nothing to customize — no ingredients to swap, and Base/Oats/No-Sugar hidden. */
+function hasNoCustomizationOptions(bowl: Bowl): boolean {
+  const ingredients = (bowl.customizableIngredients ?? []).filter((i) => !i.isBase);
+  return ingredients.length === 0 && bowl.showStandardCustomizations === false;
 }
 
 function summarize(cartItem: BowlOrderControls["cartItem"], bowl: Bowl): string {
@@ -78,6 +85,10 @@ export function useBowlOrderControls(bowl: Bowl): BowlOrderControls {
     customModalMode,
     repeatDialogRef,
     openCustomModal(mode = "edit") {
+      if (mode === "add-new" && hasNoCustomizationOptions(bowl)) {
+        addItem(bowl, [], DEFAULT_BOWL_PRESET, 0);
+        return;
+      }
       setCustomModalMode(mode);
       setShowCustomModal(true);
     },
@@ -86,6 +97,10 @@ export function useBowlOrderControls(bowl: Bowl): BowlOrderControls {
       setCustomModalMode("edit");
     },
     openRepeatChoice() {
+      if (hasNoCustomizationOptions(bowl) && cartItem) {
+        addItem(bowl, [...cartItem.customizations], { ...cartItem.presetOptions }, cartItem.customizationCost);
+        return;
+      }
       setShowRepeatChoice(true);
     },
     closeRepeatChoice() {
