@@ -1,6 +1,7 @@
 import type { Bowl, BowlPresetOptions, IngredientCustomization } from "@/types";
 import type { CheckoutLineItem } from "@/lib/checkout-security";
 import { sendBrevoEmail } from "@/lib/brevo";
+import { baseChoiceLabel, oatsChoiceLabel, parseBaseChoiceFromIngredientIds, parseOatsChoiceFromIngredientIds } from "@/lib/preset-labels";
 
 const OPERATIONS_EMAIL = "nutravoe@gmail.com";
 
@@ -117,10 +118,10 @@ function summarizeOrderCustomizations(customizations: CheckoutLineItem["customiz
   if (!customizations) return [];
   const lines: string[] = [];
   if (customizations.baseChoice) {
-    lines.push(`Base: ${customizations.baseChoice === "milk" ? "Milk" : "Yogurt"}`);
+    lines.push(`Base: ${baseChoiceLabel(customizations.baseChoice)}`);
   }
   if (customizations.oatsChoice) {
-    lines.push(`Oats: ${customizations.oatsChoice === "roasted" ? "Roasted" : "Soaked"}`);
+    lines.push(`Oats: ${oatsChoiceLabel(customizations.oatsChoice)}`);
   }
   if (typeof customizations.noSugar === "boolean") {
     lines.push(
@@ -156,11 +157,11 @@ function buildOrderConfigurationDetails(items: CheckoutLineItem[]): string {
 }
 
 function parsePresetOptions(customizations: IngredientCustomization[] | undefined): BowlPresetOptions {
-  const list = customizations ?? [];
+  const ids = (customizations ?? []).map((item) => item.ingredientId);
   return {
-    baseChoice: list.some((item) => item.ingredientId === "__preset_base_milk") ? "milk" : "yogurt",
-    oatsChoice: list.some((item) => item.ingredientId === "__preset_oats_roasted") ? "roasted" : "soaked",
-    noSugar: list.some((item) => item.ingredientId === "__preset_no_sugar"),
+    baseChoice: parseBaseChoiceFromIngredientIds(ids),
+    oatsChoice: parseOatsChoiceFromIngredientIds(ids),
+    noSugar: ids.includes("__preset_no_sugar"),
   };
 }
 
@@ -171,8 +172,8 @@ function summarizeSubscriptionCustomizations(
   const preset = parsePresetOptions(customizations);
   const list = (customizations ?? []).filter((item) => !item.ingredientId.startsWith("__preset_"));
   const lines = [
-    `Base: ${preset.baseChoice === "milk" ? "Milk" : "Yogurt"}`,
-    `Oats: ${preset.oatsChoice === "roasted" ? "Roasted" : "Soaked"}`,
+    `Base: ${baseChoiceLabel(preset.baseChoice)}`,
+    `Oats: ${oatsChoiceLabel(preset.oatsChoice)}`,
     preset.noSugar ? "Sweetness: No sugar (exclude banana, honey, dates)" : "Sweetness: Natural",
   ];
   if (bowl) {
