@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import AdminTopNav from '../components/AdminTopNav';
 import CreateForCustomerModal from '../components/CreateForCustomerModal';
+import { baseChoiceLabel, oatsChoiceLabel, parseBaseChoiceFromIngredientIds, parseOatsChoiceFromIngredientIds } from '@/lib/preset-labels';
 import {
   NUTRAVOE_TIMEZONE,
   getTodayIstYmd,
@@ -46,8 +47,9 @@ function normalizeCustomizations(
 }
 
 function readPresetChoices(customizations: { ingredientId: string; option: "default" | "remove" | "extra" }[]) {
-  const baseChoice = customizations.some(c => c.ingredientId === "__preset_base_milk") ? "milk" : "yogurt";
-  const oatsChoice = customizations.some(c => c.ingredientId === "__preset_oats_roasted") ? "roasted" : "soaked";
+  const ids = customizations.map(c => c.ingredientId);
+  const baseChoice = parseBaseChoiceFromIngredientIds(ids);
+  const oatsChoice = parseOatsChoiceFromIngredientIds(ids);
   const noSugar = customizations.some(c => c.ingredientId === "__preset_no_sugar");
   return { baseChoice, oatsChoice, noSugar };
 }
@@ -642,10 +644,10 @@ export default function AdminSubscriptionsPage() {
                               </span>
                               <span className="text-[9px] font-bold uppercase tracking-wider text-sage-dark">{ord.status.replace(/_/g, ' ')}</span>
                               <span className="text-[10px] text-stone/80 font-medium">
-                                Base: {choices.baseChoice === 'milk' ? 'Milk' : 'Yogurt'}
+                                Base: {baseChoiceLabel(choices.baseChoice)}
                               </span>
                               <span className="text-[10px] text-stone/80 font-medium">
-                                Oats: {choices.oatsChoice === 'roasted' ? 'Roasted' : 'Soaked'}
+                                Oats: {oatsChoiceLabel(choices.oatsChoice)}
                               </span>
                               <span className={`text-[10px] font-medium ${choices.noSugar ? 'text-terracotta/80' : 'text-stone/80'}`}>
                                 {choices.noSugar ? 'No sugar' : 'Regular sugar'}
@@ -698,10 +700,10 @@ export default function AdminSubscriptionsPage() {
                           <span key={`${dc.id}-${idx}`} className="bg-[#F9F8F6] border border-black/5 rounded-md px-2 py-1 font-body text-[11px] text-stone capitalize flex flex-col leading-tight">
                             <span className="font-semibold text-ink">{dc.day_of_week} — {dc.bowl_slug} ×1{instanceTag}</span>
                             <span className="text-[10px] text-stone/80 font-medium">
-                              Base: {choices.baseChoice === "milk" ? "Milk" : "Yogurt"}
+                              Base: {baseChoiceLabel(choices.baseChoice)}
                             </span>
                             <span className="text-[10px] text-stone/80 font-medium">
-                              Oats: {choices.oatsChoice === "roasted" ? "Roasted" : "Soaked"}
+                              Oats: {oatsChoiceLabel(choices.oatsChoice)}
                             </span>
                             <span className={`text-[10px] font-medium ${choices.noSugar ? "text-terracotta/80" : "text-stone/80"}`}>
                               {choices.noSugar ? "No sugar" : "Regular sugar"}
