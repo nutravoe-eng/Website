@@ -1,3 +1,5 @@
+import { verifyOtpBotToken } from "@/lib/otp-bot-verification";
+import { alertOtpBudget } from "@/lib/otp-alerts";
 import { encodeOtpSession } from "@/lib/phone-otp-session";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -19,6 +21,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (process.env.NEXT_PUBLIC_OTP_BOT_CHECK_ENABLED === "true" && !await verifyOtpBotToken(body?.botToken)) {
+    return NextResponse.json({ error: "Please complete the security check and try again." }, { status: 403 });
+  }
+
   try {
     encodeOtpSession({ phone, verificationId: "preflight", issuedAt: Date.now() });
     const phoneRequest = new Request(req.url, { headers: { "x-real-ip": phone } });
@@ -33,6 +39,8 @@ export async function POST(req: NextRequest) {
       [globalRequest, "otp-global-day", 500, 86400],
     ] as const) {
       const budget = await enforceRateLimit(request, scope, limit, seconds);
+      const remaining = Number((budget.ok ? budget.headers : { "X-RateLimit-Remaining": budget.response.headers.get("X-RateLimit-Remaining") })["X-RateLimit-Remaining"]);
+      if (Number.isFinite(remaining)) await alertOtpBudget(scope, limit, remaining, seconds);
       if (!budget.ok) return budget.response;
     }
     const result = await sendPhoneOtp(phone);

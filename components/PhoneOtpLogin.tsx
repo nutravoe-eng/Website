@@ -1,5 +1,6 @@
 "use client";
 
+import OtpBotCheck from "@/components/OtpBotCheck";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -8,6 +9,9 @@ type Step = "phone" | "otp";
 
 export default function PhoneOtpLogin({ redirectTo = "/account" }: { redirectTo?: string }) {
   const router = useRouter();
+  const botEnabled = process.env.NEXT_PUBLIC_OTP_BOT_CHECK_ENABLED === "true";
+  const [botToken, setBotToken] = useState("");
+  const [botRevision, setBotRevision] = useState(0);
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -31,14 +35,14 @@ export default function PhoneOtpLogin({ redirectTo = "/account" }: { redirectTo?
   const isCodeValid = /^\d{6}$/.test(code);
 
   async function sendOtp() {
-    if (!isPhoneValid || loading) return;
+    if (!isPhoneValid || loading || (botEnabled && !botToken)) return;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/auth/phone/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: digitsOnly }),
+        body: JSON.stringify({ phone: digitsOnly, botToken }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -46,10 +50,12 @@ export default function PhoneOtpLogin({ redirectTo = "/account" }: { redirectTo?
         return;
       }
       setStep("otp");
-      setResendCooldown(30);
+      setResendCooldown(60);
     } catch {
       setError("Something went wrong. Please check your connection and try again.");
     } finally {
+      setBotToken("");
+      setBotRevision(n => n + 1);
       setLoading(false);
     }
   }
@@ -116,6 +122,8 @@ export default function PhoneOtpLogin({ redirectTo = "/account" }: { redirectTo?
           : `Sent by SMS to +91 ${digitsOnly}.`}
       </p>
 
+      {botEnabled ? <OtpBotCheck key={botRevision} onToken={setBotToken} /> : null}
+
       {step === "phone" ? (
         <div className="mt-6">
           <label className="mb-1.5 block font-body text-[11px] font-bold uppercase tracking-[0.14em] text-stone">
@@ -143,7 +151,7 @@ export default function PhoneOtpLogin({ redirectTo = "/account" }: { redirectTo?
           <button
             type="button"
             onClick={sendOtp}
-            disabled={!isPhoneValid || loading}
+            disabled={!isPhoneValid || loading || (botEnabled && !botToken)}
             className="btn-sage mt-5 w-full disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "Sending..." : "Send OTP"}
@@ -193,7 +201,7 @@ export default function PhoneOtpLogin({ redirectTo = "/account" }: { redirectTo?
             <button
               type="button"
               onClick={sendOtp}
-              disabled={resendCooldown > 0 || loading}
+              disabled={resendCooldown > 0 || loading || (botEnabled && !botToken)}
               className="font-body text-[12px] text-sage-dark underline decoration-sage/30 underline-offset-4 disabled:cursor-not-allowed disabled:text-stone disabled:no-underline"
             >
               {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
