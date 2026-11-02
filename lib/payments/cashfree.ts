@@ -154,3 +154,11 @@ export function assertCashfreeWebhookSignature(input: {
     throw new Error("Cashfree webhook signature is invalid");
   }
 }
+
+/** Authoritative gateway details used before fulfillment. */
+export async function getCashfreePaymentDetails(merchantOrderId: string) {
+  return cashfreeOrderSchema.extend({
+    order_amount: z.number().finite().positive(),
+    order_currency: z.literal("INR"),
+  }).parse(await cashfreeRequest(`/orders/${encodeURIComponent(merchantOrderId)}`, { method: "GET" }));
+}

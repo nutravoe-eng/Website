@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { adminSupabase } from "@/lib/supabase/admin";
-import { getCashfreeOrderStatus } from "@/lib/payments/cashfree";
+import { getCashfreePaymentDetails } from "@/lib/payments/cashfree";
 import { parseMerchantOrderId } from "@/lib/payments/merchant-id";
 import { getNextDateForDayOfWeek, scheduleDeliveryDates } from "@/lib/subscription";
 import { sendOrderRequestNotificationEmail } from "@/lib/request-notification-email";
@@ -200,7 +200,26 @@ export async function applyCashfreePaymentState(input: {
     return { paid: false, found: true, kind: parsed.kind };
   }
 
-  const paymentReference = input.providerPaymentId ?? input.providerOrderId ?? null;
+  // Read gateway state server-side for every fulfillment path, including webhooks.
+  const gateway = await getCashfreePaymentDetails(input.merchantOrderId);
+  if (gateway.order_id !== input.merchantOrderId) throw new Error("Cashfree order identity mismatch");
+  if (gateway.order_status !== "PAID") return { paid: false, found: true, kind: parsed.kind };
+  const table = parsed.kind === "order" ? "orders" : "subscriptions";
+  const column = parsed.kind === "order" ? "total" : "total_amount_rs";
+  const { data: due, error: dueError } = await adminSupabase.from(table).select(column).eq("id", parsed.id).maybeSingle();
+  if (dueError) throw new Error("Unable to read payment amount due");
+  if (!due) return { paid: false, found: false };
+  const amountDue = Number((due as unknown as Record<string, unknown>)[column]);
+  const expectedPaise = Math.round(amountDue * 100);
+  const receivedPaise = Math.round(gateway.order_amount * 100);
+  if (gateway.order_currency !== "INR" || !Number.isFinite(amountDue) || amountDue <= 0 ||
+      !Number.isSafeInteger(expectedPaise) || !Number.isSafeInteger(receivedPaise) ||
+      Math.abs(amountDue * 100 - expectedPaise) > 0.00001 ||
+      Math.abs(gateway.order_amount * 100 - receivedPaise) > 0.00001 || expectedPaise !== receivedPaise) {
+    throw new Error("Cashfree payment amount or currency does not match amount due");
+  }
+
+  const paymentReference = input.providerPaymentId ?? gateway.cf_order_id;
   const admin = adminSupabase;
 
   if (parsed.kind === "order") {
@@ -238,11 +257,9 @@ export async function confirmCashfreePaymentForUser(
     if (sub.payment_status === "paid") return { paid: true, found: true, kind: "subscription" };
   }
 
-  const gatewayStatus = await getCashfreeOrderStatus(merchantOrderId);
   return applyCashfreePaymentState({
     merchantOrderId,
-    providerStatus: gatewayStatus.status,
-    providerOrderId: gatewayStatus.providerOrderId,
+    providerStatus: "PAID",
   });
 }
 
