@@ -1,3 +1,4 @@
+import { decodeOtpSession } from "@/lib/phone-otp-session";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -9,19 +10,13 @@ import {
   phoneToVirtualEmail,
 } from "@/lib/account-merge";
 
-type OtpSession = {
-  phone?: string;
-  verificationId?: string;
-  issuedAt?: number;
-};
-
 export async function POST(req: NextRequest) {
   const limited = await enforceRateLimit(req, "auth-phone-verify-otp", 8, 60);
   if (!limited.ok) return limited.response;
 
   const body = await req.json().catch(() => null);
   const digits = typeof body?.phone === "string" ? body.phone.replace(/\D/g, "") : "";
-  const phone = digits.replace(/^91/, "").slice(-10);
+  const phone = digits.slice(-10);
   const code = typeof body?.code === "string" ? body.code.trim() : "";
 
   if (phone.length !== 10 || !/^\d{6}$/.test(code)) {
@@ -33,12 +28,7 @@ export async function POST(req: NextRequest) {
 
   const cookieStore = await cookies();
   const raw = cookieStore.get("phone_otp_session")?.value;
-  let session: OtpSession | null = null;
-  try {
-    session = raw ? (JSON.parse(raw) as OtpSession) : null;
-  } catch {
-    session = null;
-  }
+  const session = decodeOtpSession(raw);
 
   if (!session || session.phone !== phone || !session.verificationId) {
     return NextResponse.json(

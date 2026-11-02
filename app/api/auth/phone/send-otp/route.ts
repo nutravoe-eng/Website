@@ -1,3 +1,4 @@
+import { encodeOtpSession } from "@/lib/phone-otp-session";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -19,6 +20,21 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    encodeOtpSession({ phone, verificationId: "preflight", issuedAt: Date.now() });
+    const phoneRequest = new Request(req.url, { headers: { "x-real-ip": phone } });
+    const globalRequest = new Request(req.url, { headers: { "x-real-ip": "global" } });
+    for (const [request, scope, limit, seconds] of [
+      [phoneRequest, "otp-phone-minute", 1, 60],
+      [phoneRequest, "otp-phone-hour", 5, 3600],
+      [phoneRequest, "otp-phone-day", 10, 86400],
+      [req, "otp-ip-hour", 20, 3600],
+      [req, "otp-ip-day", 50, 86400],
+      [globalRequest, "otp-global-hour", 100, 3600],
+      [globalRequest, "otp-global-day", 500, 86400],
+    ] as const) {
+      const budget = await enforceRateLimit(request, scope, limit, seconds);
+      if (!budget.ok) return budget.response;
+    }
     const result = await sendPhoneOtp(phone);
     if (result.error || !result.data) {
       console.error("[send-otp] MC error:", result.error);
@@ -31,7 +47,7 @@ export async function POST(req: NextRequest) {
     const cookieStore = await cookies();
     cookieStore.set(
       "phone_otp_session",
-      JSON.stringify({ phone, verificationId: result.data, issuedAt: Date.now() }),
+      encodeOtpSession({ phone, verificationId: result.data, issuedAt: Date.now() }),
       {
         httpOnly: true,
         // Secure cookies are dropped on http://localhost — only require HTTPS in production
