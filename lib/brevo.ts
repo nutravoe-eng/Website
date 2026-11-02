@@ -40,3 +40,24 @@ export async function sendBrevoEmail({
     return { success: false, error: error.message };
   }
 }
+
+/** Plain-text transactional email; no Brevo template required. */
+export async function sendBrevoTextEmail(input: {
+  toEmail: string; subject: string; textContent: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const apiKey = process.env.BREVO_API_KEY;
+  const fromEmail = process.env.BREVO_FROM_EMAIL ?? "nutravoe@gmail.com";
+  if (!apiKey || !fromEmail) return { success: false, error: "Brevo API key or verified sender missing" };
+  try {
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "api-key": apiKey },
+      body: JSON.stringify({
+        sender: { email: fromEmail, name: "Nutravoe Alerts" },
+        to: [{ email: input.toEmail }], subject: input.subject, textContent: input.textContent,
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+    return response.ok ? { success: true } : { success: false, error: `Brevo HTTP ${response.status}` };
+  } catch { return { success: false, error: "Brevo email request failed" }; }
+}

@@ -1,12 +1,11 @@
 import { adminSupabase } from "@/lib/supabase/admin";
-import { sendBrevoEmail } from "@/lib/brevo";
+import { sendBrevoTextEmail } from "@/lib/brevo";
 
 export async function alertOtpBudget(scope: string, limit: number, remaining: number, seconds: number) {
   if (!scope.startsWith("otp-global-") || remaining > limit * 0.2) return;
   try {
-    const templateId = Number(process.env.BREVO_OTP_ALERT_TEMPLATE_ID);
-    if (!Number.isInteger(templateId) || templateId <= 0) {
-      console.error("[otp-budget-alert] Email template not configured", { scope, limit, remaining });
+    if (!process.env.BREVO_API_KEY) {
+      console.error("[otp-budget-alert] Brevo API key missing", { scope, limit, remaining });
       return;
     }
     // Atomic database claim prevents every request/instance sending another alert.
@@ -19,12 +18,19 @@ export async function alertOtpBudget(scope: string, limit: number, remaining: nu
     if (!row?.allowed) return;
     const unitCost = Number(process.env.OTP_SMS_UNIT_COST_INR);
     const attempts = limit - remaining;
-    const result = await sendBrevoEmail({
+    const result = await sendBrevoTextEmail({
       toEmail: process.env.OTP_ALERT_EMAIL ?? "nutravoe@gmail.com",
-      toName: "Nutravoe Operations", templateId,
-      params: { scope, limit, attempts, remaining, window_hours: seconds / 3600,
-        estimated_cost_inr: Number.isFinite(unitCost) && unitCost > 0 ? (attempts * unitCost).toFixed(2) : "Not configured",
-        note: "Counts send attempts, including failed or subsequently blocked sends. Estimated cost is not an invoice." },
+      subject: seconds === 86400
+        ? "SMS limit for the day is 80%. Consider increasing it,"
+        : "SMS limit for the hour is 80%. Consider increasing it,",
+      textContent: [
+        `Nutravoe has used at least 80% of its ${seconds === 86400 ? "daily" : "hourly"} SMS sending allowance.`,
+        `Attempts counted: ${attempts} of ${limit}. Remaining allowance: ${remaining}.`,
+        `Window: ${seconds / 3600} hours.`,
+        Number.isFinite(unitCost) && unitCost > 0 ? `Estimated fees for counted attempts: INR ${(attempts * unitCost).toFixed(2)}.` : "Fee estimate unavailable: SMS unit price is not configured.",
+        "Sending stops at the limit. Review recent traffic for abuse before considering an increase.",
+        "Counts include failed or subsequently blocked send attempts; estimated fees are not an invoice.",
+      ].join("\n\n"),
     });
     if (!result.success) console.error("[otp-budget-alert] Email delivery failed");
   } catch { console.error("[otp-budget-alert] Alert failed"); }
