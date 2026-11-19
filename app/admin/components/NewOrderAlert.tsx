@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { createClient as createSessionClient } from '@/lib/supabase/client';
+import { announceOrdersChanged } from './orderEvents';
 
 /**
  * New-order alert for the admin panel.
@@ -161,6 +162,8 @@ export default function NewOrderAlert() {
         try { localStorage.setItem(INIT_KEY, '1'); } catch { /* ignore */ }
       }
       const fresh = orders.filter((o) => !accepted.has(o.id));
+      const known = new Set(pendingRef.current.map((o) => o.id));
+      if (fresh.some((o) => !known.has(o.id))) announceOrdersChanged(); // new order: reload the list behind the popup
       setPending(fresh);
       fresh.forEach(notify);
     } catch { /* offline: try again next tick */ }
@@ -173,6 +176,7 @@ export default function NewOrderAlert() {
     writeAccepted(accepted);
     closeNotifications(ids);
     setPending([]);
+    announceOrdersChanged();
   }, [closeNotifications]);
 
   useEffect(() => {

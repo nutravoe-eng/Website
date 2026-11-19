@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import AdminTopNav from './components/AdminTopNav';
 import OrdersTable, { type AdminOrder } from './components/OrdersTable';
+import { useReloadOnOrdersChanged } from './components/orderEvents';
 import { formatTodayIstLong } from '@/lib/datetime-ist';
 
 export default function AdminTodayPage() {
@@ -12,8 +13,8 @@ export default function AdminTodayPage() {
 
   const today = formatTodayIstLong();
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
+  const fetchOrders = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (opts?.quiet !== true) setLoading(true);
     setError('');
     try {
       const res = await fetch('/api/admin/orders?date=today');
@@ -28,6 +29,7 @@ export default function AdminTodayPage() {
   }, []);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  useReloadOnOrdersChanged(() => fetchOrders({ quiet: true }));
 
   const pending   = orders.filter(o => o.payment_status === 'pending');
   const paid      = orders.filter(o => o.payment_status === 'paid');
