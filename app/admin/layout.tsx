@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import AdminLogout from './AdminLogout';
+import NewOrderAlert from './components/NewOrderAlert';
 import { verifyAdmin } from '@/lib/admin-auth';
 
 export const metadata: Metadata = {
@@ -41,6 +42,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         {children}
       </main>
+      <NewOrderAlert />
     </div>
   );
 }
