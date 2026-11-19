@@ -1,13 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createClient as createSessionClient } from '@/lib/supabase/client';
 
 /**
  * New-order alert for the admin panel.
  *
- * Checks for new orders every few seconds. When one arrives it shows a popup with
- * an "Accept" button, sounds a buzzer until someone accepts, and (if allowed)
- * shows a system notification so it is seen even when this tab is in the background.
+ * Listens for new orders through Supabase Realtime: the database pushes an event the
+ * moment an order is inserted or marked paid, so nothing is polled. When a qualifying
+ * order arrives it shows a popup with an "Accept" button, sounds a buzzer until someone
+ * accepts, and (if allowed) shows a system notification so it is seen even when this
+ * tab is in the background. Orders are fetched once when the connection opens or
+ * reconnects, and when the tab comes back into view, to catch anything missed while offline.
  * Accepting only stops the buzzer and closes the popup; it does not change the order.
  *
  * Accepted orders are remembered in this browser, so they never buzz again, and
@@ -28,7 +33,6 @@ type AlertOrder = {
   order_items?: { bowl_name: string; quantity: number; customizations: unknown }[];
 };
 
-const POLL_MS = 10_000;
 const BUZZ_EVERY_MS = 2_500;
 const ACCEPTED_KEY = 'nv-admin-accepted-orders';
 const SOUND_KEY = 'nv-admin-alert-sound-on';
@@ -82,7 +86,6 @@ export default function NewOrderAlert() {
 
   const audioRef = useRef<AudioContext | null>(null);
   const workerRef = useRef<Worker | null>(null);
-  const lastPollRef = useRef(0);
   const lastBuzzRef = useRef(0);
   const pendingRef = useRef<AlertOrder[]>([]);
   const notesRef = useRef<Map<string, Notification>>(new Map());
@@ -143,7 +146,7 @@ export default function NewOrderAlert() {
     } catch { /* some browsers only allow notifications from a service worker */ }
   }, []);
 
-  const poll = useCallback(async () => {
+  const refresh = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/orders/recent', { cache: 'no-store' });
       if (!res.ok) return;
@@ -172,7 +175,6 @@ export default function NewOrderAlert() {
     setPending([]);
   }, [closeNotifications]);
 
-  // Timers run in a small worker so the browser doesn't slow them down in a background tab.
   useEffect(() => {
     setNotifyState('Notification' in window ? Notification.permission : 'unsupported');
     let soundWasOn = false;
@@ -194,24 +196,51 @@ export default function NewOrderAlert() {
     };
     window.addEventListener('storage', onStorage);
 
-    const src = 'setInterval(function(){postMessage(0)},1000);';
+    // Catch up when the tab comes back into view (e.g. after the laptop slept).
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    // Realtime: a separate client that borrows the signed-in admin's token, so the
+    // database only sends this tab orders an admin may see. Its heartbeat runs in a
+    // worker so the connection stays up while the tab is in the background.
+    const session = createSessionClient();
+    const live = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        accessToken: async () => (await session.auth.getSession()).data.session?.access_token ?? null,
+        realtime: { worker: true },
+      },
+    );
+    const channel = live
+      .channel('admin-new-orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+        const o = payload.new as { id?: string; status?: string; payment_method?: string; payment_status?: string } | null;
+        if (!o?.id || o.status === 'cancelled') return;
+        if (o.payment_method === 'razorpay' && o.payment_status !== 'paid') return;
+        if (readAccepted().has(o.id) || pendingRef.current.some((p) => p.id === o.id)) return;
+        refresh(); // fetch the order's items and customer name for the popup
+      })
+      .subscribe((status) => { if (status === 'SUBSCRIBED') refresh(); });
+
+    // The buzzer repeats from a small worker, so a background tab keeps buzzing on time.
+    const src = 'setInterval(function(){postMessage(0)},500);';
     const worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
     workerRef.current = worker;
     worker.onmessage = () => {
       const now = Date.now();
-      if (now - lastPollRef.current >= POLL_MS) { lastPollRef.current = now; poll(); }
       if (pendingRef.current.length && now - lastBuzzRef.current >= BUZZ_EVERY_MS) { lastBuzzRef.current = now; buzz(); }
     };
-    lastPollRef.current = Date.now();
-    poll();
 
     return () => {
+      live.removeChannel(channel);
       worker.terminate();
       document.removeEventListener('pointerdown', onFirstClick);
+      document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('storage', onStorage);
       closeNotifications();
     };
-  }, [poll, buzz, unlockSound, closeNotifications]);
+  }, [refresh, buzz, unlockSound, closeNotifications]);
 
   // Flash the tab title while an order waits.
   useEffect(() => {
