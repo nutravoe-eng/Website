@@ -155,7 +155,13 @@ export default function CartPage() {
 
   useEffect(() => {
     const hydrateDeliveryFee = async () => {
-      const policyRes = await fetch("/api/delivery-policy", { cache: "no-store" }).catch(() => null);
+      // Independent requests start together instead of one after another, so the saved
+      // address shows up as soon as possible.
+      const supabase = createClient();
+      const [policyRes, { data: { user: authUser } }] = await Promise.all([
+        fetch("/api/delivery-policy", { cache: "no-store" }).catch(() => null),
+        supabase.auth.getUser(),
+      ]);
       if (policyRes?.ok) {
         const policyData = await policyRes.json().catch(() => null);
         const nextPolicy = (policyData?.policy ?? DEFAULT_DELIVERY_POLICY) as DeliveryPolicy;
@@ -169,25 +175,39 @@ export default function CartPage() {
         }
       }
 
-      const supabase = createClient();
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const [profileRes, planConfig, flexRes, addrRes] = await Promise.all([
+        authUser
+          ? supabase.from("users").select("full_name").eq("id", authUser.id).maybeSingle()
+          : Promise.resolve(null),
+        getActivePlanConfig(),
+        authUser
+          ? supabase
+              .from("subscriptions")
+              .select("id, style, status, payment_status, period_end_date")
+              .eq("user_id", authUser.id)
+              .eq("style", "flexible")
+              .eq("payment_status", "paid")
+          : Promise.resolve(null),
+        authUser
+          ? supabase
+              .from("addresses")
+              .select("id, label, line1, line2, city, state, pincode, lat, lng, is_default")
+              .eq("user_id", authUser.id)
+              .order("is_default", { ascending: false })
+          : Promise.resolve(null),
+      ]);
+
       if (authUser) {
-        const { data: profile } = await supabase.from("users").select("full_name").eq("id", authUser.id).maybeSingle();
+        const profile = profileRes?.data;
         const name = profile?.full_name || (authUser.user_metadata?.full_name as string | undefined) || authUser.email?.split("@")[0] || "";
         setUser({ name, phone: "", email: authUser.email ?? "" });
       }
 
-      const [planConfig] = await Promise.all([getActivePlanConfig()]);
       if (planConfig) setSubPlanConfig(planConfig);
 
       // Wallet checkout: paid flexible, active or completed but still within billing period
       if (authUser) {
-        const { data: flexRows } = await supabase
-          .from("subscriptions")
-          .select("id, style, status, payment_status, period_end_date")
-          .eq("user_id", authUser.id)
-          .eq("style", "flexible")
-          .eq("payment_status", "paid");
+        const flexRows = flexRes?.data;
         const eligible = (flexRows ?? []).some((r: { style: string | null; status: string | null; payment_status: string | null; period_end_date: string | null }) =>
           isPaidFlexibleWalletEligible({
             style: r.style ?? "",
@@ -198,8 +218,7 @@ export default function CartPage() {
         );
         if (eligible) {
           setHasActivePaidSub(true);
-          const wallet = await getWallet();
-          setWalletBalanceRs(wallet.balancePaise / 100);
+          getWallet().then((wallet) => setWalletBalanceRs(wallet.balancePaise / 100)).catch(() => {});
         }
       }
 
@@ -207,11 +226,7 @@ export default function CartPage() {
       type CachedAddr = { pincode: string; isDefault?: boolean; lat?: number; lng?: number };
       let addrPick: { pincode: string; lat: number | null; lng: number | null } | null = null;
       if (authUser) {
-        const { data: addrs } = await supabase
-          .from("addresses")
-          .select("id, label, line1, line2, city, state, pincode, lat, lng, is_default")
-          .eq("user_id", authUser.id)
-          .order("is_default", { ascending: false });
+        const addrs = addrRes?.data;
         const normalized = (addrs ?? []) as DeliveryAddress[];
         setSavedAddresses(normalized);
         const row = normalized.find((a) => a.is_default) ?? normalized[0];
