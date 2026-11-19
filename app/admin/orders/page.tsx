@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import OrdersTable, { type AdminOrder } from '../components/OrdersTable';
+import { useReloadOnOrdersChanged } from '../components/orderEvents';
 import CreateForCustomerModal from '../components/CreateForCustomerModal';
 
 type Filter = { date: string; payment_status: string; status: string };
@@ -13,8 +14,8 @@ export default function AdminOrdersPage() {
   const [filters, setFilters] = useState<Filter>({ date: '', payment_status: '', status: '' });
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
+  const fetchOrders = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (opts?.quiet !== true) setLoading(true);
     setError('');
     try {
       const params = new URLSearchParams();
@@ -33,6 +34,7 @@ export default function AdminOrdersPage() {
   }, [filters]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  useReloadOnOrdersChanged(() => fetchOrders({ quiet: true }));
 
   return (
     <div>
@@ -46,7 +48,7 @@ export default function AdminOrdersPage() {
             + Create for Customer
           </button>
           <button
-            onClick={fetchOrders}
+            onClick={() => fetchOrders()}
             className="font-body text-[12px] font-bold uppercase tracking-wider text-stone hover:text-ink border border-black/10 rounded-lg px-3 py-2 hover:bg-black/5 transition-colors"
           >
             Refresh
