@@ -145,7 +145,7 @@ export default function ScratchCard({
           ? "Drag your finger across the card."
           : paid
             ? `We’ve sent your ₹${amount} cashback on GPay. Enjoy!`
-            : `We’ll send ₹${amount} to your WhatsApp number on GPay shortly.`}
+            : `We’ll send Rs ${amount} to your GPay number`}
       </p>
       {revealed ? (
         <Link className={styles.order} href="/menu">
