@@ -12,9 +12,6 @@ const nextConfig = {
       },
     ],
   },
-  async rewrites() {
-    return [{ source: "/scratch", destination: "/scratch/index.html" }];
-  },
 };
 
 export default nextConfig;
